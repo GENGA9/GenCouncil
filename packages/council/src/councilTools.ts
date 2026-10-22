@@ -228,6 +228,29 @@ export function createCouncilMcp(council: Council): McpServer {
   );
 
   server.registerTool(
+    "council_finish",
+    {
+      title: "Finish the agenda",
+      description:
+        "End this agenda: after your current turn the server merges the agenda branch into the base branch, removes the worktrees " +
+        "(notes are archived) and closes the agenda. Use when every goal is merged and verified, or when the user asks to finish. " +
+        "Refused while members run, when finished work is unmerged (pass include_unmerged:true to drop it on purpose), or when the main checkout is not ready. " +
+        "After a successful call, end your turn with a short summary of what is being merged.",
+      inputSchema: {
+        reason: z.string().min(3).describe("one line: why the agenda is done (shown to the user)"),
+        include_unmerged: z.boolean().optional().describe("finish even though some finished member work is not merged (it is dropped)"),
+      },
+    },
+    async ({ reason, include_unmerged }) =>
+      guard(async () => {
+        const r = await council.requestFinish(reason, { includeUnmerged: include_unmerged });
+        return r.scheduled
+          ? { scheduled: true, note: "이번 턴이 끝나면 베이스 브랜치에 머지하고 안건을 닫는다. 새 작업을 배정하지 말고 요약 보고로 턴을 끝내라." }
+          : { scheduled: false, problems: r.problems };
+      }),
+  );
+
+  server.registerTool(
     "council_checkpoint",
     {
       title: "Save chair state",

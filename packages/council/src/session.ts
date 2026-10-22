@@ -71,6 +71,7 @@ export type RuntimeEvent =
   | { type: "member:line"; member: string; line: string }
   | { type: "member:done"; member: MemberRecord }
   | { type: "log"; line: string }
+  | { type: "agenda:finished"; reason: string; output: string }
   | { type: "state" };
 
 const ACTIVITY_MINUTES = 20;
@@ -312,6 +313,7 @@ export class AgendaRuntime extends EventEmitter {
 
   async send(message: string, role: "user" | "event" = "user", attachments: Attachment[] = []): Promise<ChairTurnResult> {
     if (this.chair.isBusy()) throw new Error("chair is busy");
+    if (this.council.store.agenda().status === "closed") throw new Error("이 안건은 종료되었습니다. 새 안건을 열어 주세요.");
     let text = message || (attachments.length ? "첨부한 파일을 확인해 주세요." : this.isFirstTurn() ? firstTurnPreamble() : "");
     if (!text) throw new Error("empty message");
     if (attachments.length) {
@@ -334,8 +336,29 @@ export class AgendaRuntime extends EventEmitter {
     }
     this.emitEvent({ type: "chair:done", text: res.text, isError: res.isError, costUsd: res.costUsd });
     this.emitEvent({ type: "state" });
+    if (this.council.finishRequest) {
+      await this.runRequestedFinish();
+      return res;
+    }
     void this.flush();
     return res;
+  }
+
+  /** The chair called council_finish during its turn: merge into the base branch and close. */
+  private async runRequestedFinish(): Promise<void> {
+    const req = this.council.finishRequest!;
+    this.council.finishRequest = undefined;
+    try {
+      const problems = await this.council.finishProblems({ includeUnmerged: true });
+      if (problems.length) throw new Error(problems.join(" / "));
+      const output = await this.council.finish();
+      this.council.store.appendTranscript({ role: "event", text: `[council event] 안건 종료: ${req.reason} (베이스 브랜치에 머지함)` });
+      this.emitEvent({ type: "agenda:finished", reason: req.reason, output });
+      this.close({ closeMemory: false });
+    } catch (e) {
+      this.enqueue(`[council event] 안건 종료 실패: ${(e as Error).message}\n사용자에게 무엇이 막혔는지 알리고, 해결되면 다시 council_finish를 호출하라.`);
+      this.emitEvent({ type: "state" });
+    }
   }
 
   /** Chair retrospective turn (memory + persona notes + proposal review). No-op if the chair never ran. */

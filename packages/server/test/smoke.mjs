@@ -72,7 +72,7 @@ const mcpRes = await fetch(mcpUrl, {
   body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
 });
 const mcpText = await mcpRes.text();
-check("mcp tools/list answers", mcpRes.status === 200 && mcpText.includes("council_assign"), mcpText.slice(0, 120));
+check("mcp tools/list answers", mcpRes.status === 200 && mcpText.includes("council_assign") && mcpText.includes("council_finish"), mcpText.slice(0, 120));
 check("mcp 401 without token", (await fetch(mcpUrl, { method: "POST" })).status === 401);
 
 // memory endpoints

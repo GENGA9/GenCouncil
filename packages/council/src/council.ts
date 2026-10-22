@@ -165,6 +165,8 @@ export class Council extends EventEmitter {
     if (!(await isRepo(repo))) throw new Error(`not a git repository: ${repo}`);
     if (!(await hasCommits(repo))) throw new Error(`repository has no commits yet: ${repo}`);
     await ensureExclude(repo, [".worktrees/", ".council/", ".gemini/"]);
+    // a closed agenda is history: show it, but never commit, recreate its branch or worktrees
+    if (this.store.agenda().status === "closed") return;
     if (this.project.localGit) {
       // the user edits this folder directly; record their changes so agendas start from them
       const c = await commitUserEdits(this.project);
@@ -860,6 +862,38 @@ export class Council extends EventEmitter {
   }
 
   // ---------- agenda end ----------
+
+  /** set by the chair's council_finish; the runtime finishes the agenda once the chair's turn is over */
+  finishRequest?: { reason: string; at: string };
+
+  /** members whose finished work never reached the agenda branch */
+  unmergedMembers(): MemberRecord[] {
+    return this.members().filter((m) => m.status === "done" && !m.merged && !m.handoverTo && (m.commits?.length ?? 0) > 0);
+  }
+
+  /** Check what would stop finish() now, without changing anything. */
+  async finishProblems(opts: { includeUnmerged?: boolean } = {}): Promise<string[]> {
+    const problems: string[] = [];
+    if (this.running.size) problems.push(`위원이 아직 실행 중이다: ${[...this.running.keys()].join(", ")}`);
+    const unmerged = this.unmergedMembers();
+    if (unmerged.length && !opts.includeUnmerged)
+      problems.push(`머지하지 않은 위원 결과가 있다: ${unmerged.map((m) => m.id).join(", ")}. council_merge로 합치거나, 버릴 거면 include_unmerged:true로 다시 요청한다.`);
+    const repo = this.project.repo;
+    const agenda = this.store.agenda();
+    const cur = await currentBranch(repo);
+    if (cur !== agenda.baseBranch) problems.push(`메인 폴더가 '${cur}' 브랜치에 있다(필요: '${agenda.baseBranch}'). 사용자가 브랜치를 바꿔야 한다.`);
+    else if (!this.project.localGit && !(await isClean(repo))) problems.push("메인 폴더에 커밋하지 않은 변경이 있다. 사용자가 커밋하거나 치워야 한다.");
+    return problems;
+  }
+
+  /** chair asks to end the agenda; it runs after the current chair turn */
+  async requestFinish(reason: string, opts: { includeUnmerged?: boolean } = {}): Promise<{ scheduled: boolean; problems: string[] }> {
+    const problems = await this.finishProblems(opts);
+    if (problems.length) return { scheduled: false, problems };
+    this.finishRequest = { reason, at: new Date().toISOString() };
+    this.log(`chair requested agenda finish: ${reason}`);
+    return { scheduled: true, problems: [] };
+  }
 
   async finish(): Promise<string> {
     if (this.running.size) throw new Error("members still running");

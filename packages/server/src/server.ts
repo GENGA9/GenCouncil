@@ -173,6 +173,12 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         rt.on("event", (e: RuntimeEvent) => {
           broadcast({ key, ts: new Date().toISOString(), ...e });
           telegram?.notify(key, e);
+          if (e.type === "agenda:finished") {
+            // the chair ended the agenda (council_finish); it is merged and closed now
+            runtimes.delete(key);
+            broadcast({ type: "overview" });
+            void telegram?.send(`[${key}] 의장이 안건을 종료했습니다: ${e.reason}`);
+          }
         });
         log(`opened ${key}`);
         return rt;

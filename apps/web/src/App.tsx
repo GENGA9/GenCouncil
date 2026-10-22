@@ -185,6 +185,11 @@ export function App() {
           setChat((c) => [...c, item("event", `의장 계정 전환: ${String(msg.from)} → ${String(msg.to)} (${String(msg.reason)})`)]);
           void refreshOverview();
           break;
+        case "agenda:finished":
+          setChat((c) => [...c, item("event", `의장이 안건을 종료했습니다: ${String(msg.reason)} (베이스 브랜치에 머지함)`)]);
+          void refreshOverview();
+          void refreshState(key);
+          break;
       }
     }, setWsUp);
   }, [authed, refreshOverview, refreshState]);
