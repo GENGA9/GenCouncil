@@ -1,0 +1,24 @@
+{
+  "name": "gencouncil",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GenCouncil - multi-AI council orchestration with shared Space memory",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "tsc -b && npm run build:web",
+    "build:web": "npm run build --workspace @gencouncil/web",
+    "clean": "node -e \"for (const p of ['core','mcp','council','cli']) require('fs').rmSync('packages/'+p+'/dist',{recursive:true,force:true})\"",
+    "test": "tsc -b && node packages/core/test/smoke.mjs && node packages/council/test/smoke.mjs && node packages/council/test/handover.mjs && node packages/server/test/smoke.mjs && node packages/server/test/telegram.mjs",
+    "gencouncil": "node packages/cli/dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0"
+  }
+}

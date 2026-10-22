@@ -1,0 +1,324 @@
+# GenCouncil
+
+여러 AI(클로드 · 제미나이 · GPT, 다중 계정)를 "제작위원회"로 묶어 의장이 업무를 분장·취합하고,
+내 PC 전체의 공유 기억(Space)을 축적하며, 모바일에서도 작업을 이어가는 로컬 오케스트레이션 앱.
+전체 설계는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 현재 상태: 5단계까지 (공유 기억 · 의장 루프 · 웹 UI/PWA · 핸드오버/계정/릴레이 · 상주/알림/회고)
+
+## 5단계: 상주 · 알림 · 회고 · 데스크탑
+
+### 회고 자동화
+
+안건을 종료할 때 의장이 먼저 **회고 턴**을 돈다: 잘 된 분장과 실패 원인을 정리하고, 재사용 가치가 있는 해결책·도구 위치·규약을 `memory_write`로 공유 기억에 넣고, 위원으로 쓴 각 모델의 성향을 `persona` 기억에 남기고, 남은 제안을 승인/거절한 뒤 `state.md`에 "회고 완료"를 적는다. 웹의 "안건 종료"가 회고 여부를 묻고, "회고" 버튼으로 종료 없이 따로 돌릴 수도 있다. CLI는 `council finish --retro`.
+
+### Telegram
+
+알림과 대화를 폰의 Telegram으로 받는다. @BotFather로 봇을 만들고 봇에 메시지를 한 번 보낸 뒤:
+
+```bash
+gencouncil web telegram --token <봇 토큰> --chat <내 chat id> --agenda rf-project-제작위원회/밸런스-안건
+```
+
+(chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. 보내는 것: 의장 답변, 위원 완료/실패/인계, 릴레이 패킷 대기, 의장 계정 전환, 안건 종료. 받는 것: `/list` `/agenda <project/slug>` `/status`, 그 외 텍스트는 그 안건의 의장에게 전달된다. 설정된 chat id 외의 메시지는 무시한다. 끄려면 `gencouncil web telegram --off`.
+
+### 상주 (Windows 로그온 작업)
+
+```bash
+gencouncil service install     # 로그온 시 숨겨진 창으로 gencouncil web 실행 (관리자 권한 불필요)
+```
+
+```bash
+gencouncil service start | stop | status | logs
+```
+
+`~/.gencouncil/service/`에 런처(.cmd/.vbs)와 `web.log`가 생긴다. 제거는 `service uninstall`. macOS/Linux는 LaunchAgent/systemd --user로 `gencouncil web`을 띄우면 된다.
+
+### 데스크탑
+
+```bash
+gencouncil desktop             # 서버가 없으면 띄우고, Edge/Chrome 앱 모드 창으로 콘솔을 연다 (Rust 불필요)
+```
+
+앱 모드 창은 전용 프로필을 써서 토큰 쿠키가 일반 브라우징과 섞이지 않는다. 트레이 상주형 네이티브 앱은 [apps/desktop](apps/desktop/README.md)에 Tauri 2 스캐폴드(트레이 메뉴, 서버 자식 프로세스, 창 닫아도 상주)가 있다. 이 환경에 Rust가 없어 빌드는 검증하지 못했다.
+
+## 패키지
+
+| 패키지 | 역할 |
+|--------|------|
+| `packages/core` | 기억 저장소(markdown + git), 한/영 검색 색인, INDEX.md 생성 |
+| `packages/mcp` | 기억 MCP 서버(stdio) + 클로드/제미나이 등록기 |
+| `packages/council` | 프로젝트·안건·계정 레지스트리, git worktree 통합, 위원 드라이버(claude/gemini CLI, relay), 한도 분류·핸드오버, 의장 세션, 의장용 MCP, `AgendaRuntime`(의장 턴 + 위원 이벤트 전달), 터미널 REPL |
+| `packages/server` | 웹 서버: REST + WebSocket, 토큰 인증, 정적 UI, 안건별 의장 MCP 경로 `/mcp/<project>/<agenda>`, Telegram 브리지 |
+| `apps/web` | React PWA (레퍼런스의 3단 레이아웃, 폰에서는 탭 3개) |
+| `apps/desktop` | Tauri 2 트레이 앱 스캐폴드 (Rust 필요, 미검증) |
+| `packages/cli` | `gencouncil` 명령 전체 (memory · project · agenda · council · account · web · service · desktop) |
+
+## 모델 분담 (Sonnet 실행 · Haiku 탐색 · Opus 판단)
+
+새 프로젝트의 기본값은 클로드 코드의 advisor 패턴을 따른다.
+
+| 역할 | 기본 | 무엇을 |
+|------|------|--------|
+| 의장 | `sonnet` + advisor `opus` | 평범한 턴은 Sonnet. 분장 확정 전, 같은 실패 2회, 안건 종료 선언 전에만 Opus에 상담 |
+| 클로드 위원 | `sonnet` + advisor `opus` | 코드를 쓴다. 계획 확정 전·같은 오류 2회·완료 선언 전에 Opus 상담 (패킷 규칙 8) |
+| 탐색기 | Haiku 서브에이전트 `search` / `grep` / `docs` | 읽기 전용. 위원이 저장소를 직접 뒤지지 않고 병렬로 맡긴다 (`--agents`로 주입) |
+
+프로젝트 생성 시 `--chair-model/--chair-advisor/--member-model/--member-advisor`로 바꾸고, 웹의 의장 헤더에서 advisor를 바꿀 수 있다. 메인 모델이 Fable이면 Fable advisor만 허용되므로 그 외 advisor는 자동으로 붙이지 않는다. 위원 카드와 작업 칩에는 `claude-1` 같은 id 대신 **실제로 실행된 모델명**(Sonnet 5.5, Fable 5.1, Gemini 2.5 Pro …)이 표시된다. id는 작은 글씨와 브랜치명에 남는다.
+
+색: 클로드 주황 `#d97757`, 제미나이 구글 블루 `#4285f4`, GPT 그린 `#10a37f`, 그 외 릴레이 보라. 릴레이 위원은 라벨(제미나이/agy/aistudio → 블루, gpt/chatgpt → 그린)로 판별한다. 실행 중에는 레퍼런스의 회전 2×2 스피너가 그 색으로 돈다.
+
+## 4단계: 핸드오버 · 계정 레지스트리 · 릴레이 위원
+
+### 계정 레지스트리
+
+`~/.gencouncil/accounts.json`. 기본 로그인은 `claude`, `gemini`라는 이름으로 항상 존재한다. 계정을 더 쓰려면:
+
+```bash
+gencouncil account add claude-b --provider claude --config-dir C:\Users\me\.claude-b --note "회사 계정"
+```
+
+```bash
+gencouncil account login claude-b      # 그 계정 폴더로 클로드 코드를 열어 준다. /login 후 /exit
+```
+
+```bash
+gencouncil account list                # 상태: ok / exhausted(리셋 시각) / auth(로그인 필요)
+```
+
+클로드는 `CLAUDE_CONFIG_DIR`, 제미나이는 `HOME`을 그 폴더로 바꿔 띄우므로 로그인이 계정별로 분리된다. 위원·의장은 등록된 계정 중 **사용 가능한 것을 우선순위대로 자동 선택**한다. 한도 오류가 나면 그 계정은 `exhausted`가 되고(오류 문구의 리셋 시각을 읽고, 없으면 클로드 5시간 / 제미나이 1시간), 시각이 지나면 자동 복구된다. 웹 UI의 "계정" 화면에서 상태 확인·수동 복구·추가를 할 수 있다.
+
+### 핸드오버
+
+- **위원**: 패킷 규칙에 따라 단계마다 `.council/STATE.md`를 갱신한다. 위원 프로세스가 한도(quota)나 로그인(auth) 오류로 죽으면 서버가 원인을 분류해 계정을 표시하고, **같은 worktree·같은 브랜치**에서 다른 계정(없으면 `members.fallbackProvider`)의 새 위원을 띄운다. 미커밋 변경은 먼저 자동 커밋되고, 새 위원은 원래 패킷 + STATE.md + 커밋 로그 + diffstat이 담긴 인계 패킷(`.council/HANDOVER.md`)을 받는다. 작업당 최대 `members.maxHandovers`(기본 2)회. 의장에게는 "→ 핸드오버됨 X" 이벤트가 가서 재배정하지 않는다.
+- 수동 인계: 멈추거나 애매하게 실패한 위원을 이어서 시키려면 위원 카드의 "이어받기", 의장 도구 `council_handover`, 또는 CLI.
+
+```bash
+gencouncil council handover <project> <agenda> claude-1 [--provider gemini] [--account claude-b]
+```
+
+- **의장**: 의장 턴이 한도/로그인 오류로 실패하면 다른 claude 계정으로 바꾸고 `state.md`를 바탕으로 새 세션을 시작한다(최대 3회). 쓸 수 있는 계정이 없으면 그 사실을 채팅에 알린다. 의장 헤더의 계정 드롭다운으로 수동 전환도 된다(세션은 새로 시작, state.md 유지).
+
+### 릴레이 위원
+
+웹 제미나이, AI Studio, Antigravity, ChatGPT처럼 CLI가 없는 AI를 쓰는 방법. 의장이 `provider: relay`로 배정하면서 필요한 파일을 `files`에 넣으면 패킷에 파일 내용이 포함된다. 오른쪽 카드의 "패킷 · 답변"에서 ① 패킷 전체 복사 → 웹 AI에 붙여넣기 ② AI 답변 전체를 붙여넣고 "적용하고 완료". 답변의 `=== FILE: 경로 ===` 블록은 worktree에 저장·커밋되고 `=== RESULT ===` 블록은 결과 보고가 된다. 그 뒤는 일반 위원과 똑같이 의장이 검토·머지한다. 폰의 PWA에서도 같은 흐름으로 처리할 수 있다. CLI:
+
+```bash
+gencouncil council relay packet <project> <agenda> relay-1 > packet.txt
+```
+
+```bash
+gencouncil council relay submit <project> <agenda> relay-1 --file answer.txt
+```
+
+Antigravity처럼 폴더를 직접 편집하는 도구는 위원 worktree(`.worktrees/<안건>/relay-N`)를 열어 작업하게 한 뒤 RESULT 블록만 붙여넣으면 된다(미커밋 변경을 서버가 커밋한다).
+
+## 3단계: 웹 UI + 모바일
+
+```bash
+gencouncil web            # http://localhost:7700 (기본: 모든 인터페이스에 바인딩, 토큰 필요)
+```
+
+```bash
+gencouncil web token      # 접속 토큰 (처음 실행 때 ~/.gencouncil/server.json 에 생성, --reset 으로 재발급)
+```
+
+화면 구성 (레퍼런스 그대로)
+
+- 좌: SPACE → 제작위원회 → 안건 트리, 실행 중 위원 수·작업 진행도 배지, 공유 기억(승인 대기 제안 수), 현재 안건 고정, 서버/Tailscale 주소.
+- 중: 의장 헤더(모델·추론 수준 드롭다운 = 즉시 저장, 다음 턴부터 적용), 목표 박스(목표별 작업 칩: 대기/진행/검토/완료/막힘 ← 담당 위원), 의장 채팅(도구 호출은 회색 한 줄, 위원 이벤트는 노란 테두리), "의장 상태" 토글로 state.md, 세션 초기화, 안건 종료.
+- 우: 위원 카드. 실행 중은 펼쳐져 최근 20분 활동 스파크라인·도구 호출 수·마지막 말·로그/중지 버튼, 끝난 위원은 접힌 줄(▽)로 결과·diffstat·머지 버튼.
+- 폰(900px 이하): [안건] [의장] [위원] 탭.
+
+### 폰에서 쓰기 (Tailscale)
+
+1. PC와 폰에 Tailscale을 설치해 같은 tailnet에 넣는다.
+2. PC에서 `gencouncil web`. 시작 로그에 `http://<pc>.<tailnet>.ts.net:7700` 주소가 뜬다. 폰 브라우저에서 열고 토큰을 입력하면 바로 쓸 수 있다.
+3. 홈 화면에 **PWA로 설치**하려면 HTTPS가 필요하다. PC에서 한 번만:
+
+```bash
+tailscale serve --bg 7700
+```
+
+   그러면 `https://<pc>.<tailnet>.ts.net` 로 접속되고(인증서는 Tailscale이 발급), 브라우저 메뉴의 "홈 화면에 추가"가 독립 앱으로 설치된다. 서비스워커는 앱 셸만 캐시하고 API/WS는 캐시하지 않는다.
+
+보안: API·WebSocket·MCP 경로는 모두 토큰이 있어야 한다(쿠키 또는 `Authorization: Bearer`). 정적 UI만 토큰 없이 내려간다. 집 Wi-Fi에 노출하고 싶지 않으면 `gencouncil web --host 127.0.0.1` 로 띄우고 `tailscale serve`로만 내보낸다.
+
+### 개발
+
+```bash
+npm run dev --workspace @gencouncil/web   # Vite 개발 서버(5173) → 7700으로 프록시
+```
+
+`npm run build`가 TypeScript 패키지와 웹 번들을 모두 빌드한다. 서버는 `apps/web/dist`를 그대로 서빙한다.
+
+## 2단계: 제작위원회 돌리기
+
+### 개념
+
+```
+프로젝트(제작위원회)  = git 저장소 1개 + guidelines.md + 의장 설정
+ └ 안건               = 목표 목록 + 통합 브랜치 agenda/<slug>
+    ├ 작업 T1, T2 …   = 의장이 쪼갠 단위
+    └ 위원 claude-1 … = 작업 1개를 맡아 독립 worktree/브랜치 member/<slug>/<id> 에서 자율 실행
+```
+
+- **의장**은 `claude -p`(헤드리스 클로드 코드, 기존 로그인 사용)로 돌아가며 `--resume`으로 대화가 이어진다. 편집 도구가 없고 읽기 + 의장 도구(council_*) + 기억 도구(memory_*)만 쓴다.
+- **위원**도 헤드리스 CLI다. 클로드는 `claude -p --dangerously-skip-permissions`, 제미나이는 `gemini -p --approval-mode yolo`(프로젝트 `members.autonomy`가 `edits`면 편집만 자동 승인). 작업 패킷(`.council/TASK.md`)을 stdin으로 받고, 끝나면 커밋 + `.council/RESULT.md`를 쓴다. 서버가 RESULT.md를 파싱해 결과·미완료·기억 제안을 기록한다.
+- **머지는 의장만** 한다. 위원 브랜치 → 통합 worktree(`.worktrees/<slug>/_integration`, 안건 브랜치) → `council finish`로 베이스 브랜치. 충돌이 나면 머지를 되돌리고 충돌 파일을 보고한다.
+- 의장은 분장·배정·머지마다 `chair/state.md`에 상태를 남긴다. 이것이 4단계 핸드오버(의장 교체)의 근거다. `/reset`으로 세션을 끊어도 state.md는 이어진다.
+
+### 사용
+
+```bash
+gencouncil project add "RF PROJECT 제작위원회" --repo D:\PROJECT\RF --chair-model claude-opus-5-5 --chair-effort high
+```
+
+```bash
+gencouncil agenda add rf-project-제작위원회 "밸런스 안건" --goal "목표 1" --goal "목표 2"
+```
+
+```bash
+gencouncil council chat rf-project-제작위원회 밸런스-안건
+```
+
+채팅에서 그냥 말하면 의장에게 전달된다. 위원이 끝나면 `[council event]`가 자동으로 의장에게 들어가고 의장이 검토·머지한다. REPL 명령: `/status` `/tasks` `/members` `/log <id>` `/merge <id>` `/stop <id>` `/reset` `/quit`. 채팅을 닫으면 실행 중인 위원은 중지된다.
+
+```bash
+gencouncil council finish rf-project-제작위원회 밸런스-안건     # 안건 브랜치를 베이스에 머지, worktree 정리
+```
+
+의장 없이 위원 하나만 직접 돌려 보려면:
+
+```bash
+gencouncil council run <project> <agenda> --task "제목" --instructions "무엇을/어디에/완료 조건" --provider claude
+```
+
+가이드라인(AI 성향·분장 규칙)은 `gencouncil project guidelines <project>`가 알려 주는 파일을 편집한다. 의장 프롬프트에 매 턴 들어간다.
+
+다중 계정: `gencouncil account add claude-b --provider claude --config-dir ~/.claude-b` 후 배정 시 `account: claude-b`. 클로드는 `CLAUDE_CONFIG_DIR`, 제미나이는 HOME을 바꿔 띄운다.
+
+런타임 데이터는 `~/.gencouncil/projects/<project>/agendas/<slug>/`(agenda.json, tasks.json, members.json, members/*.log, chair/state.md, chair/session.json, transcript.jsonl)에 쌓인다.
+
+### 주의
+
+- `autonomy: full`(기본)은 위원이 권한 확인 없이 명령을 실행한다. worktree로 격리되지만 저장소 밖을 건드릴 수 있는 명령까지 막지는 않는다. 신뢰할 수 없는 작업은 `--autonomy edits`로.
+- 제미나이 위원은 로그인 전이라 실제 실행은 아직 검증하지 못했다. 또 Gemini CLI는 신뢰하지 않은 폴더에서 MCP와 프로젝트 설정을 끈다(그래서 패킷은 stdin으로 주고, 기억 제안은 RESULT.md로도 받는다).
+- 바이너리 파일은 한 위원에게만 배정하도록 가이드라인 기본 템플릿에 적혀 있다.
+
+## 1단계: Space 공유 기억
+
+기억은 코드와 분리된 `~/.gencouncil/space/memory/`에 산다(`GENCOUNCIL_HOME`으로 변경 가능).
+
+```
+~/.gencouncil/space/            git 저장소
+  memory/
+    INDEX.md                    자동 생성 색인 (위원 프롬프트에 주입)
+    solutions/ tools/ conventions/ accounts/ personas/
+    proposals/                  위원이 제안한 것. 승인되면 위 폴더로 이동
+```
+
+## 설치
+
+```bash
+npm install && npm run build
+```
+
+```bash
+npm link --workspace @gencouncil/mcp   # 전역 `gencouncil` 명령
+```
+
+```bash
+gencouncil init                        # 기억 폴더 + 시드 2개
+```
+
+```bash
+gencouncil install all                 # 클로드 코드 + 제미나이 CLI 등록, CLAUDE.md/GEMINI.md에 사용 규칙 추가
+```
+
+`install`이 하는 일
+
+- 클로드 코드: `claude mcp add --scope user gencouncil …` (user 스코프, 모든 프로젝트에서 보임)
+- 제미나이 CLI: `~/.gemini/settings.json`의 `mcpServers.gencouncil`
+- Antigravity: `gencouncil install antigravity` → `~/.gemini/antigravity/mcp_config.json` (IDE 재시작 후 반영)
+- 각 도구의 전역 지시 파일에 `<!-- gencouncil:start/end -->` 블록으로 사용 규칙을 넣는다. `--no-rules`로 생략.
+
+제미나이 CLI는 **신뢰하지 않은 폴더에서는 MCP 서버를 끈다.** 처음 `gemini`를 실행할 때 폴더를 신뢰하거나,
+`gemini mcp list`에서 Disabled로 나오면 그 폴더에서 `/permissions`(또는 신뢰 프롬프트)로 허용한다.
+
+다른 계정의 클로드 코드에 붙이려면 그 계정의 설정 디렉토리로 실행한다.
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-b gencouncil install claude
+```
+
+## MCP 도구
+
+| 도구 | 누가 | 설명 |
+|------|------|------|
+| `memory_index` | 모두 | 검증된 기억의 한 줄 색인 |
+| `memory_search` | 모두 | 한/영 전문 검색 (`type`, `project`, `include_proposed`) |
+| `memory_read` / `memory_list` | 모두 | 항목 읽기 / 목록 |
+| `memory_propose` | 모두 | 제안 (proposals/ 에 저장) |
+| `memory_write` / `memory_update` | owner, chair | 바로 검증된 기억으로 저장 / 수정(`append` 권장) |
+| `memory_approve` / `memory_reject` | owner, chair | 제안 승인 / 거절 |
+
+역할은 서버 환경변수 `GENCOUNCIL_ROLE`(owner | chair | member)로 정한다. `install`은 내 도구에 owner를 준다.
+2단계에서 의장이 띄우는 위원은 member로 띄워 제안만 하게 할 계획이다.
+`GENCOUNCIL_AGENT`는 항목의 `source`에 기록된다(claude-code, gemini-cli …).
+
+## CLI
+
+```bash
+gencouncil search "ffmpeg 경로"
+```
+
+```bash
+gencouncil add --type solution --title "ffmpeg가 PATH에 없을 때 실행 경로" --tags ffmpeg,windows --body-file note.md
+```
+
+```bash
+gencouncil proposals
+```
+
+```bash
+gencouncil approve <id>
+```
+
+그 밖에 `status`, `index`, `read`, `list`, `update`, `reject`, `remove`, `server-path`. `gencouncil help` 참고.
+
+## 기억 파일 형식
+
+```markdown
+---
+id: sol-20261022-ffmpeg가-path에-없을-때-실행-경로
+title: ffmpeg가 PATH에 없을 때 실행 경로
+type: solution            # solution | tool | convention | account | persona
+tags: [ffmpeg, windows]
+project: RF               # 비우면 Space 전체
+status: verified          # verified | proposed | rejected
+source: claude-code
+created: 2026-10-22T05:00:00.000Z
+updated: 2026-10-22T05:00:00.000Z
+---
+
+## 문제
+## 해결
+## 적용 방법
+```
+
+직접 편집해도 된다. 서버가 변경을 감지해 다시 읽고, 쓰기마다 git 커밋이 남는다.
+
+## 테스트
+
+```bash
+npm test
+```
+
+임시 `GENCOUNCIL_HOME`에서 기억 저장소 왕복, MCP stdio 세션(member / owner 역할 게이트), LLM 없이 안건·worktree·패킷·머지/충돌·finish 흐름, 한도 분류·계정 레지스트리·릴레이 왕복·가짜 드라이버로 한도 오류 → 자동 핸드오버, 웹 서버(인증, 프로젝트/안건 API, 런타임 열기, MCP 엔드포인트, WebSocket), 그리고 가짜 Telegram API로 알림 포맷·명령·의장 전달을 검사한다. 실제 의장·위원 실행은 계정을 쓰므로 자동 테스트에 넣지 않았다.
+
+## 남은 일
+
+- Tauri 트레이 앱 빌드 검증 (Rust 설치 후 `apps/desktop`)
+- 제미나이 CLI 로그인 후 제미나이 위원 실제 실행 검증
+- Telegram 봇 실제 연결 검증 (봇 토큰 필요)

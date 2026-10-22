@@ -1,0 +1,18 @@
+{
+  "name": "@gencouncil/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "gencouncil command line: memory, projects, agendas, council chat",
+  "bin": {
+    "gencouncil": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@gencouncil/core": "*",
+    "@gencouncil/council": "*",
+    "@gencouncil/mcp": "*",
+    "@gencouncil/server": "*"
+  }
+}

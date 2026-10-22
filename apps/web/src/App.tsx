@@ -1,0 +1,369 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, ApiError, connectWs } from "./api";
+import { AccountsView } from "./components/AccountsView";
+import { CenterPane } from "./components/CenterPane";
+import { LeftPane } from "./components/LeftPane";
+import { MemoryView } from "./components/MemoryView";
+import { RightPane } from "./components/RightPane";
+import { GuidelinesModal, HandoverModal, MemberModal, NewAgendaModal, NewProjectModal, RelayModal } from "./components/Modals";
+import type { ChatItem, Overview, RuntimeState, TranscriptEntry } from "./types";
+
+const MEMORY_KEY = "__memory__";
+const ACCOUNTS_KEY = "__accounts__";
+const isSpecial = (k: string) => k === MEMORY_KEY || k === ACCOUNTS_KEY;
+type Tab = "left" | "center" | "right";
+
+function useMedia(query: string): boolean {
+  const [m, setM] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const fn = () => setM(mq.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, [query]);
+  return m;
+}
+
+let seq = 1;
+const item = (role: ChatItem["role"], text: string, ts = new Date().toISOString()): ChatItem => ({ id: seq++, role, text, ts });
+
+export function App() {
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [token, setToken] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [selected, setSelected] = useState<string>(() => localStorage.getItem("gc.selected") ?? "");
+  const [state, setState] = useState<RuntimeState | null>(null);
+  const [chat, setChat] = useState<ChatItem[]>([]);
+  const [firstTurn, setFirstTurn] = useState(false);
+  const [loadingAgenda, setLoadingAgenda] = useState(false);
+  const [wsUp, setWsUp] = useState(false);
+  const [tab, setTab] = useState<Tab>("center");
+  const [modal, setModal] = useState<
+    | null
+    | { kind: "project" }
+    | { kind: "agenda"; projectId: string }
+    | { kind: "guidelines"; projectId: string }
+    | { kind: "member"; id: string }
+    | { kind: "relay"; id: string }
+    | { kind: "handover"; id: string }
+  >(null);
+  const [toast, setToast] = useState("");
+  const mobile = useMedia("(max-width: 900px)");
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+
+  const notify = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 4000);
+  }, []);
+
+  const refreshOverview = useCallback(async () => {
+    try {
+      setOverview(await api.overview());
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) setAuthed(false);
+    }
+  }, []);
+
+  const loadAgenda = useCallback(
+    async (key: string) => {
+      if (!key || isSpecial(key)) {
+        setState(null);
+        setChat([]);
+        return;
+      }
+      setLoadingAgenda(true);
+      try {
+        const r = await api.agenda(key);
+        setState(r.state);
+        setFirstTurn(r.firstTurn);
+        setChat(
+          r.transcript.map((t: TranscriptEntry) =>
+            item(t.role === "assistant" && t.isError ? "error" : t.role, t.text, t.ts),
+          ),
+        );
+      } catch (e) {
+        notify((e as Error).message);
+      } finally {
+        setLoadingAgenda(false);
+      }
+    },
+    [notify],
+  );
+
+  const refreshState = useCallback(async (key: string) => {
+    try {
+      const r = await api.agenda(key);
+      setState(r.state);
+      setFirstTurn(r.firstTurn);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // auth bootstrap
+  useEffect(() => {
+    api.me().then(
+      () => setAuthed(true),
+      () => setAuthed(false),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    void refreshOverview();
+  }, [authed, refreshOverview]);
+
+  useEffect(() => {
+    if (!authed) return;
+    localStorage.setItem("gc.selected", selected);
+    void loadAgenda(selected);
+  }, [authed, selected, loadAgenda]);
+
+  // websocket
+  const stateTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!authed) return;
+    const scheduleState = (key: string) => {
+      if (stateTimer.current) return;
+      stateTimer.current = window.setTimeout(() => {
+        stateTimer.current = undefined;
+        void refreshState(key);
+      }, 800);
+    };
+    return connectWs((msg) => {
+      const type = msg.type as string;
+      if (type === "overview") {
+        void refreshOverview();
+        return;
+      }
+      const key = msg.key as string | undefined;
+      if (!key || key !== selectedRef.current) {
+        if (type === "member:done" || type === "member:start") void refreshOverview();
+        return;
+      }
+      switch (type) {
+        case "chair:start":
+          setChat((c) => [...c, item(msg.role === "event" ? "event" : "user", String(msg.text))]);
+          setState((s) => (s ? { ...s, chair: { ...s.chair, busy: true } } : s));
+          setFirstTurn(false);
+          break;
+        case "chair:text":
+          setChat((c) => [...c, item("assistant", String(msg.text))]);
+          break;
+        case "chair:tool": {
+          const input = msg.input ? JSON.stringify(msg.input) : "";
+          setChat((c) => [...c, item("tool", `${String(msg.name).replace(/^mcp__\w+__/, "")} ${input.slice(0, 200)}`)]);
+          break;
+        }
+        case "chair:done":
+          if (msg.isError) setChat((c) => [...c, item("error", String(msg.text))]);
+          setState((s) => (s ? { ...s, chair: { ...s.chair, busy: false } } : s));
+          scheduleState(key);
+          break;
+        case "member:line":
+        case "member:start":
+        case "member:done":
+        case "state":
+          scheduleState(key);
+          if (type !== "member:line") void refreshOverview();
+          break;
+        case "log":
+          setChat((c) => [...c, item("system", String(msg.line))]);
+          break;
+        case "chair:handover":
+          setChat((c) => [...c, item("event", `의장 계정 전환: ${String(msg.from)} → ${String(msg.to)} (${String(msg.reason)})`)]);
+          void refreshOverview();
+          break;
+      }
+    }, setWsUp);
+  }, [authed, refreshOverview, refreshState]);
+
+  const send = useCallback(
+    async (message: string) => {
+      if (!selected || isSpecial(selected)) return;
+      try {
+        await api.chat(selected, message);
+      } catch (e) {
+        notify((e as Error).message);
+      }
+    },
+    [selected, notify],
+  );
+
+  const onLogin = async () => {
+    try {
+      await api.login(token.trim());
+      setLoginError("");
+      setAuthed(true);
+    } catch (e) {
+      setLoginError((e as Error).message);
+    }
+  };
+
+  const currentProject = useMemo(() => overview?.projects.find((p) => selected.startsWith(p.id + "/")), [overview, selected]);
+
+  if (authed === null) return <div className="boot">연결 중…</div>;
+  if (authed === false) {
+    return (
+      <div className="login">
+        <div className="login-card">
+          <h1>GenCouncil</h1>
+          <p>서버 토큰을 입력하세요. 토큰은 PC에서 <code>gencouncil web token</code> 으로 볼 수 있습니다.</p>
+          <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="token" onKeyDown={(e) => e.key === "Enter" && onLogin()} autoFocus />
+          <button onClick={onLogin}>입장</button>
+          {loginError && <div className="err">{loginError}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  const left = (
+    <LeftPane
+      overview={overview}
+      selected={selected}
+      onSelect={(k) => {
+        setSelected(k);
+        if (mobile) setTab("center");
+      }}
+      onNewProject={() => setModal({ kind: "project" })}
+      onNewAgenda={(pid) => setModal({ kind: "agenda", projectId: pid })}
+      onGuidelines={(pid) => setModal({ kind: "guidelines", projectId: pid })}
+      memoryKey={MEMORY_KEY}
+      accountsKey={ACCOUNTS_KEY}
+      wsUp={wsUp}
+    />
+  );
+  const center =
+    selected === MEMORY_KEY ? (
+      <MemoryView notify={notify} />
+    ) : selected === ACCOUNTS_KEY ? (
+      <AccountsView notify={notify} />
+    ) : (
+      <CenterPane
+        state={state}
+        chat={chat}
+        firstTurn={firstTurn}
+        loading={loadingAgenda}
+        project={currentProject}
+        onSend={send}
+        onSetChair={async (model, effort, account, advisor) => {
+          if (!currentProject) return;
+          await api.setChair(currentProject.id, model, effort, account, advisor);
+          notify(account !== undefined ? `의장 계정을 ${account}로 바꿨습니다. 새 세션으로 시작합니다.` : "의장 설정을 저장했습니다. 다음 턴부터 적용됩니다.");
+          if (selected) void refreshState(selected);
+        }}
+        onReset={async () => {
+          if (!selected) return;
+          await api.reset(selected);
+          notify("의장 세션을 초기화했습니다 (state.md 유지).");
+          void refreshState(selected);
+        }}
+        onRetrospect={async () => {
+          if (!selected) return;
+          try {
+            notify("회고 시작: 의장이 교훈·성향을 공유 기억에 기록합니다.");
+            const r = await api.retrospect(selected);
+            notify(r.ran ? (r.isError ? `회고 실패: ${r.text.slice(0, 120)}` : "회고 완료") : "의장 세션이 없어 회고할 내용이 없습니다.");
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+        onFinish={async () => {
+          if (!selected || !confirm("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?")) return;
+          const retro = confirm("종료 전에 의장이 회고(교훈·성향을 공유 기억에 기록, 제안 승인)를 먼저 할까요?\n확인 = 회고 후 종료 / 취소 = 바로 종료");
+          try {
+            if (retro) notify("회고 중… 끝나면 종료합니다.");
+            await api.finish(selected, retro);
+            notify("안건을 종료했습니다.");
+            void refreshOverview();
+            void loadAgenda(selected);
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+      />
+    );
+  const right = (
+    <RightPane
+      state={state}
+      onOpen={(id) => setModal({ kind: "member", id })}
+      onMerge={async (id) => {
+        if (!selected) return;
+        try {
+          const r = await api.merge(selected, id);
+          notify(r.ok ? `${id} 머지 완료` : `충돌: ${r.conflicts.join(", ")}`);
+        } catch (e) {
+          notify((e as Error).message);
+        }
+      }}
+      onStop={async (id) => {
+        if (!selected || !confirm(`${id} 를 중지할까요?`)) return;
+        await api.stop(selected, id);
+      }}
+      onRelay={(id) => setModal({ kind: "relay", id })}
+      onHandover={(id) => setModal({ kind: "handover", id })}
+    />
+  );
+
+  return (
+    <div className={`app ${mobile ? "mobile" : ""}`}>
+      {mobile ? (
+        <>
+          <div className="tabs">
+            <button className={tab === "left" ? "on" : ""} onClick={() => setTab("left")}>안건</button>
+            <button className={tab === "center" ? "on" : ""} onClick={() => setTab("center")}>의장</button>
+            <button className={tab === "right" ? "on" : ""} onClick={() => setTab("right")}>
+              위원{state?.members.some((m) => m.status === "running") ? " ●" : ""}
+            </button>
+          </div>
+          <div className="pane-mobile">{tab === "left" ? left : tab === "center" ? center : right}</div>
+        </>
+      ) : (
+        <>
+          <aside className="pane left">{left}</aside>
+          <main className="pane center">{center}</main>
+          <aside className="pane right">{right}</aside>
+        </>
+      )}
+      {toast && <div className="toast">{toast}</div>}
+      {modal?.kind === "project" && (
+        <NewProjectModal
+          onClose={() => setModal(null)}
+          onCreate={async (b) => {
+            await api.createProject(b);
+            setModal(null);
+            void refreshOverview();
+          }}
+        />
+      )}
+      {modal?.kind === "agenda" && (
+        <NewAgendaModal
+          projectId={modal.projectId}
+          onClose={() => setModal(null)}
+          onCreate={async (title, goals) => {
+            const r = await api.createAgenda(modal.projectId, title, goals);
+            setModal(null);
+            await refreshOverview();
+            setSelected(r.key);
+          }}
+        />
+      )}
+      {modal?.kind === "guidelines" && <GuidelinesModal projectId={modal.projectId} onClose={() => setModal(null)} notify={notify} />}
+      {modal?.kind === "member" && selected && <MemberModal agendaKey={selected} memberId={modal.id} onClose={() => setModal(null)} />}
+      {modal?.kind === "relay" && selected && (
+        <RelayModal agendaKey={selected} memberId={modal.id} onClose={() => setModal(null)} onDone={(m) => { notify(m); void refreshState(selected); }} />
+      )}
+      {modal?.kind === "handover" && selected && (
+        <HandoverModal
+          agendaKey={selected}
+          memberId={modal.id}
+          accounts={state?.accounts ?? []}
+          onClose={() => setModal(null)}
+          onDone={(m) => { notify(m); void refreshState(selected); }}
+        />
+      )}
+    </div>
+  );
+}

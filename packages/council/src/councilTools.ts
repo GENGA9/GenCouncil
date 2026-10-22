@@ -1,0 +1,261 @@
+/**
+ * Chair-facing MCP server (tools prefixed council_*), hosted over Streamable HTTP
+ * by the council process so the headless `claude -p` chair can call back into it.
+ */
+import http from "node:http";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { z } from "zod";
+import type { Council } from "./council.js";
+
+function text(s: string) {
+  return { content: [{ type: "text" as const, text: s }] };
+}
+function json(v: unknown) {
+  return text(JSON.stringify(v, null, 2));
+}
+function err(s: string) {
+  return { content: [{ type: "text" as const, text: s }], isError: true };
+}
+
+async function guard<T>(fn: () => Promise<T> | T) {
+  try {
+    return json(await fn());
+  } catch (e) {
+    return err((e as Error).message);
+  }
+}
+
+export function createCouncilMcp(council: Council): McpServer {
+  const server = new McpServer({ name: "council", version: "0.1.0" });
+
+  server.registerTool(
+    "council_state",
+    {
+      title: "Council state",
+      description: "Goals, tasks, members (status/branch/result summary), integration worktree, and the chair's saved state.md.",
+      inputSchema: {},
+    },
+    async () => guard(() => council.state()),
+  );
+
+  server.registerTool(
+    "council_guidelines",
+    { title: "Project guidelines", description: "The project's work-assignment guidelines (AI tendencies, rules).", inputSchema: {} },
+    async () => text(council.registry.guidelines(council.project) || "(no guidelines)"),
+  );
+
+  server.registerTool(
+    "council_add_task",
+    {
+      title: "Add task",
+      description: "Create a task under the agenda. Keep tasks file-disjoint so members can run in parallel.",
+      inputSchema: {
+        title: z.string().min(2),
+        description: z.string().optional().describe("What/where/done-when; this is shown to the member"),
+        goal: z.number().int().min(1).optional().describe("1-based index of the goal this task serves"),
+      },
+    },
+    async (i) => guard(() => council.addTask(i)),
+  );
+
+  server.registerTool(
+    "council_update_task",
+    {
+      title: "Update task",
+      description: "Change a task's status (todo|doing|review|done|blocked) or note.",
+      inputSchema: {
+        task_id: z.string(),
+        status: z.enum(["todo", "doing", "review", "done", "blocked"]).optional(),
+        note: z.string().optional(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+      },
+    },
+    async ({ task_id, ...patch }) => guard(() => council.updateTask(task_id, patch)),
+  );
+
+  server.registerTool(
+    "council_assign",
+    {
+      title: "Assign task to a new member",
+      description:
+        "Spawn an autonomous member (claude or gemini CLI) in its own git worktree/branch to do one task, " +
+        "or create a relay member (provider 'relay': a human copies the packet into a web AI such as web Gemini / AI Studio / Antigravity and pastes the answer back; " +
+        "the web AI cannot see the repo, so list the files it needs in `files`). " +
+        "Returns immediately; you will be notified with a [council event] message when it finishes " +
+        "(or call council_wait). Write instructions as a complete brief: what, which files, done-when, don'ts. " +
+        "The account is chosen automatically from usable accounts; a member that dies of a quota/auth error is handed over automatically.",
+      inputSchema: {
+        task_id: z.string(),
+        provider: z.enum(["claude", "gemini", "relay"]).optional().describe("default: project.members.defaultProvider"),
+        model: z.string().optional(),
+        account: z.string().optional().describe("preferred account id (see council_accounts)"),
+        label: z.string().optional().describe("relay only: display label, e.g. 제미나이(agy), aistudio, chatgpt"),
+        files: z.array(z.string()).optional().describe("relay only: repo-relative files/dirs to bundle into the packet"),
+        instructions: z.string().min(20),
+      },
+    },
+    async ({ task_id, ...rest }) =>
+      guard(async () => {
+        const m = await council.assign({ taskId: task_id, ...rest });
+        return { member_id: m.id, provider: m.provider, account: m.account, branch: m.branch, worktree: m.worktree, status: m.status };
+      }),
+  );
+
+  server.registerTool(
+    "council_handover",
+    {
+      title: "Hand a member's work over to a new member",
+      description:
+        "Continue a failed/stopped member's task in the SAME worktree and branch with a new process (another account, provider or model). " +
+        "Quota/auth failures are handed over automatically; use this for manual cases (e.g. a relay member you want a CLI member to finish, or a stuck member you stopped).",
+      inputSchema: {
+        member_id: z.string(),
+        provider: z.enum(["claude", "gemini"]).optional(),
+        model: z.string().optional(),
+        account: z.string().optional(),
+        reason: z.string().optional(),
+      },
+    },
+    async ({ member_id, ...rest }) =>
+      guard(async () => {
+        const m = await council.handover(member_id, rest);
+        return { member_id: m.id, provider: m.provider, account: m.account, handover_from: m.handoverFrom, branch: m.branch };
+      }),
+  );
+
+  server.registerTool(
+    "council_relay_packet",
+    {
+      title: "Relay packet text",
+      description: "Return the packet a human must paste into the web AI for a relay member. Usually the user copies it from the UI; use this to check its contents.",
+      inputSchema: { member_id: z.string() },
+    },
+    async ({ member_id }) => {
+      try {
+        return text(council.relayPacket(member_id));
+      } catch (e) {
+        return err((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "council_accounts",
+    {
+      title: "Account registry",
+      description: "Which logins exist per provider and whether they are usable now (ok / exhausted with reset time / auth needed).",
+      inputSchema: {},
+    },
+    async () => guard(() => council.accounts.list()),
+  );
+
+  server.registerTool(
+    "council_member",
+    {
+      title: "Inspect member",
+      description: "Status, commits, diffstat, RESULT.md summary, optional log tail and full diff vs the agenda branch.",
+      inputSchema: {
+        member_id: z.string(),
+        tail: z.number().int().min(0).max(400).optional().describe("lines of log tail"),
+        diff: z.boolean().optional().describe("include full diff (review before merging)"),
+      },
+    },
+    async ({ member_id, tail, diff }) => guard(() => council.memberInfo(member_id, { tail, diff })),
+  );
+
+  server.registerTool(
+    "council_wait",
+    {
+      title: "Wait for a member to finish",
+      description: "Block until at least one running member finishes (or timeout). Returns finished members since the last call.",
+      inputSchema: { timeout_sec: z.number().int().min(5).max(3600).optional().describe("default 600") },
+    },
+    async ({ timeout_sec }) =>
+      guard(async () => {
+        const done = await council.waitAny((timeout_sec ?? 600) * 1000);
+        return { finished: done.map((m) => ({ id: m.id, status: m.status, task: m.taskId, commits: m.commits, summary: m.result?.summary })), still_running: council.runningCount() };
+      }),
+  );
+
+  server.registerTool(
+    "council_merge",
+    {
+      title: "Merge member branch into agenda branch",
+      description: "Review the diff first (council_member diff:true). On conflict the merge is aborted and conflict files are returned.",
+      inputSchema: { member_id: z.string() },
+    },
+    async ({ member_id }) => guard(() => council.merge(member_id)),
+  );
+
+  server.registerTool(
+    "council_stop_member",
+    { title: "Stop member", description: "Kill a running member process. Its branch and partial work are kept.", inputSchema: { member_id: z.string() } },
+    async ({ member_id }) => guard(() => ({ stopped: council.stopMember(member_id) })),
+  );
+
+  server.registerTool(
+    "council_checkpoint",
+    {
+      title: "Save chair state",
+      description:
+        "Overwrite chair/state.md with your current handover state: 한 일 / 하는 중 / 다음 할 일 / 막힌 점 / 사용자 결정 대기. " +
+        "Call after every decomposition, assignment batch, merge, or important decision.",
+      inputSchema: { state: z.string().min(10) },
+    },
+    async ({ state }) =>
+      guard(() => {
+        council.checkpoint(state);
+        return { saved: true };
+      }),
+  );
+
+  return server;
+}
+
+export interface CouncilHttp {
+  url: string;
+  port: number;
+  close(): Promise<void>;
+}
+
+/** Serve one MCP request (stateless streamable-http) for the given council. */
+export async function handleCouncilMcpRequest(council: Council, req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  const mcp = createCouncilMcp(council);
+  res.on("close", () => {
+    void transport.close();
+    void mcp.close();
+  });
+  try {
+    await mcp.connect(transport);
+    await transport.handleRequest(req, res);
+  } catch (e) {
+    if (!res.headersSent) res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: (e as Error).message }));
+  }
+}
+
+/** Host the council MCP server alone on 127.0.0.1 (used by the terminal REPL). */
+export function startCouncilHttp(council: Council, port = 0): Promise<CouncilHttp> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(async (req, res) => {
+      if (!req.url?.startsWith("/mcp")) {
+        res.writeHead(404).end();
+        return;
+      }
+      await handleCouncilMcpRequest(council, req, res);
+    });
+    server.on("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      const addr = server.address();
+      const p = typeof addr === "object" && addr ? addr.port : port;
+      resolve({
+        url: `http://127.0.0.1:${p}/mcp`,
+        port: p,
+        close: () => new Promise((r) => server.close(() => r())),
+      });
+    });
+  });
+}

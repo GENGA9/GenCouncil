@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GenCouncil",
+  "version": "0.1.0",
+  "identifier": "dev.gencouncil.desktop",
+  "build": {
+    "frontendDist": "../../web/dist"
+  },
+  "app": {
+    "windows": [],
+    "security": { "csp": null },
+    "trayIcon": { "iconPath": "../../web/public/icons/icon-192.png", "iconAsTemplate": false }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../../web/public/icons/icon-192.png", "../../web/public/icons/icon-512.png"]
+  }
+}

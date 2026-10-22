@@ -1,0 +1,22 @@
+{
+  "name": "@gencouncil/server",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "GenCouncil web server: REST + WebSocket API, static UI, per-agenda chair MCP endpoints",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@gencouncil/core": "*",
+    "@gencouncil/council": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
+  }
+}

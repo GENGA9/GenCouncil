@@ -1,0 +1,9 @@
+{
+  "name": "@gencouncil/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tauri tray wrapper for the GenCouncil web console (needs Rust; see README)",
+  "scripts": {
+    "tauri": "tauri"
+  }
+}

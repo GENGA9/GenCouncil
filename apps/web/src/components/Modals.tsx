@@ -1,0 +1,294 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { api } from "../api";
+
+function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className={`modal ${wide ? "wide" : ""}`} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <span>{title}</span>
+          <button className="icon" onClick={onClose}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; onCreate: (b: Record<string, unknown>) => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [repo, setRepo] = useState("");
+  const [chairModel, setChairModel] = useState("sonnet");
+  const [chairEffort, setChairEffort] = useState("");
+  const [chairAdvisor, setChairAdvisor] = useState("opus");
+  const [memberModel, setMemberModel] = useState("sonnet");
+  const [memberAdvisor, setMemberAdvisor] = useState("opus");
+  const [autonomy, setAutonomy] = useState("full");
+  const [provider, setProvider] = useState("claude");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await onCreate({ name, repo, chairModel, chairEffort, chairAdvisor, claudeModel: memberModel, claudeAdvisor: memberAdvisor, autonomy, defaultProvider: provider });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="제작위원회 추가" onClose={onClose}>
+      <label>이름<input value={name} onChange={(e) => setName(e.target.value)} placeholder="RF PROJECT 제작위원회" autoFocus /></label>
+      <label>저장소 경로 (PC의 git 저장소)<input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="D:\PROJECT\RF" /></label>
+      <div className="row2">
+        <label>의장 모델
+          <select value={chairModel} onChange={(e) => setChairModel(e.target.value)}>
+            <option value="">기본</option>
+            <option value="sonnet">sonnet (권장)</option>
+            <option value="opus">opus</option>
+            <option value="haiku">haiku</option>
+          </select>
+        </label>
+        <label>의장 advisor
+          <select value={chairAdvisor} onChange={(e) => setChairAdvisor(e.target.value)}>
+            <option value="opus">opus (권장)</option>
+            <option value="sonnet">sonnet</option>
+            <option value="fable">fable</option>
+            <option value="">없음</option>
+          </select>
+        </label>
+      </div>
+      <div className="row2">
+        <label>의장 추론
+          <select value={chairEffort} onChange={(e) => setChairEffort(e.target.value)}>
+            {["", "low", "medium", "high", "xhigh", "max"].map((x) => <option key={x} value={x}>{x || "기본"}</option>)}
+          </select>
+        </label>
+        <label>클로드 위원 모델 / advisor
+          <span className="row2">
+            <select value={memberModel} onChange={(e) => setMemberModel(e.target.value)}>
+              <option value="sonnet">sonnet</option>
+              <option value="opus">opus</option>
+              <option value="haiku">haiku</option>
+            </select>
+            <select value={memberAdvisor} onChange={(e) => setMemberAdvisor(e.target.value)}>
+              <option value="opus">opus</option>
+              <option value="sonnet">sonnet</option>
+              <option value="">없음</option>
+            </select>
+          </span>
+        </label>
+      </div>
+      <div className="row2">
+        <label>위원 자율성
+          <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
+            <option value="full">full (권한 확인 없음)</option>
+            <option value="edits">edits (편집만 자동)</option>
+          </select>
+        </label>
+        <label>기본 위원
+          <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <option value="claude">claude</option>
+            <option value="gemini">gemini</option>
+          </select>
+        </label>
+      </div>
+      {err && <div className="err">{err}</div>}
+      <div className="modal-actions">
+        <button className="ghost" onClick={onClose}>취소</button>
+        <button className="primary" onClick={submit} disabled={busy || !name.trim() || !repo.trim()}>만들기</button>
+      </div>
+    </Modal>
+  );
+}
+
+export function NewAgendaModal({ projectId, onClose, onCreate }: { projectId: string; onClose: () => void; onCreate: (title: string, goals: string[]) => Promise<void> }) {
+  const [title, setTitle] = useState("");
+  const [goals, setGoals] = useState("");
+  const [err, setErr] = useState("");
+  const submit = async () => {
+    try {
+      await onCreate(title, goals.split("\n").map((g) => g.trim()).filter(Boolean));
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  return (
+    <Modal title={`안건 추가 · ${projectId}`} onClose={onClose}>
+      <label>제목<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="밸런스 안건" autoFocus /></label>
+      <label>목표 (한 줄에 하나)<textarea rows={5} value={goals} onChange={(e) => setGoals(e.target.value)} placeholder={"목표1\n목표2\n목표3"} /></label>
+      {err && <div className="err">{err}</div>}
+      <div className="modal-actions">
+        <button className="ghost" onClick={onClose}>취소</button>
+        <button className="primary" onClick={submit} disabled={!title.trim()}>만들기</button>
+      </div>
+    </Modal>
+  );
+}
+
+export function GuidelinesModal({ projectId, onClose, notify }: { projectId: string; onClose: () => void; notify: (m: string) => void }) {
+  const [text, setText] = useState("");
+  const [file, setFile] = useState("");
+  useEffect(() => {
+    api.guidelines(projectId).then((r) => {
+      setText(r.text);
+      setFile(r.path);
+    });
+  }, [projectId]);
+  return (
+    <Modal title="업무 분장 가이드라인" onClose={onClose} wide>
+      <div className="small muted mono">{file}</div>
+      <textarea className="editor" rows={22} value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="modal-actions">
+        <button className="ghost" onClick={onClose}>닫기</button>
+        <button className="primary" onClick={async () => { await api.saveGuidelines(projectId, text); notify("가이드라인 저장. 의장의 다음 턴부터 반영됩니다."); onClose(); }}>저장</button>
+      </div>
+    </Modal>
+  );
+}
+
+export function RelayModal({ agendaKey, memberId, onClose, onDone }: { agendaKey: string; memberId: string; onClose: () => void; onDone: (msg: string) => void }) {
+  const [packet, setPacket] = useState("");
+  const [response, setResponse] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [tab, setTab] = useState<"packet" | "answer">("packet");
+  useEffect(() => {
+    api.packet(agendaKey, memberId).then(setPacket).catch((e) => setErr((e as Error).message));
+  }, [agendaKey, memberId]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(packet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const ta = document.getElementById("relay-packet") as HTMLTextAreaElement | null;
+      ta?.select();
+      setErr("클립보드 접근이 막혀 있습니다. 텍스트를 직접 선택해 복사하세요.");
+    }
+  };
+  const submit = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await api.relay(agendaKey, memberId, { response });
+      onDone(`${r.id} ${r.status}: ${r.summary?.slice(0, 80) ?? ""}`);
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={`릴레이 위원 ${memberId}`} onClose={onClose} wide>
+      <div className="tabs inline">
+        <button className={tab === "packet" ? "on" : ""} onClick={() => setTab("packet")}>1. 패킷 복사</button>
+        <button className={tab === "answer" ? "on" : ""} onClick={() => setTab("answer")}>2. 답변 붙여넣기</button>
+      </div>
+      {tab === "packet" ? (
+        <>
+          <p className="small muted">아래 전체를 웹 제미나이 / AI Studio / Antigravity 채팅에 붙여넣으세요. 답변은 FILE/RESULT 블록 양식으로 오도록 패킷에 적혀 있습니다.</p>
+          <div className="modal-actions" style={{ marginTop: 0, marginBottom: 8 }}>
+            <button className="primary small" onClick={copy}>{copied ? "복사됨 ✓" : "전체 복사"}</button>
+          </div>
+          <textarea id="relay-packet" className="editor" rows={18} value={packet} readOnly />
+        </>
+      ) : (
+        <>
+          <p className="small muted">웹 AI의 답변 전체를 붙여넣으세요. <code>=== FILE: 경로 ===</code> 블록은 worktree에 저장·커밋되고, <code>=== RESULT ===</code> 블록은 결과 보고가 됩니다. 파일을 직접 고친 경우(Antigravity)는 RESULT 블록만 붙여도 됩니다.</p>
+          <textarea className="editor" rows={16} value={response} onChange={(e) => setResponse(e.target.value)} placeholder="=== FILE: src/x.js ===&#10;...&#10;=== END ===&#10;=== RESULT ===&#10;## 결과&#10;...&#10;=== END ===" />
+          {err && <div className="err">{err}</div>}
+          <div className="modal-actions">
+            <button className="ghost" onClick={onClose}>닫기</button>
+            <button className="primary" onClick={submit} disabled={busy || !response.trim()}>적용하고 완료</button>
+          </div>
+        </>
+      )}
+      {tab === "packet" && err && <div className="err">{err}</div>}
+    </Modal>
+  );
+}
+
+export function HandoverModal({ agendaKey, memberId, accounts, onClose, onDone }: { agendaKey: string; memberId: string; accounts: { id: string; provider: string; status: string }[]; onClose: () => void; onDone: (msg: string) => void }) {
+  const [provider, setProvider] = useState("");
+  const [account, setAccount] = useState("");
+  const [model, setModel] = useState("");
+  const [err, setErr] = useState("");
+  const usable = accounts.filter((a) => (!provider || a.provider === provider) && a.status === "ok");
+  const submit = async () => {
+    try {
+      const r = await api.handover(agendaKey, memberId, { provider: provider || undefined, account: account || undefined, model: model || undefined });
+      onDone(`${memberId} → ${r.id} (${r.provider}/${r.account ?? "default"}) 인계 시작`);
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  return (
+    <Modal title={`${memberId} 이어받기`} onClose={onClose}>
+      <p className="small muted">같은 worktree·브랜치에서 새 위원이 남은 작업을 이어갑니다. 비워 두면 같은 제공자의 다른 계정을 자동으로 고릅니다.</p>
+      <div className="row2">
+        <label>제공자
+          <select value={provider} onChange={(e) => { setProvider(e.target.value); setAccount(""); }}>
+            <option value="">자동</option>
+            <option value="claude">claude</option>
+            <option value="gemini">gemini</option>
+          </select>
+        </label>
+        <label>계정
+          <select value={account} onChange={(e) => setAccount(e.target.value)}>
+            <option value="">자동</option>
+            {usable.map((a) => <option key={a.id} value={a.id}>{a.id} ({a.provider})</option>)}
+          </select>
+        </label>
+      </div>
+      <label>모델 (선택)<input value={model} onChange={(e) => setModel(e.target.value)} placeholder="claude-sonnet-5-5" /></label>
+      {err && <div className="err">{err}</div>}
+      <div className="modal-actions">
+        <button className="ghost" onClick={onClose}>취소</button>
+        <button className="primary" onClick={submit}>이어받기</button>
+      </div>
+    </Modal>
+  );
+}
+
+export function MemberModal({ agendaKey, memberId, onClose }: { agendaKey: string; memberId: string; onClose: () => void }) {
+  const [tab, setTab] = useState<"log" | "diff" | "result" | "state">("result");
+  const [info, setInfo] = useState<Record<string, unknown> & { logTail: string[]; diff?: string; stateMd?: string } | null>(null);
+  useEffect(() => {
+    api.member(agendaKey, memberId, { tail: 200, diff: true }).then(setInfo).catch(() => setInfo(null));
+  }, [agendaKey, memberId]);
+  const result = info?.result as { summary?: string; changedFiles?: string; unfinished?: string } | undefined;
+  return (
+    <Modal title={`위원 ${memberId}`} onClose={onClose} wide>
+      <div className="tabs inline">
+        <button className={tab === "result" ? "on" : ""} onClick={() => setTab("result")}>결과</button>
+        <button className={tab === "diff" ? "on" : ""} onClick={() => setTab("diff")}>diff</button>
+        <button className={tab === "log" ? "on" : ""} onClick={() => setTab("log")}>로그</button>
+        <button className={tab === "state" ? "on" : ""} onClick={() => setTab("state")}>STATE.md</button>
+      </div>
+      {!info && <div className="muted small">불러오는 중…</div>}
+      {info && tab === "result" && (
+        <div className="member-detail">
+          <div className="small muted mono">{String(info.branch)} · {String(info.status)} · 커밋 {(info.commits as string[] | undefined)?.length ?? 0}</div>
+          <h4>결과</h4><pre className="mem-text">{result?.summary || "(없음)"}</pre>
+          <h4>변경 파일</h4><pre className="mem-text">{result?.changedFiles || String(info.diffstat ?? "(없음)")}</pre>
+          <h4>미완료·막힌 점</h4><pre className="mem-text">{result?.unfinished || "(없음)"}</pre>
+          {Boolean(info.error) && <div className="err">{String(info.error)}</div>}
+        </div>
+      )}
+      {info && tab === "diff" && <pre className="log">{info.diff || "(diff 없음)"}</pre>}
+      {info && tab === "log" && <pre className="log">{info.logTail.join("\n") || "(로그 없음)"}</pre>}
+      {info && tab === "state" && <pre className="log">{info.stateMd || "(STATE.md 없음: 위원이 아직 체크포인트를 쓰지 않음)"}</pre>}
+    </Modal>
+  );
+}
