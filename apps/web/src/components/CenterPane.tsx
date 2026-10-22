@@ -167,7 +167,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
       </div>
       {project && (
         <div className="small muted center-foot">
-          {project.mode === "folder" ? `폴더 ${project.source} (사본에서 작업)` : project.repo} · 위원 자율성 {project.members.autonomy} · 한도{" "}
+          {project.repo}{project.localGit ? " (로컬 git)" : ""} · 위원 자율성 {project.members.autonomy} · 한도{" "}
           {Object.entries(state.limits)
             .filter(([, l]) => l.maxMembers > 0)
             .map(([k, l]) => `${k} ${state.active[k] ?? 0}/${l.maxMembers}${l.maxModel ? " ≤" + l.maxModel : ""}`)

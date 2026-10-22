@@ -74,6 +74,7 @@ export interface ProjectOv {
   repo: string;
   mode?: "git" | "folder";
   source?: string;
+  localGit?: boolean;
   baseBranch: string;
   chair: { model?: string; effort?: string; advisor?: string; account?: string };
   members: { autonomy: string; defaultProvider: string; limits?: Limits; explorers?: boolean };

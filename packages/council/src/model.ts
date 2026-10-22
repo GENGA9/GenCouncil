@@ -25,9 +25,11 @@ export interface ProjectConfig {
   repo: string;
   /** default "git" */
   mode?: ProjectMode;
-  /** folder mode: the user's folder that results are copied back to */
+  /** legacy copy mode only */
   source?: string;
-  /** folder mode: extra names to skip when copying (on top of .git, node_modules, ...) */
+  /** the folder was not a repository: GenCouncil created a local git there (never pushed) and commits the user's edits itself */
+  localGit?: boolean;
+  /** extra folder names to keep out of git (on top of environments, caches, binaries, big media) */
   ignore?: string[];
   /** branch agendas are cut from and merged back into (default: current branch at creation) */
   baseBranch: string;
@@ -243,6 +245,7 @@ export class ProjectRegistry {
     baseBranch: string;
     mode?: ProjectMode;
     source?: string;
+    localGit?: boolean;
     chairModel?: string;
     chairEffort?: string;
     chairAdvisor?: string;
@@ -262,6 +265,7 @@ export class ProjectRegistry {
       baseBranch: input.baseBranch,
       mode: input.mode ?? "git",
       source: input.source ? path.resolve(input.source) : undefined,
+      localGit: input.localGit || undefined,
       chair: {
         provider: "claude",
         model: input.chairModel ?? "opus",

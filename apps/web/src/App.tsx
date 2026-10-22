@@ -344,7 +344,8 @@ export function App() {
         <NewProjectModal
           onClose={() => setModal(null)}
           onCreate={async (b) => {
-            await api.createProject(b);
+            const created = await api.createProject(b);
+            if (created.scanSummary) notify(created.scanSummary);
             setModal(null);
             void refreshOverview();
           }}

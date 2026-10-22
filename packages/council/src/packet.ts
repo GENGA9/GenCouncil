@@ -32,7 +32,9 @@ ${i.instructions.trim()}
 ${i.task.description.trim() || "(위 지시 참고)"}
 
 ## 규칙
-
+${i.project.localGit ? `
+0. 이 작업 폴더에는 git이 관리하는 파일만 있다. 파이썬 가상환경, 실행 파일·라이브러리, 큰 이미지·영상·압축·모델 파일은 원본 폴더(${i.project.repo})에만 있다. 그런 파일이 필요하면 원본 경로에서 읽기만 하고, 원본 폴더에는 절대 쓰지 않는다.
+` : ""}
 1. 현재 폴더 안에서만 작업한다. 상위 폴더, 다른 worktree, 다른 브랜치를 건드리지 않는다. \`git checkout\`, \`git switch\`, \`git merge\`, \`git rebase\`, \`git push\` 는 금지.
 2. 완료하면 \`git add -A && git commit -m "${i.task.title}: <요약>"\` 으로 전부 커밋한다. 중간 커밋을 여러 번 해도 된다. \`.council/\` 폴더는 커밋하지 않는다(이미 제외되어 있다).
 3. 마지막에 \`.council/RESULT.md\` 를 아래 양식으로 작성한다.

@@ -39,7 +39,7 @@ import {
   type Limits,
   type WebSite,
 } from "./models.js";
-import { snapshot, syncBack } from "./shadow.js";
+import { commitUserEdits } from "./localgit.js";
 import {
   AgendaStore,
   ProjectRegistry,
@@ -93,6 +93,7 @@ export interface CouncilState {
   active: Record<LimitKey, number>;
   mode: "git" | "folder";
   source?: string;
+  localGit: boolean;
 }
 
 const RELAY_PROMPT_HEAD = `# 릴레이 작업 패킷
@@ -161,10 +162,10 @@ export class Council extends EventEmitter {
     if (!(await isRepo(repo))) throw new Error(`not a git repository: ${repo}`);
     if (!(await hasCommits(repo))) throw new Error(`repository has no commits yet: ${repo}`);
     await ensureExclude(repo, [".worktrees/", ".council/", ".gemini/"]);
-    if (this.project.mode === "folder") {
-      // pick up whatever the user changed in their folder since the last snapshot
-      const c = await snapshot(this.project);
-      if (c) this.log(`folder snapshot ${c.slice(0, 7)} from ${this.project.source}`);
+    if (this.project.localGit) {
+      // the user edits this folder directly; record their changes so agendas start from them
+      const c = await commitUserEdits(this.project);
+      if (c) this.log(`사용자 변경을 커밋했습니다 (${c.slice(0, 7)})`);
     }
     const agenda = this.store.agenda();
     await ensureBranch(repo, agenda.branch, agenda.baseBranch);
@@ -230,6 +231,7 @@ export class Council extends EventEmitter {
       active: this.activeCounts(),
       mode: this.project.mode ?? "git",
       source: this.project.source,
+      localGit: Boolean(this.project.localGit),
     };
   }
 
@@ -818,22 +820,12 @@ export class Council extends EventEmitter {
     const agenda = this.store.agenda();
     const cur = await currentBranch(repo);
     if (cur !== agenda.baseBranch) throw new Error(`main checkout is on '${cur}', expected '${agenda.baseBranch}'. Switch branches first.`);
+    // local-git folders: commit the user's own edits first so the merge sees them (conflicts surface as git conflicts)
+    if (this.project.localGit) await commitUserEdits(this.project);
     if (!(await isClean(repo))) throw new Error("main checkout has uncommitted changes; commit or stash them first");
-    let before: string | undefined;
-    if (this.project.mode === "folder") {
-      // take the user's latest edits first so the merge sees them (conflicts surface as git conflicts)
-      await snapshot(this.project);
-      before = (await git(repo, ["rev-parse", "HEAD"])).trim();
-    }
     const res = await mergeInto(repo, agenda.branch, `agenda: ${agenda.title}`);
     if (!res.ok) throw new Error(`merge conflict in main checkout: ${res.conflicts.join(", ")}`);
-    let output = res.output;
-    if (this.project.mode === "folder" && before) {
-      const after = (await git(repo, ["rev-parse", "HEAD"])).trim();
-      const r = await syncBack(this.project, before, after);
-      output += `\ncopied back to ${this.project.source}: ${r.written.length} written, ${r.deleted.length} deleted`;
-      this.log(`folder sync: ${r.written.length} written, ${r.deleted.length} deleted in ${this.project.source}`);
-    }
+    const output = res.output;
     await this.clean();
     agenda.status = "closed";
     agenda.closed = new Date().toISOString();

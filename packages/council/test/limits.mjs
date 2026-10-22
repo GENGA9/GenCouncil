@@ -113,23 +113,45 @@ release();
 await finished;
 check("slot freed after finish", council.activeCounts().claude === 0);
 
-// ---- folder mode ----
+// ---- non-git folder: local git in place ----
 const src = path.join(tmp, "plain folder");
 fs.mkdirSync(path.join(src, "sub"), { recursive: true });
 fs.writeFileSync(path.join(src, "keep.txt"), "keep\n");
 fs.writeFileSync(path.join(src, "sub", "old.txt"), "old\n");
 fs.mkdirSync(path.join(src, "node_modules", "x"), { recursive: true });
 fs.writeFileSync(path.join(src, "node_modules", "x", "big.js"), "ignored\n");
+fs.mkdirSync(path.join(src, "tools", "py-env", "Lib"), { recursive: true });
+fs.writeFileSync(path.join(src, "tools", "py-env", "pyvenv.cfg"), "home = x\n");
+fs.writeFileSync(path.join(src, "tools", "py-env", "Lib", "mod.py"), "x = 1\n");
+fs.writeFileSync(path.join(src, "tools", "run.py"), "print(1)\n");
+fs.mkdirSync(path.join(src, "output"), { recursive: true });
+fs.writeFileSync(path.join(src, "output", "big.png"), Buffer.alloc(100 * 1024));
+fs.writeFileSync(path.join(src, "icon.png"), Buffer.alloc(2 * 1024));
+fs.writeFileSync(path.join(src, "lib.dll"), Buffer.alloc(10));
+// a folder that is its own git repository
+fs.mkdirSync(path.join(src, "site"), { recursive: true });
+execFileSync("git", ["init", "-q"], { cwd: path.join(src, "site") });
+fs.writeFileSync(path.join(src, "site", "index.html"), "<h1>x</h1>\n");
 const fp = await createProject({ name: "폴더 작업", path: src });
-check("folder mode chosen for non-git folder", fp.mode === "folder" && fp.source === path.resolve(src) && fp.name === "폴더 작업 제작위원회");
-check("source folder untouched (no .git)", !fs.existsSync(path.join(src, ".git")));
-check("shadow has files but not node_modules", fs.existsSync(path.join(fp.repo, "keep.txt")) && !fs.existsSync(path.join(fp.repo, "node_modules")));
+check("local git created in the folder", fp.localGit === true && fp.repo === path.resolve(src) && fs.existsSync(path.join(src, ".git")) && fp.name === "폴더 작업 제작위원회");
+const lsFiles = async () => (await git(src, ["ls-files"])).split("\n").filter(Boolean);
+const tracked = await lsFiles();
+check("code tracked, small icon tracked", tracked.includes("keep.txt") && tracked.includes("tools/run.py") && tracked.includes("icon.png"), tracked.join(","));
+check("venv, node_modules, big media, binaries excluded", !tracked.some((f) => f.startsWith("tools/py-env") || f.startsWith("node_modules") || f === "output/big.png" || f === "lib.dll"), tracked.join(","));
+check("scan summary", /제외/.test(fp.scanSummary) && fp.scan.skippedDirs.includes("tools/py-env"), fp.scanSummary);
+check("nested repo kept out", fp.scan.nestedRepos.includes("site") && !tracked.some((f) => f.startsWith("site")) && (await git(src, ["status", "--porcelain"])).trim() === "", fp.scanSummary);
+
 const fstore = AgendaStore.create(fp, "폴더 안건", ["y"]);
+// the user edits the folder before the agenda opens: committed on open
+fs.writeFileSync(path.join(src, "before.txt"), "before\n");
 const fc = new Council(fstore, memory);
 await fc.open();
-// a "member": edits keep.txt, adds new.txt, deletes sub/old.txt on its branch
+check("user edits committed on open", (await git(src, ["log", "--oneline", "-1"])).includes("사용자 변경 반영") && (await git(src, ["status", "--porcelain"])).trim() === "");
+
+// a member edits keep.txt, adds new.txt, deletes sub/old.txt on its branch
 const wt = fstore.memberWorktree("claude-1");
 await ensureWorktree(fp.repo, wt, fstore.memberBranch("claude-1"), fstore.agenda().branch);
+check("member worktree has no venv or big files", !fs.existsSync(path.join(wt, "tools", "py-env")) && !fs.existsSync(path.join(wt, "output", "big.png")) && fs.existsSync(path.join(wt, "keep.txt")));
 fs.writeFileSync(path.join(wt, "keep.txt"), "keep\nchanged by member\n");
 fs.writeFileSync(path.join(wt, "new.txt"), "new\n");
 fs.rmSync(path.join(wt, "sub", "old.txt"));
@@ -139,16 +161,19 @@ fstore.saveMembers([{ id: "claude-1", provider: "claude", taskId: "T1", branch: 
 fstore.saveTasks([{ id: "T1", title: "t", description: "", status: "review", created: "", updated: "" }]);
 const fc2 = new Council(fstore, memory);
 await fc2.open();
-check("member merge in shadow", (await fc2.merge("claude-1")).ok);
-// meanwhile the user edits another file in their folder
+check("member merge", (await fc2.merge("claude-1")).ok);
+
+// meanwhile the user edits another file and drops a big video into the folder
 fs.writeFileSync(path.join(src, "user.txt"), "user edit\n");
-const out = await fc2.finish();
-check("finish reports copy-back", /copied back to .*: 2 written, 1 deleted/.test(out), out.split("\n").pop());
-check("member change copied to folder", fs.readFileSync(path.join(src, "keep.txt"), "utf8").includes("changed by member") && fs.existsSync(path.join(src, "new.txt")));
-check("member deletion applied to folder", !fs.existsSync(path.join(src, "sub", "old.txt")));
-check("user's own edit kept", fs.readFileSync(path.join(src, "user.txt"), "utf8") === "user edit\n");
-check("ignored folders untouched", fs.existsSync(path.join(src, "node_modules", "x", "big.js")));
-check("still no .git in folder", !fs.existsSync(path.join(src, ".git")));
+fs.writeFileSync(path.join(src, "output", "clip.mp4"), Buffer.alloc(400 * 1024));
+await fc2.finish();
+const after = await lsFiles();
+check("member change in folder", fs.readFileSync(path.join(src, "keep.txt"), "utf8").replace(/\r/g, "").includes("changed by member") && fs.existsSync(path.join(src, "new.txt")));
+check("member deletion applied", !fs.existsSync(path.join(src, "sub", "old.txt")));
+check("user edit kept and committed", fs.readFileSync(path.join(src, "user.txt"), "utf8") === "user edit\n" && after.includes("user.txt"));
+check("new big file stays out of git but on disk", fs.existsSync(path.join(src, "output", "clip.mp4")) && !after.includes("output/clip.mp4"));
+check("excluded things untouched", fs.existsSync(path.join(src, "node_modules", "x", "big.js")) && fs.existsSync(path.join(src, "tools", "py-env", "Lib", "mod.py")) && fs.existsSync(path.join(src, "output", "big.png")));
+check("worktrees cleaned", !fs.existsSync(path.join(src, ".worktrees", "폴더-안건")));
 
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });

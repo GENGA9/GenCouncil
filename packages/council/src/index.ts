@@ -13,7 +13,7 @@ export * from "./quota.js";
 export * from "./relay.js";
 export * from "./explorers.js";
 export * from "./models.js";
-export * from "./shadow.js";
+export * from "./localgit.js";
 export * from "./launch.js";
 export * from "./projects.js";
 export * from "./approval.js";

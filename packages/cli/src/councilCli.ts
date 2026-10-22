@@ -137,7 +137,8 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
           chairModel: values["chair-model"], chairEffort: values["chair-effort"], chairAdvisor: values["chair-advisor"], chairAccount: values["chair-account"],
           autonomy: values.autonomy as Autonomy | undefined, defaultProvider: values.provider as CliProvider | undefined, limits,
         }, registry);
-        console.log(`project ${p.id} "${p.name}" (${p.mode}${p.mode === "folder" ? `: ${p.source} via shadow repo` : ""}) -> ${projectDir(p.id)}`);
+        console.log(`project ${p.id} "${p.name}" (${p.localGit ? "local git created in the folder" : "git"}: ${p.repo}) -> ${projectDir(p.id)}`);
+        if (p.scanSummary) console.log(p.scanSummary);
         console.log(`guidelines: ${registry.guidelinesPath(p)}`);
         return 0;
       }
@@ -146,7 +147,7 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
         if (!all.length) console.log("(no projects)");
         for (const p of all)
           console.log(
-            `${p.id}  "${p.name}"  ${p.mode === "folder" ? `folder=${p.source}` : `repo=${p.repo}`}  chair=${p.chair.model ?? "default"}/${p.chair.effort ?? "default"}${p.chair.advisor ? "+" + p.chair.advisor : ""}`,
+            `${p.id}  "${p.name}"  ${p.localGit ? "local-git=" : "repo="}${p.repo}  chair=${p.chair.model ?? "default"}/${p.chair.effort ?? "default"}${p.chair.advisor ? "+" + p.chair.advisor : ""}`,
           );
         return 0;
       }

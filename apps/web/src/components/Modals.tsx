@@ -85,7 +85,7 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
           <button className="ghost" type="button" onClick={() => setPicking(true)}>폴더 선택</button>
         </span>
       </label>
-      <div className="small muted">git 저장소면 그대로 쓰고, 아니면 GenCouncil 안의 사본에서 작업한 뒤 안건 종료 때 바뀐 파일만 이 폴더로 옮깁니다. 폴더에 .git을 만들지 않습니다.</div>
+      <div className="small muted">이 폴더에서 바로 작업합니다. git 저장소가 아니면 폴더 안에 로컬 git을 만듭니다(어디에도 올라가지 않음). 파이썬 가상환경·바이너리·큰 이미지/영상/압축 파일은 git에서 제외되고 폴더에는 그대로 남습니다.</div>
       <ChairFields model={chairModel} effort={chairEffort} setModel={setChairModel} setEffort={setChairEffort} />
       <label>위원 자율성
         <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
@@ -127,7 +127,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
   };
   return (
     <Modal title={`${project.name} 설정`} onClose={onClose} wide>
-      <div className="small muted mono">{project.mode === "folder" ? `폴더: ${project.source} (사본에서 작업)` : `git: ${project.repo}`}</div>
+      <div className="small muted mono">{`${project.localGit ? "로컬 git (GenCouncil이 만듦)" : "git"}: ${project.repo}`}</div>
       <ChairFields model={chairModel} effort={chairEffort} setModel={setChairModel} setEffort={setChairEffort} />
       <label>위원 자율성
         <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
