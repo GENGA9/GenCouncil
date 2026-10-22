@@ -41,13 +41,13 @@ const rejects = (p, re) => p.then(() => false, (e) => re.test(e.message));
 
 // ---- ladders ----
 const lim = normalizeLimits({ claude: { maxMembers: 1, maxModel: "sonnet", maxEffort: "medium" }, gpt: { maxMembers: 0 }, "gemini-web": { maxMembers: 1 } });
-check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 1 && tierOf("gemini", "gemini-2.5-flash") === 1);
+check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 1 && tierOf("gemini", "gemini-3.8-flash-high") === 0 && tierOf("gemini", "gemini-2.5-pro") === 1);
 check("default model is the workhorse within limit", resolveModel("claude", undefined, lim.claude) === "sonnet" && resolveModel("gpt", undefined, normalizeLimits({}).gpt) === "gpt-6.1-sol");
 check("model above limit rejected", throws(() => resolveModel("claude", "opus", lim.claude), /above the user's limit/));
 check("unknown model rejected", throws(() => resolveModel("claude", "gpt-6", lim.claude), /unknown claude model/));
 check("default effort medium", resolveEffort("claude", undefined, lim.claude) === "medium");
 check("effort above limit rejected", throws(() => resolveEffort("claude", "high", lim.claude), /above the user's limit/));
-check("gemini has no effort", resolveEffort("gemini", "high", lim.gemini) === undefined);
+check("gemini effort caps at high", resolveEffort("gemini", "high", lim.gemini) === "high" && resolveEffort("gemini", undefined, lim.gemini) === "medium");
 check("advisor below main rejected", throws(() => resolveAdvisor("sonnet", "haiku", lim.claude), /ranks below/));
 check("advisor above limit rejected", throws(() => resolveAdvisor("haiku", "opus", lim.claude), /above the user's limit/));
 check("advisor ok", resolveAdvisor("haiku", "sonnet", lim.claude) === "sonnet");

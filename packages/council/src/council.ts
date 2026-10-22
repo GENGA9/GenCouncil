@@ -5,7 +5,7 @@ import { type EntryType, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
 import { AccountRegistry, type Account } from "./accounts.js";
 import { ChairApprover, chairReview, type PermissionDecision, type Reviewer } from "./approval.js";
-import { drivers, parseClaudeLine, parseCodexLine, parseGeminiLine, type RunningProc } from "./drivers.js";
+import { drivers, makeAgyParser, parseClaudeLine, parseCodexLine, type RunningProc } from "./drivers.js";
 import {
   currentBranch,
   deleteBranch,
@@ -465,7 +465,7 @@ export class Council extends EventEmitter {
       `=== ${new Date().toISOString()} spawn ${provider} account=${account.id} model=${member.model ?? "default"} effort=${member.effort ?? "-"} advisor=${member.advisor ?? "-"} task=${task.id} branch=${member.branch}\n`,
     );
 
-    const parse = provider === "claude" ? parseClaudeLine : provider === "gpt" ? parseCodexLine : parseGeminiLine;
+    const parse = provider === "claude" ? parseClaudeLine : provider === "gpt" ? parseCodexLine : makeAgyParser();
     let resultText = "";
     let sawError = false;
     const tail: string[] = [];

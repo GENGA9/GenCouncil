@@ -41,7 +41,7 @@ ${goals || "(아직 목표 없음: 사용자의 첫 요청을 보고 council_set
 ${i.limits}
 
 원칙: **실행은 싸게, 판단은 비싸게.**
-- 모델은 작업을 끝낼 수 있는 가장 낮은 단계부터. 단순 수정·반복·문서 → 하위(haiku / gemini flash / gpt luna), 일반 코딩 → 주력(sonnet / gpt sol), 설계가 어려운 작업만 상위(opus / astra / gemini pro).
+- 모델은 작업을 끝낼 수 있는 가장 낮은 단계부터. 단순 수정·반복·문서 → 하위(haiku / gemini-3.8-flash / gpt luna), 일반 코딩 → 주력(sonnet / gpt sol), 설계가 어려운 작업만 상위(opus / astra / gemini pro).
 - 여러 단계에 걸친 긴 클로드 작업은 **sonnet + advisor opus**(한도가 허용하면): 평소엔 sonnet이 일하고 계획 확정 전·같은 오류 2회·완료 선언 전에만 opus에 상담한다. 짧은 작업엔 advisor를 붙이지 마라. advisor는 메인보다 같거나 높은 모델이어야 한다.
 - 클로드 위원에게는 읽기 전용 haiku 탐색기(search/grep/docs)가 자동으로 붙는다. 탐색이 많은 작업이라고 메인 모델을 올릴 필요 없다.
 - effort: 기계적 작업 low, 보통 medium(기본), 까다로운 디버깅·설계 high 이상. 제미나이 CLI는 effort가 없다.

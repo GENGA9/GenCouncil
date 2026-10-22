@@ -1,7 +1,8 @@
 import { familyColorByName } from "../model";
-import type { AgendaOv, Overview } from "../types";
+import type { AgendaOv, Overview, UsageSnapshot } from "../types";
 import { THEME_LABEL, useTheme } from "../theme";
 import { GridSpinner } from "./GridSpinner";
+import { UsagePanel } from "./UsagePanel";
 
 interface Props {
   overview: Overview | null;
@@ -16,6 +17,8 @@ interface Props {
   onSettings: (projectId: string) => void;
   /** live status of the open agenda (more current than the overview) */
   live?: { key: string; chairBusy: boolean; families: string[] };
+  /** usage pushed over the websocket */
+  usage?: UsageSnapshot | null;
 }
 
 /** spinner color for an agenda: the chair (claude) when it is thinking, else the first running family */
@@ -25,7 +28,7 @@ function agendaSpinner(a: AgendaOv, size: number) {
   return null;
 }
 
-export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live }: Props) {
+export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live, usage }: Props) {
   const ts = overview?.server.tailscale;
   const [theme, cycleTheme] = useTheme();
   const badAccounts = overview?.accounts.filter((a) => a.status !== "ok").length ?? 0;
@@ -106,6 +109,8 @@ export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onS
           <div className="small muted">안건을 선택하세요</div>
         )}
       </div>
+
+      <UsagePanel pushed={usage} />
 
       {overview && (
         <div className="server-info small muted">

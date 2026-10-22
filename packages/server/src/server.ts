@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { MemoryStore, type EntryType } from "@gencouncil/core";
 import {
   AccountRegistry,
+  collectUsage,
+  type AccountUsage,
   AgendaRuntime,
   AgendaStore,
   CLI_PROVIDERS,
@@ -14,6 +16,7 @@ import {
   ProjectRegistry,
   SITE_INFO,
   SUPPORTS_EFFORT,
+  EFFORT_CAP,
   WEB_SITES,
   createProject,
   updateProject,
@@ -117,6 +120,20 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   const webDir = opts.webDir ?? defaultWebDir();
   const registry = new ProjectRegistry();
   const accounts = new AccountRegistry();
+  // subscription usage (5h / weekly) per CLI account, cached; reading it spawns codex / agy
+  const USAGE_TTL = 5 * 60 * 1000;
+  let usageCache: { at: number; items: AccountUsage[] } | undefined;
+  let usageRun: Promise<void> | undefined;
+  const refreshUsage = (): Promise<void> =>
+    (usageRun ??= collectUsage(accounts)
+      .then((items) => {
+        usageCache = { at: Date.now(), items };
+        broadcast({ type: "usage", ...usageCache });
+      })
+      .catch((e) => log(`usage check failed: ${(e as Error).message}`))
+      .finally(() => {
+        usageRun = undefined;
+      }));
   const memory = new MemoryStore({ watch: true });
   await memory.init();
   const tailscale = await detectTailscale();
@@ -300,7 +317,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     return { ...p, scanSummary };
   });
   on("GET", "/api/models", () => ({
-    providers: CLI_PROVIDERS.map((p) => ({ id: p, models: LADDERS[p].map(({ id, label, note }) => ({ id, label, note })), effort: SUPPORTS_EFFORT[p] })),
+    providers: CLI_PROVIDERS.map((p) => ({ id: p, models: LADDERS[p].map(({ id, label, note }) => ({ id, label, note })), effort: SUPPORTS_EFFORT[p], efforts: EFFORTS.slice(0, EFFORTS.indexOf(EFFORT_CAP[p]) + 1) })),
     sites: WEB_SITES.map((s) => ({ id: s, ...SITE_INFO[s] })),
     efforts: EFFORTS,
     defaults: DEFAULT_LIMITS,
@@ -344,6 +361,11 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
 
   // ---------- accounts ----------
   on("GET", "/api/accounts", () => accounts.list());
+  on("GET", "/api/usage", async ({ url }) => {
+    const force = url.searchParams.get("refresh") === "1";
+    if (force || !usageCache || Date.now() - usageCache.at > USAGE_TTL) await refreshUsage();
+    return usageCache ?? { at: 0, items: [] };
+  });
   on("POST", "/api/accounts", async ({ body }) => {
     const b = await body();
     const id = String(b.id ?? "").trim();

@@ -1,7 +1,7 @@
 /**
  * CLI drivers. Every member and the chair is a headless CLI process:
  *   claude -p ... --output-format stream-json     (uses the user's Claude Code login)
- *   gemini -p ... -o stream-json                  (uses the user's Gemini CLI login)
+ *   agy -p ... --output-format stream-json        (Antigravity CLI, the user's Google login)
  * Multi-account works by pointing the process at another config dir
  * (CLAUDE_CONFIG_DIR / HOME+USERPROFILE for gemini).
  */
@@ -144,18 +144,39 @@ export const claudeDriver: Driver = {
   },
 };
 
-// ---------- Gemini CLI ----------
+// ---------- Gemini via Antigravity CLI (agy) ----------
+// Google stopped serving Gemini CLI personal logins; Antigravity CLI is the replacement.
+
+/** "gemini-4-argon" + "high" -> "gemini-4-argon-high" (xhigh/max clamp to high) */
+export function agyModelId(model: string | undefined, effort: string | undefined): string | undefined {
+  if (!model) return undefined;
+  if (/-(low|medium|high)$/.test(model)) return model;
+  const e = effort === "low" || effort === "medium" ? effort : effort ? "high" : "medium";
+  return `${model}-${e}`;
+}
+
+/** packets up to this size go in the prompt itself; bigger ones are read from .council/TASK.md */
+const AGY_INLINE_PACKET = 20000;
 
 export const geminiDriver: Driver = {
   provider: "gemini",
   spawn(spec, onLine) {
-    const args = ["-p", spec.prompt, "-o", "stream-json"];
-    if (spec.model) args.push("-m", spec.model);
-    args.push("--approval-mode", spec.autonomy === "full" ? "yolo" : "auto_edit");
+    let prompt = spec.prompt;
+    if (spec.stdinText) {
+      prompt +=
+        spec.stdinText.length <= AGY_INLINE_PACKET
+          ? `\n\n(작업 패킷은 stdin 대신 아래에 붙였습니다)\n\n${spec.stdinText}`
+          : "\n\n작업 패킷이 길어 stdin 대신 .council/TASK.md 파일로만 전달됩니다. 먼저 그 파일을 읽으세요.";
+    }
+    const args = ["-p", prompt, "--output-format", "stream-json"];
+    const model = agyModelId(spec.model, spec.effort);
+    if (model) args.push("--model", model);
+    if (spec.autonomy === "full") args.push("--dangerously-skip-permissions");
+    else args.push("--mode", "accept-edits");
     if (spec.extraArgs) args.push(...spec.extraArgs);
     const env: NodeJS.ProcessEnv = { ...process.env, ...spec.env };
-    const child = spawnCli("gemini", args, { cwd: spec.cwd, env });
-    return wireProcess(child, spec, onLine);
+    const child = spawnCli("agy", args, { cwd: spec.cwd, env });
+    return wireProcess(child, { ...spec, stdinText: undefined }, onLine);
   },
 };
 
@@ -228,7 +249,63 @@ export function parseClaudeLine(line: string): ClaudeEvent[] {
   return [{ kind: "other", type }];
 }
 
-/** Gemini stream-json: best effort, we only need text + tool names. */
+/**
+ * Antigravity CLI stream-json (stateful: text arrives as deltas per step).
+ *   {"event":"init","init":{"model":...},"conversation_id":...}
+ *   {"event":"step_update","step_update":{"step_index":1,"state":"ACTIVE"|"DONE","step_type":"agent_response","text_delta":"..."}}
+ *   {"event":"result","result":{"status":"SUCCESS","response":"..."}}
+ * Lines in the old Gemini CLI format are still understood.
+ */
+export function makeAgyParser(): (line: string) => ClaudeEvent[] {
+  const texts = new Map<number, string>();
+  const toolsSeen = new Set<number>();
+  return (line: string) => {
+    let msg: Record<string, unknown>;
+    try {
+      msg = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+    const ev = msg.event;
+    if (typeof ev !== "string") return parseGeminiLine(line);
+    if (ev === "init") {
+      const init = (msg.init ?? {}) as { model?: string };
+      return [{ kind: "init", sessionId: String(msg.conversation_id ?? ""), model: init.model }];
+    }
+    if (ev === "step_update") {
+      const s = (msg.step_update ?? {}) as { step_index?: number; state?: string; step_type?: string; text_delta?: string; tool_name?: string; name?: string };
+      const idx = s.step_index ?? -1;
+      const type = s.step_type ?? "";
+      if (type === "user_input") return [];
+      if (type === "agent_response") {
+        if (s.text_delta) texts.set(idx, (texts.get(idx) ?? "") + s.text_delta);
+        if (s.state === "DONE") {
+          const t = (texts.get(idx) ?? "").trim();
+          texts.delete(idx);
+          return t ? [{ kind: "text", text: t }] : [];
+        }
+        return [];
+      }
+      if (type && !toolsSeen.has(idx)) {
+        toolsSeen.add(idx);
+        return [{ kind: "tool", name: s.tool_name ?? s.name ?? type, input: undefined }];
+      }
+      return [];
+    }
+    if (ev === "result") {
+      const r = (msg.result ?? {}) as { status?: string; response?: string; error?: string; conversation_id?: string };
+      const ok = String(r.status ?? "").toUpperCase() === "SUCCESS";
+      return [{ kind: "result", text: r.response ?? r.error ?? "", sessionId: r.conversation_id, isError: !ok }];
+    }
+    if (ev === "error") {
+      const e = (msg.error ?? {}) as { message?: string } | string;
+      return [{ kind: "result", text: typeof e === "string" ? e : e.message ?? "error", isError: true }];
+    }
+    return [{ kind: "other", type: ev }];
+  };
+}
+
+/** old Gemini CLI stream-json: best effort, we only need text + tool names. */
 export function parseGeminiLine(line: string): ClaudeEvent[] {
   let msg: Record<string, unknown>;
   try {

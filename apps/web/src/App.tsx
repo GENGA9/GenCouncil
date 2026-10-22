@@ -7,7 +7,7 @@ import { LeftPane } from "./components/LeftPane";
 import { MemoryView } from "./components/MemoryView";
 import { RightPane } from "./components/RightPane";
 import { GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
-import type { Attachment, ChatItem, Overview, RuntimeState, TranscriptEntry } from "./types";
+import type { Attachment, ChatItem, Overview, RuntimeState, TranscriptEntry, UsageSnapshot } from "./types";
 
 const MEMORY_KEY = "__memory__";
 const ACCOUNTS_KEY = "__accounts__";
@@ -33,6 +33,7 @@ export function App() {
   const [token, setToken] = useState("");
   const [loginError, setLoginError] = useState("");
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null);
   const [selected, setSelected] = useState<string>(() => localStorage.getItem("gc.selected") ?? "");
   const [state, setState] = useState<RuntimeState | null>(null);
   const [chat, setChat] = useState<ChatItem[]>([]);
@@ -140,6 +141,10 @@ export function App() {
         void refreshOverview();
         return;
       }
+      if (type === "usage") {
+        setUsage({ at: Number(msg.at), items: (msg.items as UsageSnapshot["items"]) ?? [] });
+        return;
+      }
       const key = msg.key as string | undefined;
       if (!key || key !== selectedRef.current) {
         if (type === "member:done" || type === "member:start") void refreshOverview();
@@ -229,6 +234,7 @@ export function App() {
   const left = (
     <LeftPane
       overview={overview}
+      usage={usage}
       selected={selected}
       onSelect={(k) => {
         setSelected(k);

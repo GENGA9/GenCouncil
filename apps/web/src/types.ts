@@ -14,7 +14,7 @@ export interface LimitEntry {
 export type Limits = Record<string, LimitEntry>;
 
 export interface ModelsInfo {
-  providers: Array<{ id: string; models: Array<{ id: string; label: string; note: string }>; effort: boolean }>;
+  providers: Array<{ id: string; models: Array<{ id: string; label: string; note: string }>; effort: boolean; efforts?: string[] }>;
   sites: Array<{ id: string; label: string; url: string; family: string }>;
   efforts: string[];
   defaults: Limits;
@@ -79,6 +79,26 @@ export interface ProjectOv {
   chair: { model?: string; effort?: string; advisor?: string; account?: string };
   members: { autonomy: string; defaultProvider: string; limits?: Limits; explorers?: boolean };
   agendas: AgendaOv[];
+}
+
+export interface UsageWindow {
+  usedPct: number;
+  resetsAt?: string;
+}
+
+export interface AccountUsage {
+  provider: "claude" | "gemini" | "gpt";
+  account: string;
+  fiveHour?: UsageWindow;
+  weekly?: UsageWindow;
+  noFiveHour?: boolean;
+  error?: string;
+  checkedAt: string;
+}
+
+export interface UsageSnapshot {
+  at: number;
+  items: AccountUsage[];
 }
 
 export interface Overview {

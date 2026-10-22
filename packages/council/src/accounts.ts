@@ -3,7 +3,7 @@
  * ~/.gencouncil/accounts.json. The implicit accounts "claude", "gemini" and "gpt" are the normal
  * logins (no config dir override) and always exist.
  *
- * CLI accounts keep their login in their own folder (CLAUDE_CONFIG_DIR / HOME for gemini / CODEX_HOME).
+ * CLI accounts keep their login in their own folder (CLAUDE_CONFIG_DIR / HOME for gemini = Antigravity CLI / CODEX_HOME).
  * Web accounts (web Gemini, AI Studio, ChatGPT) are dedicated Chrome profiles the user logs into once;
  * relay members then open the site in that profile.
  */
@@ -58,7 +58,7 @@ export function isWebSite(p: string): p is WebSite {
 
 const IMPLICIT: Account[] = [
   { id: "claude", provider: "claude", priority: 50, status: "ok", note: "기본 로그인 (~/.claude)" },
-  { id: "gemini", provider: "gemini", priority: 50, status: "ok", note: "기본 로그인 (~/.gemini)" },
+  { id: "gemini", provider: "gemini", priority: 50, status: "ok", note: "기본 로그인 (Antigravity)" },
   { id: "gpt", provider: "gpt", priority: 50, status: "ok", note: "기본 로그인 (~/.codex)" },
 ];
 
@@ -240,7 +240,7 @@ export function loginCommand(account: Account, registry: AccountRegistry, chrome
     case "claude":
       return { kind: "cli", exe: "claude", args: [], env, hint: "/login 을 입력해 로그인한 뒤 /exit" };
     case "gemini":
-      return { kind: "cli", exe: "gemini", args: [], env, hint: "로그인 방법을 고르고 브라우저에서 로그인한 뒤 /quit" };
+      return { kind: "cli", exe: "agy", args: [], env, hint: "Antigravity 창에서 이 구글 계정으로 로그인한 뒤 창을 닫으세요 (/login 으로 다시 로그인 가능)" };
     case "gpt":
       return { kind: "cli", exe: "codex", args: ["login"], env, hint: "브라우저에서 ChatGPT 계정으로 로그인하면 창이 닫힙니다" };
   }

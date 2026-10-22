@@ -298,3 +298,16 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .msg-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .msg-attachments img { max-width: 220px; max-height: 160px; border-radius: 8px; border: 1px solid var(--border); display: block; }
 .msg.user .msg-attachments { justify-content: flex-end; }
+
+/* usage bars (left pane) */
+.usage-panel { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.usage-head { display: flex; justify-content: space-between; align-items: center; }
+.usage-head button { padding: 0 6px; }
+.usage-acct { display: flex; flex-direction: column; gap: 2px; }
+.usage-name { font-size: 12px; font-weight: 600; }
+.usage-bar-row { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 6px; font-size: 11px; }
+.usage-bar-label { color: var(--muted); }
+.usage-bar { height: 7px; border-radius: 4px; background: var(--border); overflow: hidden; display: block; }
+.usage-bar-fill { display: block; height: 100%; border-radius: 4px; transition: width 0.4s; }
+.usage-bar-pct { min-width: 30px; white-space: nowrap; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.usage-err { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

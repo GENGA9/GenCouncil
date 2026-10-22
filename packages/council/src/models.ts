@@ -33,10 +33,10 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
     { id: "opus", label: "Opus", note: "어려운 설계·디버깅, advisor", match: /opus/i },
     { id: "fable", label: "Fable", note: "최상위. 가장 어려운 장기 작업", match: /fable|mythos/i },
   ],
+  // Antigravity CLI (agy). The CLI takes "<model>-<low|medium|high>"; the driver adds the effort suffix.
   gemini: [
-    { id: "gemini-2.5-flash-lite", label: "Gemini Flash-Lite", note: "가장 가벼움", match: /flash-lite/i },
-    { id: "gemini-2.5-flash", label: "Gemini Flash", note: "빠른 범용", match: /flash(?!-lite)/i },
-    { id: "gemini-2.5-pro", label: "Gemini Pro", note: "긴 맥락 분석·리서치", match: /pro/i },
+    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", note: "빠른 범용. 단순 수정·반복", match: /flash/i },
+    { id: "gemini-4-argon", label: "Gemini 4 Argon", note: "최상위. 긴 맥락 분석·리서치·설계", match: /argon|pro/i },
   ],
   gpt: [
     { id: "gpt-6-luna", label: "GPT-6 Luna", note: "빠르고 저렴. 쉬운 작업", match: /luna|terra|mini/i },
@@ -45,8 +45,11 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
   ],
 };
 
-/** CLI accepts an effort setting (Gemini CLI has none) */
-export const SUPPORTS_EFFORT: Record<CliProvider, boolean> = { claude: true, gemini: false, gpt: true };
+/** CLI accepts an effort setting */
+export const SUPPORTS_EFFORT: Record<CliProvider, boolean> = { claude: true, gemini: true, gpt: true };
+
+/** highest effort each CLI understands (Antigravity models come in low / medium / high) */
+export const EFFORT_CAP: Record<CliProvider, Effort> = { claude: "max", gemini: "high", gpt: "max" };
 
 export const SITE_INFO: Record<WebSite, { label: string; url: string; family: "gemini" | "gpt" }> = {
   "gemini-web": { label: "웹 제미나이", url: "https://gemini.google.com/app", family: "gemini" },
@@ -67,7 +70,7 @@ export type Limits = Record<LimitKey, ProviderLimit>;
 
 export const DEFAULT_LIMITS: Limits = {
   claude: { maxMembers: 3, maxModel: "opus", maxEffort: "high" },
-  gemini: { maxMembers: 2, maxModel: "gemini-2.5-pro" },
+  gemini: { maxMembers: 2, maxModel: "gemini-4-argon", maxEffort: "high" },
   gpt: { maxMembers: 2, maxModel: "gpt-6.1-sol", maxEffort: "high" },
   "gemini-web": { maxMembers: 1 },
   aistudio: { maxMembers: 1 },
@@ -79,9 +82,16 @@ export function normalizeLimits(l?: Partial<Record<string, Partial<ProviderLimit
   for (const k of LIMIT_KEYS) {
     const d = DEFAULT_LIMITS[k];
     const v = l?.[k] ?? {};
+    let maxModel = v.maxModel ?? d.maxModel;
+    // map older ids (e.g. gemini-2.5-pro) onto the current ladder
+    if (maxModel && (CLI_PROVIDERS as readonly string[]).includes(k)) {
+      const p = k as CliProvider;
+      const t = tierOf(p, maxModel);
+      if (t >= 0) maxModel = LADDERS[p][t].id;
+    }
     out[k] = {
       maxMembers: Number.isFinite(Number(v.maxMembers)) ? Math.max(0, Math.floor(Number(v.maxMembers))) : d.maxMembers,
-      maxModel: v.maxModel ?? d.maxModel,
+      maxModel,
       maxEffort: (v.maxEffort && EFFORTS.includes(v.maxEffort as Effort) ? v.maxEffort : d.maxEffort) as Effort | undefined,
     };
   }
@@ -111,8 +121,10 @@ export function allowedModels(provider: CliProvider, limit: ProviderLimit): Mode
 
 export function allowedEfforts(provider: CliProvider, limit: ProviderLimit): Effort[] {
   if (!SUPPORTS_EFFORT[provider]) return [];
-  const max = effortIndex(limit.maxEffort);
-  return max < 0 ? [...EFFORTS] : EFFORTS.slice(0, max + 1);
+  const cap = effortIndex(EFFORT_CAP[provider]);
+  const lim = effortIndex(limit.maxEffort);
+  const max = lim < 0 ? cap : Math.min(lim, cap);
+  return EFFORTS.slice(0, max + 1);
 }
 
 export class LimitError extends Error {}

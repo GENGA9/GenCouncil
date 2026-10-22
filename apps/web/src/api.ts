@@ -1,4 +1,4 @@
-import type { Account, Attachment, CurateStatus, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry } from "./types";
+import type { Account, Attachment, CurateStatus, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -36,6 +36,7 @@ export const api = {
   me: () => call<{ ok: boolean }>("GET", "/api/me"),
   login: (token: string) => call<{ ok: boolean }>("POST", "/api/login", { token }),
   overview: () => call<Overview>("GET", "/api/overview"),
+  usage: (refresh = false) => call<UsageSnapshot>("GET", `/api/usage${refresh ? "?refresh=1" : ""}`),
   createProject: (b: Record<string, unknown>) => call<{ id: string; scanSummary?: string }>("POST", "/api/projects", b),
   guidelines: (id: string) => call<{ text: string; path: string }>("GET", `/api/projects/${encodeURIComponent(id)}/guidelines`),
   saveGuidelines: (id: string, text: string) => call("PUT", `/api/projects/${encodeURIComponent(id)}/guidelines`, { text }),

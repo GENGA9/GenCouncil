@@ -4,7 +4,7 @@ import type { Limits, ModelsInfo } from "../types";
 
 const LABEL: Record<string, string> = {
   claude: "클로드",
-  gemini: "제미나이 CLI",
+  gemini: "제미나이 (Antigravity)",
   gpt: "GPT (Codex)",
   "gemini-web": "웹 제미나이",
   aistudio: "AI Studio",
@@ -46,7 +46,7 @@ export function LimitsEditor({ value, onChange }: { value: Limits; onChange: (v:
             </select>
             {p.effort ? (
               <select value={l.maxEffort ?? ""} disabled={l.maxMembers === 0} onChange={(e) => set(p.id, { maxEffort: e.target.value })}>
-                {models.efforts.map((e) => (
+                {(p.efforts ?? models.efforts).map((e) => (
                   <option key={e} value={e}>{e}</option>
                 ))}
               </select>
