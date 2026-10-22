@@ -1,4 +1,5 @@
-import type { CliProvider, MemberFailure } from "./model.js";
+import type { MemberFailure } from "./model.js";
+import type { CliProvider } from "./models.js";
 
 /**
  * Classify a CLI failure from its output. Best effort: the CLIs change their wording,

@@ -3,9 +3,8 @@ import { familyColor, memberName } from "../model";
 import type { ChatItem, Member, ProjectOv, RuntimeState, Task } from "../types";
 import { GridSpinner } from "./GridSpinner";
 
-const MODELS = ["", "sonnet", "opus", "haiku", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
+const MODELS = ["", "opus", "sonnet", "fable", "haiku"];
 const EFFORTS = ["", "low", "medium", "high", "xhigh", "max"];
-const ADVISORS = ["", "opus", "sonnet", "fable"];
 const STATUS_KO: Record<Task["status"], string> = { todo: "대기", doing: "진행", review: "검토", done: "완료", blocked: "막힘" };
 
 interface Props {
@@ -45,7 +44,6 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
 
   const model = state.chair.model ?? "";
   const effort = state.chair.effort ?? "";
-  const advisor = state.chair.advisor ?? "";
   const memberById = new Map(state.members.map((m) => [m.id, m]));
   const goalTasks = (i: number) => state.tasks.filter((t) => t.goal === i + 1);
   const orphanTasks = state.tasks.filter((t) => !t.goal);
@@ -67,12 +65,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
               <option key={e} value={e}>{e ? `추론 ${e}` : "추론 기본"}</option>
             ))}
           </select>
-          <select value={ADVISORS.includes(advisor) ? advisor : "custom"} onChange={(e) => e.target.value !== "custom" && onSetChair(model, effort, undefined, e.target.value)} title="advisor: 계획 확정·같은 오류 2회·완료 선언 전에 상담하는 상위 모델">
-            {ADVISORS.map((a) => (
-              <option key={a} value={a}>{a ? `advisor ${a}` : "advisor 없음"}</option>
-            ))}
-            {!ADVISORS.includes(advisor) && <option value="custom">advisor {advisor}</option>}
-          </select>
+
           <select
             value={state.chair.account ?? "claude"}
             title="의장 계정 (바꾸면 state.md 기반으로 새 세션 시작)"
@@ -161,8 +154,11 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
       </div>
       {project && (
         <div className="small muted center-foot">
-          {project.repo} · 위원 자율성 {project.members.autonomy} · 기본 위원 {project.members.defaultProvider}
-          {project.members.claudeModel ? ` (${project.members.claudeModel}${project.members.claudeAdvisor ? ` + advisor ${project.members.claudeAdvisor}` : ""}${project.members.explorers !== false ? " + haiku 탐색기" : ""})` : ""}
+          {project.mode === "folder" ? `폴더 ${project.source} (사본에서 작업)` : project.repo} · 위원 자율성 {project.members.autonomy} · 한도{" "}
+          {Object.entries(state.limits)
+            .filter(([, l]) => l.maxMembers > 0)
+            .map(([k, l]) => `${k} ${state.active[k] ?? 0}/${l.maxMembers}${l.maxModel ? " ≤" + l.maxModel : ""}`)
+            .join(" · ")}
         </div>
       )}
     </div>

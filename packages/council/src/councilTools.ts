@@ -80,18 +80,23 @@ export function createCouncilMcp(council: Council): McpServer {
     {
       title: "Assign task to a new member",
       description:
-        "Spawn an autonomous member (claude or gemini CLI) in its own git worktree/branch to do one task, " +
+        "Spawn an autonomous member (claude, gemini or gpt CLI) in its own git worktree/branch to do one task, " +
         "or create a relay member (provider 'relay': a human copies the packet into a web AI such as web Gemini / AI Studio / Antigravity and pastes the answer back; " +
         "the web AI cannot see the repo, so list the files it needs in `files`). " +
         "Returns immediately; you will be notified with a [council event] message when it finishes " +
         "(or call council_wait). Write instructions as a complete brief: what, which files, done-when, don'ts. " +
-        "The account is chosen automatically from usable accounts; a member that dies of a quota/auth error is handed over automatically.",
+        "The account is chosen automatically from usable accounts; a member that dies of a quota/auth error is handed over automatically. " +
+        "Pick provider/model/effort/advisor yourself within the user's limits (see the limits table in your instructions or council_limits); " +
+        "the call is rejected with the allowed values if you exceed them.",
       inputSchema: {
         task_id: z.string(),
-        provider: z.enum(["claude", "gemini", "relay"]).optional().describe("default: project.members.defaultProvider"),
-        model: z.string().optional(),
+        provider: z.enum(["claude", "gemini", "gpt", "relay"]).optional().describe("default: project.members.defaultProvider"),
+        model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-2.5-flash | gemini-2.5-pro, gpt-6-luna | gpt-6.1-sol | gpt-6-astra. default: the workhorse model within the limit"),
+        effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("claude/gpt only. default medium (clamped to the limit)"),
+        advisor: z.string().optional().describe("claude only: stronger model consulted before locking a plan, after a repeated error and before declaring done, e.g. opus. omit for short tasks"),
         account: z.string().optional().describe("preferred account id (see council_accounts)"),
-        label: z.string().optional().describe("relay only: display label, e.g. 제미나이(agy), aistudio, chatgpt"),
+        site: z.enum(["gemini-web", "aistudio", "chatgpt"]).optional().describe("relay only: which web AI; opens the user's pre-logged-in profile and counts toward that site's limit"),
+        label: z.string().optional().describe("relay only: display label, e.g. 제미나이(agy)"),
         files: z.array(z.string()).optional().describe("relay only: repo-relative files/dirs to bundle into the packet"),
         instructions: z.string().min(20),
       },
@@ -99,7 +104,7 @@ export function createCouncilMcp(council: Council): McpServer {
     async ({ task_id, ...rest }) =>
       guard(async () => {
         const m = await council.assign({ taskId: task_id, ...rest });
-        return { member_id: m.id, provider: m.provider, account: m.account, branch: m.branch, worktree: m.worktree, status: m.status };
+        return { member_id: m.id, provider: m.provider, model: m.model, effort: m.effort, advisor: m.advisor, site: m.site, account: m.account, branch: m.branch, worktree: m.worktree, status: m.status };
       }),
   );
 
@@ -112,8 +117,9 @@ export function createCouncilMcp(council: Council): McpServer {
         "Quota/auth failures are handed over automatically; use this for manual cases (e.g. a relay member you want a CLI member to finish, or a stuck member you stopped).",
       inputSchema: {
         member_id: z.string(),
-        provider: z.enum(["claude", "gemini"]).optional(),
+        provider: z.enum(["claude", "gemini", "gpt"]).optional(),
         model: z.string().optional(),
+        effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
         account: z.string().optional(),
         reason: z.string().optional(),
       },
@@ -139,6 +145,16 @@ export function createCouncilMcp(council: Council): McpServer {
         return err((e as Error).message);
       }
     },
+  );
+
+  server.registerTool(
+    "council_limits",
+    {
+      title: "Member limits",
+      description: "The user's limits per provider (max simultaneous members, max model, max effort) and how many are working now.",
+      inputSchema: {},
+    },
+    async () => text(council.limitsMarkdown()),
   );
 
   server.registerTool(

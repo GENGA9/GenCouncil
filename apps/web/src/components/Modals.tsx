@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
+import type { Limits, ProjectOv } from "../types";
+import { FolderPicker } from "./FolderPicker";
+import { LimitsEditor, useModels } from "./LimitsEditor";
 
 function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
@@ -20,23 +23,52 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
   );
 }
 
+const CHAIR_MODELS = [
+  ["opus", "opus (권장)"],
+  ["sonnet", "sonnet"],
+  ["fable", "fable"],
+  ["haiku", "haiku"],
+];
+
+function ChairFields({ model, effort, setModel, setEffort }: { model: string; effort: string; setModel: (v: string) => void; setEffort: (v: string) => void }) {
+  return (
+    <div className="row2">
+      <label>의장 모델
+        <select value={model} onChange={(e) => setModel(e.target.value)}>
+          {CHAIR_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </label>
+      <label>의장 추론
+        <select value={effort} onChange={(e) => setEffort(e.target.value)}>
+          {["", "low", "medium", "high", "xhigh", "max"].map((x) => <option key={x} value={x}>{x || "기본"}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+const SUFFIX = "제작위원회";
+const withSuffix = (n: string) => (n.trim().endsWith(SUFFIX) ? n.trim() : `${n.trim()} ${SUFFIX}`);
+
 export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; onCreate: (b: Record<string, unknown>) => Promise<void> }) {
+  const models = useModels();
   const [name, setName] = useState("");
-  const [repo, setRepo] = useState("");
-  const [chairModel, setChairModel] = useState("sonnet");
+  const [folder, setFolder] = useState("");
+  const [picking, setPicking] = useState(false);
+  const [chairModel, setChairModel] = useState("opus");
   const [chairEffort, setChairEffort] = useState("");
-  const [chairAdvisor, setChairAdvisor] = useState("opus");
-  const [memberModel, setMemberModel] = useState("sonnet");
-  const [memberAdvisor, setMemberAdvisor] = useState("opus");
   const [autonomy, setAutonomy] = useState("full");
-  const [provider, setProvider] = useState("claude");
+  const [limits, setLimits] = useState<Limits | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (models && !limits) setLimits(models.defaults);
+  }, [models, limits]);
   const submit = async () => {
     setBusy(true);
     setErr("");
     try {
-      await onCreate({ name, repo, chairModel, chairEffort, chairAdvisor, claudeModel: memberModel, claudeAdvisor: memberAdvisor, autonomy, defaultProvider: provider });
+      await onCreate({ name, path: folder, chairModel, chairEffort, autonomy, limits });
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -44,66 +76,70 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
     }
   };
   return (
-    <Modal title="제작위원회 추가" onClose={onClose}>
-      <label>이름<input value={name} onChange={(e) => setName(e.target.value)} placeholder="RF PROJECT 제작위원회" autoFocus /></label>
-      <label>저장소 경로 (PC의 git 저장소)<input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="D:\PROJECT\RF" /></label>
-      <div className="row2">
-        <label>의장 모델
-          <select value={chairModel} onChange={(e) => setChairModel(e.target.value)}>
-            <option value="">기본</option>
-            <option value="sonnet">sonnet (권장)</option>
-            <option value="opus">opus</option>
-            <option value="haiku">haiku</option>
-          </select>
-        </label>
-        <label>의장 advisor
-          <select value={chairAdvisor} onChange={(e) => setChairAdvisor(e.target.value)}>
-            <option value="opus">opus (권장)</option>
-            <option value="sonnet">sonnet</option>
-            <option value="fable">fable</option>
-            <option value="">없음</option>
-          </select>
-        </label>
-      </div>
-      <div className="row2">
-        <label>의장 추론
-          <select value={chairEffort} onChange={(e) => setChairEffort(e.target.value)}>
-            {["", "low", "medium", "high", "xhigh", "max"].map((x) => <option key={x} value={x}>{x || "기본"}</option>)}
-          </select>
-        </label>
-        <label>클로드 위원 모델 / advisor
-          <span className="row2">
-            <select value={memberModel} onChange={(e) => setMemberModel(e.target.value)}>
-              <option value="sonnet">sonnet</option>
-              <option value="opus">opus</option>
-              <option value="haiku">haiku</option>
-            </select>
-            <select value={memberAdvisor} onChange={(e) => setMemberAdvisor(e.target.value)}>
-              <option value="opus">opus</option>
-              <option value="sonnet">sonnet</option>
-              <option value="">없음</option>
-            </select>
-          </span>
-        </label>
-      </div>
-      <div className="row2">
-        <label>위원 자율성
-          <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
-            <option value="full">full (권한 확인 없음)</option>
-            <option value="edits">edits (편집만 자동)</option>
-          </select>
-        </label>
-        <label>기본 위원
-          <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-            <option value="claude">claude</option>
-            <option value="gemini">gemini</option>
-          </select>
-        </label>
-      </div>
+    <Modal title="제작위원회 추가" onClose={onClose} wide>
+      <label>프로젝트 이름<input value={name} onChange={(e) => setName(e.target.value)} placeholder="RF PROJECT" autoFocus /></label>
+      {name.trim() && <div className="small muted name-preview">→ {withSuffix(name)}</div>}
+      <label>작업 폴더
+        <span className="folder-row">
+          <input value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={"D:\\PROJECT\\RF"} />
+          <button className="ghost" type="button" onClick={() => setPicking(true)}>폴더 선택</button>
+        </span>
+      </label>
+      <div className="small muted">git 저장소면 그대로 쓰고, 아니면 GenCouncil 안의 사본에서 작업한 뒤 안건 종료 때 바뀐 파일만 이 폴더로 옮깁니다. 폴더에 .git을 만들지 않습니다.</div>
+      <ChairFields model={chairModel} effort={chairEffort} setModel={setChairModel} setEffort={setChairEffort} />
+      <label>위원 자율성
+        <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
+          <option value="full">full (권한 확인 없음)</option>
+          <option value="edits">edits (편집만 자동)</option>
+        </select>
+      </label>
+      <h4>위원 한도</h4>
+      {limits && <LimitsEditor value={limits} onChange={setLimits} />}
       {err && <div className="err">{err}</div>}
       <div className="modal-actions">
         <button className="ghost" onClick={onClose}>취소</button>
-        <button className="primary" onClick={submit} disabled={busy || !name.trim() || !repo.trim()}>만들기</button>
+        <button className="primary" onClick={submit} disabled={busy || !name.trim() || !folder.trim()}>{busy ? "만드는 중…" : "만들기"}</button>
+      </div>
+      {picking && <FolderPicker start={folder || undefined} onClose={() => setPicking(false)} onPick={(p) => { setFolder(p); setPicking(false); }} />}
+    </Modal>
+  );
+}
+
+export function ProjectSettingsModal({ project, onClose, onSaved }: { project: ProjectOv; onClose: () => void; onSaved: (msg: string) => void }) {
+  const models = useModels();
+  const [chairModel, setChairModel] = useState(project.chair.model ?? "opus");
+  const [chairEffort, setChairEffort] = useState(project.chair.effort ?? "");
+  const [autonomy, setAutonomy] = useState(project.members.autonomy);
+  const [limits, setLimits] = useState<Limits | null>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    if (models && !limits) setLimits({ ...models.defaults, ...(project.members.limits ?? {}) });
+  }, [models, limits, project]);
+  const save = async () => {
+    try {
+      await api.projectSettings(project.id, { chair: { model: chairModel, effort: chairEffort }, members: { autonomy, limits } });
+      onSaved("설정을 저장했습니다. 의장의 다음 턴부터 적용됩니다.");
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  return (
+    <Modal title={`${project.name} 설정`} onClose={onClose} wide>
+      <div className="small muted mono">{project.mode === "folder" ? `폴더: ${project.source} (사본에서 작업)` : `git: ${project.repo}`}</div>
+      <ChairFields model={chairModel} effort={chairEffort} setModel={setChairModel} setEffort={setChairEffort} />
+      <label>위원 자율성
+        <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
+          <option value="full">full (권한 확인 없음)</option>
+          <option value="edits">edits (편집만 자동)</option>
+        </select>
+      </label>
+      <h4>위원 한도</h4>
+      {limits && <LimitsEditor value={limits} onChange={setLimits} />}
+      {err && <div className="err">{err}</div>}
+      <div className="modal-actions">
+        <button className="ghost" onClick={onClose}>취소</button>
+        <button className="primary" onClick={save}>저장</button>
       </div>
     </Modal>
   );
@@ -154,7 +190,7 @@ export function GuidelinesModal({ projectId, onClose, notify }: { projectId: str
   );
 }
 
-export function RelayModal({ agendaKey, memberId, onClose, onDone }: { agendaKey: string; memberId: string; onClose: () => void; onDone: (msg: string) => void }) {
+export function RelayModal({ agendaKey, memberId, site, onClose, onDone }: { agendaKey: string; memberId: string; site?: string; onClose: () => void; onDone: (msg: string) => void }) {
   const [packet, setPacket] = useState("");
   const [response, setResponse] = useState("");
   const [copied, setCopied] = useState(false);
@@ -198,6 +234,11 @@ export function RelayModal({ agendaKey, memberId, onClose, onDone }: { agendaKey
         <>
           <p className="small muted">아래 전체를 웹 제미나이 / AI Studio / Antigravity 채팅에 붙여넣으세요. 답변은 FILE/RESULT 블록 양식으로 오도록 패킷에 적혀 있습니다.</p>
           <div className="modal-actions" style={{ marginTop: 0, marginBottom: 8 }}>
+            {site && (
+              <button className="ghost small" onClick={async () => { await copy(); try { await api.openWeb(agendaKey, memberId); } catch (e) { setErr((e as Error).message); } }}>
+                복사하고 사이트 열기 (PC)
+              </button>
+            )}
             <button className="primary small" onClick={copy}>{copied ? "복사됨 ✓" : "전체 복사"}</button>
           </div>
           <textarea id="relay-packet" className="editor" rows={18} value={packet} readOnly />
@@ -242,6 +283,7 @@ export function HandoverModal({ agendaKey, memberId, accounts, onClose, onDone }
             <option value="">자동</option>
             <option value="claude">claude</option>
             <option value="gemini">gemini</option>
+            <option value="gpt">gpt</option>
           </select>
         </label>
         <label>계정

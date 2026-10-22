@@ -4,7 +4,7 @@ import path from "node:path";
 import { type EntryType, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
 import { AccountRegistry, type Account } from "./accounts.js";
-import { drivers, parseClaudeLine, parseGeminiLine, type RunningProc } from "./drivers.js";
+import { drivers, parseClaudeLine, parseCodexLine, parseGeminiLine, type RunningProc } from "./drivers.js";
 import {
   currentBranch,
   deleteBranch,
@@ -24,10 +24,24 @@ import {
 } from "./git.js";
 import { explorerAgents } from "./explorers.js";
 import {
+  LIMIT_KEYS,
+  LimitError,
+  SITE_INFO,
+  WEB_SITES,
+  limitsMarkdown,
+  normalizeLimits,
+  resolveAdvisor,
+  resolveEffort,
+  resolveModel,
+  type CliProvider,
+  type LimitKey,
+  type Limits,
+  type WebSite,
+} from "./models.js";
+import { snapshot, syncBack } from "./shadow.js";
+import {
   AgendaStore,
   ProjectRegistry,
-  advisorFor,
-  type CliProvider,
   type MemberRecord,
   type ProjectConfig,
   type Provider,
@@ -44,8 +58,14 @@ export interface AssignInput {
   taskId: string;
   provider?: Provider;
   model?: string;
+  /** low | medium | high | xhigh | max (claude, gpt) */
+  effort?: string;
+  /** claude only: stronger model consulted at key decisions */
+  advisor?: string;
   account?: string;
   instructions: string;
+  /** relay only: which web AI (gemini-web | aistudio | chatgpt); others are free-form */
+  site?: WebSite;
   /** relay only: display label such as "제미나이(agy)" */
   label?: string;
   /** relay only: files (relative to the repo) to bundle into the packet */
@@ -55,6 +75,7 @@ export interface AssignInput {
 export interface HandoverOptions {
   provider?: CliProvider;
   model?: string;
+  effort?: string;
   account?: string;
   reason?: string;
 }
@@ -67,6 +88,10 @@ export interface CouncilState {
   integrationWorktree: string;
   chairState: string;
   accounts: Account[];
+  limits: Limits;
+  active: Record<LimitKey, number>;
+  mode: "git" | "folder";
+  source?: string;
 }
 
 const RELAY_PROMPT_HEAD = `# 릴레이 작업 패킷
@@ -101,6 +126,11 @@ export class Council extends EventEmitter {
     if (!(await isRepo(repo))) throw new Error(`not a git repository: ${repo}`);
     if (!(await hasCommits(repo))) throw new Error(`repository has no commits yet: ${repo}`);
     await ensureExclude(repo, [".worktrees/", ".council/", ".gemini/"]);
+    if (this.project.mode === "folder") {
+      // pick up whatever the user changed in their folder since the last snapshot
+      const c = await snapshot(this.project);
+      if (c) this.log(`folder snapshot ${c.slice(0, 7)} from ${this.project.source}`);
+    }
     const agenda = this.store.agenda();
     await ensureBranch(repo, agenda.branch, agenda.baseBranch);
     await ensureWorktree(repo, this.store.integrationWorktree(), agenda.branch, agenda.baseBranch);
@@ -161,7 +191,43 @@ export class Council extends EventEmitter {
       integrationWorktree: this.store.integrationWorktree(),
       chairState: this.store.chairState(),
       accounts: this.accounts.list(),
+      limits: this.limits(),
+      active: this.activeCounts(),
+      mode: this.project.mode ?? "git",
+      source: this.project.source,
     };
+  }
+
+  limits(): Limits {
+    return normalizeLimits(this.project.members.limits);
+  }
+
+  private limitKeyOf(m: Pick<MemberRecord, "provider" | "site">): LimitKey | undefined {
+    if (m.provider === "relay") return m.site;
+    return m.provider;
+  }
+
+  /** members currently occupying a slot (running, starting, or a relay waiting for a human) */
+  activeCounts(): Record<LimitKey, number> {
+    const out = Object.fromEntries(LIMIT_KEYS.map((k) => [k, 0])) as Record<LimitKey, number>;
+    for (const m of this.members()) {
+      if (!["running", "starting", "waiting"].includes(m.status)) continue;
+      const k = this.limitKeyOf(m);
+      if (k) out[k]++;
+    }
+    return out;
+  }
+
+  limitsMarkdown(): string {
+    return limitsMarkdown(this.limits(), this.activeCounts());
+  }
+
+  private checkSlot(key: LimitKey): void {
+    const lim = this.limits()[key];
+    if (lim.maxMembers <= 0) throw new LimitError(`${key} members are disabled by the user's limits`);
+    const active = this.activeCounts()[key];
+    if (active >= lim.maxMembers)
+      throw new LimitError(`${key} limit reached (${active}/${lim.maxMembers} working). wait for one to finish (council_wait) or use another provider`);
   }
 
   runningCount(): number {
@@ -234,15 +300,32 @@ export class Council extends EventEmitter {
     const task = this.task(input.taskId);
     const agenda = this.store.agenda();
     const requested = input.provider ?? this.project.members.defaultProvider;
+    const limits = this.limits();
 
     let provider: Provider = requested;
     let account: Account | undefined;
+    let model: string | undefined;
+    let effort: MemberRecord["effort"];
+    let advisor: string | undefined;
+    let site: WebSite | undefined;
     if (requested !== "relay") {
       const pick = this.chooseAccount(requested, input.account);
       provider = pick.provider;
       account = pick.account;
+      const p = provider as CliProvider;
+      this.checkSlot(p);
+      // a fallback provider cannot use the other provider's model name
+      model = resolveModel(p, p === requested ? input.model : undefined, limits[p]);
+      effort = resolveEffort(p, input.effort, limits[p]);
+      if (p === "claude") advisor = resolveAdvisor(model, input.advisor, limits.claude);
+    } else {
+      site = input.site && (WEB_SITES as readonly string[]).includes(input.site) ? input.site : undefined;
+      if (site) {
+        this.checkSlot(site);
+        // a pre-logged-in browser profile for that site, if the user set one up
+        account = this.accounts.pickWeb(site, input.account);
+      }
     }
-    const model = input.model ?? (provider === "claude" ? this.project.members.claudeModel : provider === "gemini" ? this.project.members.geminiModel : undefined);
     const id = this.nextMemberId(provider);
     const branch = this.store.memberBranch(id);
     const worktree = this.store.memberWorktree(id);
@@ -251,8 +334,11 @@ export class Council extends EventEmitter {
     const member: MemberRecord = {
       id,
       provider,
-      label: provider === "relay" ? input.label || "relay" : undefined,
+      label: provider === "relay" ? input.label || (site ? SITE_INFO[site].label : "relay") : undefined,
+      site,
       model,
+      effort,
+      advisor,
       account: account?.id,
       taskId: task.id,
       branch,
@@ -309,8 +395,7 @@ export class Council extends EventEmitter {
     const extraArgs: string[] = [];
     if (provider === "claude") {
       extraArgs.push("--mcp-config", mcpFile, "--strict-mcp-config");
-      const advisor = advisorFor(member.model, this.project.members.claudeAdvisor);
-      if (advisor) extraArgs.push("--advisor", advisor);
+      if (member.advisor) extraArgs.push("--advisor", member.advisor);
       if (this.project.members.explorers ?? true) {
         const agentsFile = path.join(councilDir, "agents.json");
         fs.writeFileSync(agentsFile, JSON.stringify(explorerAgents(), null, 2), "utf8");
@@ -321,9 +406,11 @@ export class Council extends EventEmitter {
     const logFile = this.store.memberLog(member.id);
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     const logStream = fs.createWriteStream(logFile, { flags: "a" });
-    logStream.write(`=== ${new Date().toISOString()} spawn ${provider} account=${account.id} task=${task.id} branch=${member.branch}\n`);
+    logStream.write(
+      `=== ${new Date().toISOString()} spawn ${provider} account=${account.id} model=${member.model ?? "default"} effort=${member.effort ?? "-"} advisor=${member.advisor ?? "-"} task=${task.id} branch=${member.branch}\n`,
+    );
 
-    const parse = provider === "claude" ? parseClaudeLine : parseGeminiLine;
+    const parse = provider === "claude" ? parseClaudeLine : provider === "gpt" ? parseCodexLine : parseGeminiLine;
     let resultText = "";
     let sawError = false;
     const tail: string[] = [];
@@ -340,6 +427,7 @@ export class Council extends EventEmitter {
           prompt: MEMBER_PROMPT,
           stdinText: packet,
           model: member.model,
+          effort: member.effort,
           autonomy: this.project.members.autonomy,
           env: { ...this.accounts.env(account), GENCOUNCIL_ROLE: "member", GENCOUNCIL_AGENT: agentLabel },
           extraArgs,
@@ -484,7 +572,7 @@ export class Council extends EventEmitter {
   async handover(memberId: string, opts: HandoverOptions = {}): Promise<MemberRecord> {
     const prev = this.member(memberId);
     if (this.running.has(memberId)) throw new Error(`member ${memberId} is still running; stop it first`);
-    if (prev.provider === "relay" && !opts.provider) throw new Error("relay member: specify provider claude|gemini to hand over to a CLI member");
+    if (prev.provider === "relay" && !opts.provider) throw new Error("relay member: specify provider claude|gemini|gpt to hand over to a CLI member");
     if (prev.handoverTo) throw new Error(`member ${memberId} was already handed over to ${prev.handoverTo}`);
     const max = this.project.members.maxHandovers ?? 2;
     if (this.handoverCount(prev) >= max) throw new Error(`task ${prev.taskId} already handed over ${max} times`);
@@ -493,12 +581,26 @@ export class Council extends EventEmitter {
     const exclude = prev.account && !opts.account ? [prev.account] : [];
     const pick = this.chooseAccount(wantProvider, opts.account, exclude);
     const provider = pick.provider;
-    const model = opts.model ?? (provider === prev.provider ? prev.model : undefined) ?? (provider === "claude" ? this.project.members.claudeModel : this.project.members.geminiModel);
+    const limits = this.limits();
+    this.checkSlot(provider);
+    const sameProvider = provider === prev.provider;
+    const model = resolveModel(provider, opts.model ?? (sameProvider ? prev.model : undefined), limits[provider]);
+    const effort = resolveEffort(provider, opts.effort ?? (sameProvider ? prev.effort : undefined), limits[provider]);
+    let advisor: string | undefined;
+    if (provider === "claude" && sameProvider && prev.advisor) {
+      try {
+        advisor = resolveAdvisor(model, prev.advisor, limits.claude);
+      } catch {
+        advisor = undefined;
+      }
+    }
     const id = this.nextMemberId(provider);
     const next: MemberRecord = {
       id,
       provider,
       model,
+      effort,
+      advisor,
       account: pick.account.id,
       taskId: prev.taskId,
       branch: prev.branch,
@@ -674,13 +776,26 @@ export class Council extends EventEmitter {
     const cur = await currentBranch(repo);
     if (cur !== agenda.baseBranch) throw new Error(`main checkout is on '${cur}', expected '${agenda.baseBranch}'. Switch branches first.`);
     if (!(await isClean(repo))) throw new Error("main checkout has uncommitted changes; commit or stash them first");
+    let before: string | undefined;
+    if (this.project.mode === "folder") {
+      // take the user's latest edits first so the merge sees them (conflicts surface as git conflicts)
+      await snapshot(this.project);
+      before = (await git(repo, ["rev-parse", "HEAD"])).trim();
+    }
     const res = await mergeInto(repo, agenda.branch, `agenda: ${agenda.title}`);
     if (!res.ok) throw new Error(`merge conflict in main checkout: ${res.conflicts.join(", ")}`);
+    let output = res.output;
+    if (this.project.mode === "folder" && before) {
+      const after = (await git(repo, ["rev-parse", "HEAD"])).trim();
+      const r = await syncBack(this.project, before, after);
+      output += `\ncopied back to ${this.project.source}: ${r.written.length} written, ${r.deleted.length} deleted`;
+      this.log(`folder sync: ${r.written.length} written, ${r.deleted.length} deleted in ${this.project.source}`);
+    }
     await this.clean();
     agenda.status = "closed";
     agenda.closed = new Date().toISOString();
     this.store.saveAgenda(agenda);
-    return res.output;
+    return output;
   }
 
   /** <agenda>/archive/<worktree name>/ keeps a worktree's .council/*.md after the worktree is removed */

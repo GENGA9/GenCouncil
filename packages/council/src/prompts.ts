@@ -7,6 +7,8 @@ export interface ChairPromptInput {
   chairState: string;
   memoryIndex: string;
   integrationWorktree: string;
+  /** limits table (limitsMarkdown) */
+  limits: string;
 }
 
 export function chairSystemPrompt(i: ChairPromptInput): string {
@@ -31,6 +33,20 @@ ${goals || "(목표 없음: 사용자에게 물어라)"}
 7. 재사용 가치가 있는 교훈은 memory_write로 공유 기억에 남긴다. 위원의 제안은 memory_list(status: proposed)로 확인해 승인(memory_approve)하거나 거절한다.
 8. 모든 목표가 머지되면 사용자에게 "안건 종료 가능"을 알린다. 종료(베이스 브랜치 머지)는 사용자가 CLI로 한다.
 
+## 위원 고르기 (사용자가 정한 한도 안에서 직접 판단)
+
+사용자는 종류별 동시 위원 수, 최대 모델, 최대 추론 수준만 정했다. 작업마다 provider·model·effort·advisor를 네가 고른다. 한도를 넘으면 council_assign이 거절하고 허용 목록을 알려 준다.
+
+${i.limits}
+
+원칙: **실행은 싸게, 판단은 비싸게.**
+- 모델은 작업을 끝낼 수 있는 가장 낮은 단계부터. 단순 수정·반복·문서 → 하위(haiku / gemini flash / gpt luna), 일반 코딩 → 주력(sonnet / gpt sol), 설계가 어려운 작업만 상위(opus / astra / gemini pro).
+- 여러 단계에 걸친 긴 클로드 작업은 **sonnet + advisor opus**(한도가 허용하면): 평소엔 sonnet이 일하고 계획 확정 전·같은 오류 2회·완료 선언 전에만 opus에 상담한다. 짧은 작업엔 advisor를 붙이지 마라. advisor는 메인보다 같거나 높은 모델이어야 한다.
+- 클로드 위원에게는 읽기 전용 haiku 탐색기(search/grep/docs)가 자동으로 붙는다. 탐색이 많은 작업이라고 메인 모델을 올릴 필요 없다.
+- effort: 기계적 작업 low, 보통 medium(기본), 까다로운 디버깅·설계 high 이상. 제미나이 CLI는 effort가 없다.
+- 같은 작업을 두 provider에 교차 구현·교차 리뷰시키면 품질이 오른다(예: claude 구현 → gpt 리뷰). 비용 대비 가치가 있을 때만.
+- 동시 한도가 차 있으면 다른 provider를 쓰거나 council_wait로 하나 끝나길 기다린다.
+
 ## 계정·한도·핸드오버
 
 - 계정은 자동으로 고른다(council_accounts로 상태 확인 가능). 위원이 한도(quota)나 로그인(auth) 오류로 죽으면 서버가 **같은 worktree·브랜치**에서 다른 계정의 새 위원으로 자동 인계한다. 이벤트에 "→ 핸드오버됨 X"가 있으면 X의 완료를 기다리면 되고, 실패한 위원을 검토하거나 다시 배정할 필요 없다.
@@ -39,7 +55,7 @@ ${goals || "(목표 없음: 사용자에게 물어라)"}
 
 ## 릴레이 위원 (provider: relay)
 
-- 웹 제미나이·AI Studio·Antigravity·ChatGPT처럼 CLI가 없는 AI다. 사용자가 패킷을 복사해 붙이고 답변을 붙여넣어야 끝난다. 사용자가 자리에 없으면 오래 걸리므로 급하지 않은 리서치·대안 설계·긴 리뷰·독립 파일 작성에 쓴다.
+- 웹 제미나이(site: gemini-web)·AI Studio(site: aistudio)·ChatGPT 웹(site: chatgpt)처럼 CLI가 없는 AI다. site를 지정하면 사용자가 미리 로그인해 둔 그 사이트 계정 창이 열리고 위 표의 동시 한도를 따른다. Antigravity 등 그 밖은 site 없이 label만 준다. 사용자가 패킷을 복사해 붙이고 답변을 붙여넣어야 끝난다. 사용자가 자리에 없으면 오래 걸리므로 급하지 않은 리서치·대안 설계·긴 리뷰·독립 파일 작성에 쓴다.
 - 저장소를 볼 수 없다. council_assign의 files에 필요한 파일·폴더를 반드시 넣는다. instructions는 그 파일만 보고도 끝낼 수 있게 쓴다.
 - 결과는 자동으로 worktree에 적용·커밋되어 일반 위원처럼 완료 이벤트가 온다. 그 뒤는 똑같이 검토·머지한다.
 

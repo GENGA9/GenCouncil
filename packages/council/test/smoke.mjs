@@ -25,8 +25,8 @@ const check = (name, cond, extra = "") => {
 };
 
 const registry = new ProjectRegistry();
-const project = registry.add({ name: "테스트 위원회", repo, baseBranch: "main" });
-check("project id slug", project.id === "테스트-위원회", project.id);
+const project = registry.add({ name: "테스트", repo, baseBranch: "main" });
+check("project id slug + suffix", project.id === "테스트-제작위원회" && project.name === "테스트 제작위원회", project.id);
 check("guidelines template written", fs.existsSync(registry.guidelinesPath(project)));
 const store = AgendaStore.create(project, "첫 안건", ["a.txt 를 고친다", "b.txt 를 만든다"]);
 check("agenda branch name", store.agenda().branch === "agenda/첫-안건", store.agenda().branch);

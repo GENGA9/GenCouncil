@@ -1,17 +1,33 @@
 import fs from "node:fs";
 import path from "node:path";
 import { gencouncilHome, slugify } from "@gencouncil/core";
+import { normalizeLimits, type CliProvider, type Effort, type Limits, type WebSite } from "./models.js";
 
-/** claude/gemini run as headless CLIs; relay = a human copies the packet into a web AI and pastes the answer back */
-export type Provider = "claude" | "gemini" | "relay";
-export type CliProvider = "claude" | "gemini";
+/** claude/gemini/gpt run as headless CLIs; relay = a human copies the packet into a web AI and pastes the answer back */
+export type Provider = CliProvider | "relay";
 export type Autonomy = "full" | "edits";
+/** git: work in the user's repository; folder: work in a private shadow repo and copy results back on finish */
+export type ProjectMode = "git" | "folder";
+
+export const COUNCIL_SUFFIX = "제작위원회";
+
+/** "RF PROJECT" -> "RF PROJECT 제작위원회" (unchanged if it already ends with it) */
+export function councilName(name: string): string {
+  const n = name.trim();
+  return n.endsWith(COUNCIL_SUFFIX) ? n : `${n} ${COUNCIL_SUFFIX}`;
+}
 
 export interface ProjectConfig {
   id: string;
   name: string;
-  /** absolute path of the git repository the council works on */
+  /** absolute path of the git repository the council works on (the shadow repo in folder mode) */
   repo: string;
+  /** default "git" */
+  mode?: ProjectMode;
+  /** folder mode: the user's folder that results are copied back to */
+  source?: string;
+  /** folder mode: extra names to skip when copying (on top of .git, node_modules, ...) */
+  ignore?: string[];
   /** branch agendas are cut from and merged back into (default: current branch at creation) */
   baseBranch: string;
   chair: {
@@ -26,6 +42,8 @@ export interface ProjectConfig {
   members: {
     autonomy: Autonomy;
     defaultProvider: CliProvider;
+    /** per-provider member caps; the chair picks models/efforts within these */
+    limits?: Partial<Limits>;
     claudeModel?: string;
     geminiModel?: string;
     /** advisor for claude members (default opus); "" = off */
@@ -104,7 +122,12 @@ export interface MemberRecord {
   provider: Provider;
   /** display label for relay members, e.g. "제미나이(agy)" or "aistudio" */
   label?: string;
+  /** relay members: which web AI */
+  site?: WebSite;
   model?: string;
+  effort?: Effort;
+  /** claude members: advisor the chair attached */
+  advisor?: string;
   account?: string;
   taskId: string;
   /** previous member whose worktree/branch this one continues */
@@ -144,6 +167,8 @@ export function prettyModel(model?: string): string | undefined {
   if (/^(fable|opus|sonnet|haiku)$/i.test(m)) return cap(m);
   const gem = /^gemini-(.+)$/i.exec(m);
   if (gem) return "Gemini " + gem[1].split("-").map(cap).join(" ");
+  const gpt = /^gpt-([\d.]+)(?:-(.+))?$/i.exec(m);
+  if (gpt) return `GPT-${gpt[1]}${gpt[2] ? " " + gpt[2].split("-").map(cap).join(" ") : ""}`;
   return m;
 }
 
@@ -154,7 +179,7 @@ function cap(s: string): string {
 /** What the UI shows for a member: the model it actually runs, not "claude-1". */
 export function memberDisplayName(m: Pick<MemberRecord, "id" | "provider" | "model" | "label">): string {
   if (m.provider === "relay") return m.label || "relay";
-  return prettyModel(m.model) ?? (m.provider === "claude" ? "Claude" : "Gemini");
+  return prettyModel(m.model) ?? (m.provider === "claude" ? "Claude" : m.provider === "gpt" ? "GPT" : "Gemini");
 }
 
 /**
@@ -215,35 +240,38 @@ export class ProjectRegistry {
     name: string;
     repo: string;
     baseBranch: string;
+    mode?: ProjectMode;
+    source?: string;
     chairModel?: string;
     chairEffort?: string;
     chairAdvisor?: string;
     chairAccount?: string;
     autonomy?: Autonomy;
     defaultProvider?: CliProvider;
-    claudeModel?: string;
-    claudeAdvisor?: string;
+    limits?: Partial<Limits>;
   }): ProjectConfig {
-    const id = slugify(input.name, 60);
+    const name = councilName(input.name);
+    const id = slugify(name, 60);
     if (this.get(id)) throw new Error(`project already exists: ${id}`);
-    // Default split: Sonnet runs, Opus advises at the big decisions, Haiku explorers do the reading.
+    // The chair is judgment-heavy and token-light: Opus by default. Members' models are the chair's call within the limits.
     const cfg: ProjectConfig = {
       id,
-      name: input.name,
+      name,
       repo: path.resolve(input.repo),
       baseBranch: input.baseBranch,
+      mode: input.mode ?? "git",
+      source: input.source ? path.resolve(input.source) : undefined,
       chair: {
         provider: "claude",
-        model: input.chairModel ?? "sonnet",
+        model: input.chairModel ?? "opus",
         effort: input.chairEffort,
-        advisor: input.chairAdvisor ?? "opus",
+        advisor: input.chairAdvisor || undefined,
         account: input.chairAccount,
       },
       members: {
         autonomy: input.autonomy ?? "full",
         defaultProvider: input.defaultProvider ?? "claude",
-        claudeModel: input.claudeModel ?? "sonnet",
-        claudeAdvisor: input.claudeAdvisor ?? "opus",
+        limits: normalizeLimits(input.limits),
         explorers: true,
         autoHandover: true,
         maxHandovers: 2,
@@ -402,6 +430,7 @@ export const GUIDELINES_TEMPLATE = (p: ProjectConfig): string => `# ${p.name} �
 
 - claude: 긴 맥락의 리팩터링, 테스트 작성, 꼼꼼한 검증에 강함. 지시가 명확할수록 좋다.
 - gemini: 넓은 탐색, 대안 비교, 문서/리서치, 대량 반복 작업. 결과 양식을 고정해 주면 안정적이다.
+- gpt (Codex CLI): 코딩 주력의 다른 시각. 클로드와 같은 작업을 교차 구현·교차 리뷰시킬 때 좋다.
 - relay(웹 제미나이·AI Studio·Antigravity, 사람이 복사해 전달): 느리지만 한도가 따로다. 저장소를 못 보므로 필요한 파일을 files에 넣어 줘야 한다. 리서치, 대안 설계, 긴 리뷰, 독립 파일 작성에 쓴다. 사용자가 자리에 없으면 오래 걸린다.
 
 ## 분장 규칙

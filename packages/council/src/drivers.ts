@@ -8,7 +8,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import type { Autonomy, CliProvider, Provider } from "./model.js";
+import type { Autonomy, Provider } from "./model.js";
+import type { CliProvider } from "./models.js";
 
 export interface SpawnSpec {
   cwd: string;
@@ -17,6 +18,8 @@ export interface SpawnSpec {
   /** long content written to stdin (task packet) */
   stdinText?: string;
   model?: string;
+  /** low | medium | high | xhigh | max (ignored by CLIs without an effort setting) */
+  effort?: string;
   env?: Record<string, string>;
   autonomy: Autonomy;
   extraArgs?: string[];
@@ -129,6 +132,7 @@ export const claudeDriver: Driver = {
   spawn(spec, onLine) {
     const args = ["-p", spec.prompt, "--output-format", "stream-json", "--verbose"];
     if (spec.model) args.push("--model", spec.model);
+    if (spec.effort) args.push("--effort", spec.effort);
     if (spec.autonomy === "full") args.push("--dangerously-skip-permissions");
     else args.push("--permission-mode", "acceptEdits");
     if (spec.extraArgs) args.push(...spec.extraArgs);
@@ -155,7 +159,26 @@ export const geminiDriver: Driver = {
   },
 };
 
-export const drivers: Record<CliProvider, Driver> = { claude: claudeDriver, gemini: geminiDriver };
+// ---------- Codex CLI (GPT) ----------
+
+export const codexDriver: Driver = {
+  provider: "gpt",
+  spawn(spec, onLine) {
+    // prompt as the argument, packet on stdin (codex appends piped stdin as a <stdin> block)
+    const args = ["exec", "--json", "--skip-git-repo-check", "-C", spec.cwd];
+    if (spec.model) args.push("-m", spec.model);
+    if (spec.effort) args.push("-c", `model_reasoning_effort=${spec.effort}`);
+    if (spec.autonomy === "full") args.push("--dangerously-bypass-approvals-and-sandbox");
+    else args.push("-s", "workspace-write", "-c", "approval_policy=never");
+    if (spec.extraArgs) args.push(...spec.extraArgs);
+    args.push(spec.prompt);
+    const env: NodeJS.ProcessEnv = { ...process.env, ...spec.env };
+    const child = spawnCli("codex", args, { cwd: spec.cwd, env });
+    return wireProcess(child, spec, onLine);
+  },
+};
+
+export const drivers: Record<CliProvider, Driver> = { claude: claudeDriver, gemini: geminiDriver, gpt: codexDriver };
 
 // ---------- stream-json parsing (Claude Code) ----------
 
@@ -230,5 +253,33 @@ export function parseGeminiLine(line: string): ClaudeEvent[] {
   if (type === "error") {
     return [{ kind: "result", text: String(msg.message ?? "error"), isError: true }];
   }
+  return [{ kind: "other", type }];
+}
+
+/** Codex `exec --json` JSONL: thread/turn/item events. Best effort across versions. */
+export function parseCodexLine(line: string): ClaudeEvent[] {
+  let msg: Record<string, unknown>;
+  try {
+    msg = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const type = String(msg.type ?? "");
+  if (type === "thread.started") return [{ kind: "init", sessionId: String(msg.thread_id ?? ""), model: msg.model as string | undefined }];
+  if (type === "item.completed" || type === "item.started") {
+    const item = (msg.item ?? {}) as Record<string, unknown>;
+    const itype = String(item.type ?? item.item_type ?? "");
+    if (itype === "agent_message" || itype === "assistant_message") {
+      return type === "item.completed" && typeof item.text === "string" ? [{ kind: "text", text: item.text }] : [];
+    }
+    if (type === "item.started" && itype && itype !== "reasoning") return [{ kind: "tool", name: itype, input: item.command ?? item.changes ?? item.tool }];
+    return [];
+  }
+  if (type === "turn.completed") return [{ kind: "result", text: "", isError: false }];
+  if (type === "turn.failed") {
+    const err = (msg.error ?? {}) as { message?: string };
+    return [{ kind: "result", text: err.message ?? "turn failed", isError: true }];
+  }
+  if (type === "error") return [{ kind: "result", text: String(msg.message ?? "error"), isError: true }];
   return [{ kind: "other", type }];
 }

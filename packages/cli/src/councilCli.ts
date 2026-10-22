@@ -18,19 +18,39 @@ import {
   projectDir,
   runChat,
   startCouncilHttp,
+  createProject,
+  isCliProvider,
+  isWebSite,
+  limitsMarkdown,
+  normalizeLimits,
+  openLoginWindow,
+  LIMIT_KEYS,
+  type AccountProvider,
   type Autonomy,
   type CliProvider,
+  type Effort,
+  type LimitKey,
   type MemberRecord,
   type Provider,
 } from "@gencouncil/council";
 
+/** "claude=3,opus,high" -> ["claude", {maxMembers:3, maxModel:"opus", maxEffort:"high"}] */
+function parseLimit(spec: string): [LimitKey, { maxMembers: number; maxModel?: string; maxEffort?: Effort }] {
+  const [key, rest = ""] = spec.split("=");
+  if (!(LIMIT_KEYS as string[]).includes(key)) throw new Error(`--limit key must be one of ${LIMIT_KEYS.join(", ")}`);
+  const [n, model, effort] = rest.split(",").map((x) => x.trim());
+  return [key as LimitKey, { maxMembers: Number(n || 0), maxModel: model || undefined, maxEffort: (effort || undefined) as Effort | undefined }];
+}
+
 export const COUNCIL_HELP = `council commands
-  project add <name> --repo <path> [--base <branch>] [--chair-model m] [--chair-effort e] [--chair-advisor a]
-                     [--autonomy full|edits] [--provider claude|gemini] [--member-model m] [--member-advisor a]
-                     (defaults: chair sonnet + advisor opus; claude members sonnet + advisor opus + haiku explorers)
+  project add <name> --path <folder> [--chair-model m] [--chair-effort e] [--autonomy full|edits]
+                     [--limit claude=3,opus,high] [--limit gpt=2,gpt-6.1-sol,high] [--limit gemini-web=1] ...
+                     any folder works: a git repo is used directly, other folders get a private shadow repo
+                     " 제작위원회" is appended to the name. default chair: opus
   project list | project show <project> | project guidelines <project>   (prints path to edit)
-  project set <project> [--chair-model m] [--chair-advisor a] [--member-model m] [--member-advisor a]
+  project set <project> [--chair-model m] [--chair-effort e] [--chair-advisor a] [--limit key=n,model,effort]...
                         [--explorers on|off] [--autonomy ..] [--provider ..] [--fallback-provider ..]
+  project limits <project>   show the member limits the chair works within
   agenda add <project> "<title>" --goal "..." [--goal "..."]
   agenda list <project>
   council chat <project> <agenda> [--chair-model m] [--chair-effort e]   talk to the chair (REPL)
@@ -46,9 +66,10 @@ export const COUNCIL_HELP = `council commands
   council relay packet <project> <agenda> <member>            print the packet to paste into a web AI
   council relay submit <project> <agenda> <member> --file answer.txt [--result-file r.md]
                      apply the web AI's answer (FILE/RESULT blocks) and finish the relay member
-  account add <id> --provider claude|gemini --config-dir <dir> [--priority n] [--note ..]
+  account add <id> --provider claude|gemini|gpt|gemini-web|aistudio|chatgpt [--config-dir <dir>] [--priority n] [--note ..]
+                     (folder defaults to ~/.gencouncil/accounts/<id>; web accounts are Chrome profiles)
   account list | account reset <id> | account remove <id>
-  account login <id>   open the CLI interactively on that account (claude: type /login; gemini: follow the prompt)
+  account login <id>   open a login window for that account (CLI console or Chrome on the site); log in once
 `;
 
 export const COUNCIL_COMMANDS = new Set(["project", "agenda", "council", "account"]);
@@ -102,24 +123,21 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
           args,
           allowPositionals: true,
           options: {
-            repo: { type: "string" }, base: { type: "string" }, "chair-model": { type: "string" }, "chair-effort": { type: "string" },
-            "chair-advisor": { type: "string" }, "chair-account": { type: "string" }, autonomy: { type: "string" }, provider: { type: "string" },
-            "member-model": { type: "string" }, "member-advisor": { type: "string" },
+            path: { type: "string" }, repo: { type: "string" }, mode: { type: "string" }, base: { type: "string" },
+            "chair-model": { type: "string" }, "chair-effort": { type: "string" }, "chair-advisor": { type: "string" }, "chair-account": { type: "string" },
+            autonomy: { type: "string" }, provider: { type: "string" }, limit: { type: "string", multiple: true },
           },
         });
         const name = positionals.join(" ").trim();
-        if (!name || !values.repo) throw new Error("usage: project add <name> --repo <path>");
-        const repo = path.resolve(values.repo);
-        if (!(await isRepo(repo))) throw new Error(`not a git repository: ${repo} (run git init + first commit)`);
-        if (!(await hasCommits(repo))) throw new Error(`repository has no commits yet: ${repo}`);
-        const base = values.base ?? (await currentBranch(repo));
-        const p = registry.add({
-          name, repo, baseBranch: base,
+        const folder = values.path ?? values.repo;
+        if (!name || !folder) throw new Error("usage: project add <name> --path <folder>");
+        const limits = Object.fromEntries((values.limit ?? []).map(parseLimit));
+        const p = await createProject({
+          name, path: folder, mode: (values.mode as "auto" | "git" | "folder") ?? "auto", baseBranch: values.base,
           chairModel: values["chair-model"], chairEffort: values["chair-effort"], chairAdvisor: values["chair-advisor"], chairAccount: values["chair-account"],
-          autonomy: values.autonomy as Autonomy | undefined, defaultProvider: values.provider as CliProvider | undefined,
-          claudeModel: values["member-model"], claudeAdvisor: values["member-advisor"],
-        });
-        console.log(`project ${p.id} -> ${projectDir(p.id)}`);
+          autonomy: values.autonomy as Autonomy | undefined, defaultProvider: values.provider as CliProvider | undefined, limits,
+        }, registry);
+        console.log(`project ${p.id} "${p.name}" (${p.mode}${p.mode === "folder" ? `: ${p.source} via shadow repo` : ""}) -> ${projectDir(p.id)}`);
         console.log(`guidelines: ${registry.guidelinesPath(p)}`);
         return 0;
       }
@@ -128,7 +146,7 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
         if (!all.length) console.log("(no projects)");
         for (const p of all)
           console.log(
-            `${p.id}  "${p.name}"  repo=${p.repo}  base=${p.baseBranch}  chair=${p.chair.model ?? "default"}/${p.chair.effort ?? "default"}${p.chair.advisor ? "+" + p.chair.advisor : ""}  members=${p.members.claudeModel ?? "default"}${p.members.claudeAdvisor ? "+" + p.members.claudeAdvisor : ""}`,
+            `${p.id}  "${p.name}"  ${p.mode === "folder" ? `folder=${p.source}` : `repo=${p.repo}`}  chair=${p.chair.model ?? "default"}/${p.chair.effort ?? "default"}${p.chair.advisor ? "+" + p.chair.advisor : ""}`,
           );
         return 0;
       }
@@ -137,7 +155,7 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
           args, allowPositionals: true,
           options: {
             "chair-model": { type: "string" }, "chair-effort": { type: "string" }, "chair-advisor": { type: "string" }, "chair-account": { type: "string" },
-            "member-model": { type: "string" }, "member-advisor": { type: "string" }, explorers: { type: "string" }, autonomy: { type: "string" },
+            limit: { type: "string", multiple: true }, explorers: { type: "string" }, autonomy: { type: "string" },
             provider: { type: "string" }, "fallback-provider": { type: "string" },
           },
         });
@@ -147,14 +165,18 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
         if (v["chair-effort"] !== undefined) p.chair.effort = v["chair-effort"] || undefined;
         if (v["chair-advisor"] !== undefined) p.chair.advisor = v["chair-advisor"];
         if (v["chair-account"] !== undefined) p.chair.account = v["chair-account"] || undefined;
-        if (v["member-model"] !== undefined) p.members.claudeModel = v["member-model"] || undefined;
-        if (v["member-advisor"] !== undefined) p.members.claudeAdvisor = v["member-advisor"];
+        if (v.limit?.length) p.members.limits = normalizeLimits({ ...normalizeLimits(p.members.limits), ...Object.fromEntries(v.limit.map(parseLimit)) });
         if (v.explorers !== undefined) p.members.explorers = v.explorers !== "false" && v.explorers !== "off";
         if (v.autonomy) p.members.autonomy = v.autonomy as Autonomy;
         if (v.provider) p.members.defaultProvider = v.provider as CliProvider;
         if (v["fallback-provider"] !== undefined) p.members.fallbackProvider = (v["fallback-provider"] as CliProvider) || undefined;
         registry.save(p);
         console.log(JSON.stringify({ chair: p.chair, members: p.members }, null, 2));
+        return 0;
+      }
+      case "limits": {
+        const p = requireProject(args[0]);
+        console.log(limitsMarkdown(normalizeLimits(p.members.limits), {}));
         return 0;
       }
       case "show": {
@@ -213,12 +235,10 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
           options: { provider: { type: "string" }, "config-dir": { type: "string" }, priority: { type: "string" }, note: { type: "string" } },
         });
         const id = positionals[0];
-        if (!id || !values.provider || !values["config-dir"]) throw new Error("usage: account add <id> --provider claude|gemini --config-dir <dir>");
-        if (!["claude", "gemini"].includes(values.provider)) throw new Error("--provider must be claude or gemini");
-        const dir = path.resolve(values["config-dir"]);
-        fs.mkdirSync(dir, { recursive: true });
+        if (!id || !values.provider) throw new Error("usage: account add <id> --provider claude|gemini|gpt|gemini-web|aistudio|chatgpt [--config-dir <dir>]");
+        if (!isCliProvider(values.provider) && !isWebSite(values.provider)) throw new Error("--provider must be claude, gemini, gpt, gemini-web, aistudio or chatgpt");
         const a = accounts.upsert({
-          id, provider: values.provider as CliProvider, configDir: dir,
+          id, provider: values.provider as AccountProvider, configDir: values["config-dir"] ? path.resolve(values["config-dir"]) : undefined,
           priority: values.priority ? Number(values.priority) : undefined, note: values.note,
         });
         console.log(`account ${a.id} saved (${a.provider}, ${a.configDir})`);
@@ -234,19 +254,14 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
       case "login": {
         const a = accounts.get(args[0] ?? "");
         if (!a) throw new Error(`unknown account: ${args[0]}`);
-        const exe = findExecutable(a.provider);
-        if (!exe) throw new Error(`${a.provider} CLI not found on PATH`);
-        const env = { ...process.env, ...accounts.env(a) };
-        delete env.CLAUDECODE;
-        console.log(`opening ${a.provider} on account ${a.id}${a.configDir ? ` (${a.configDir})` : ""}. ${a.provider === "claude" ? "Type /login, finish in the browser, then /exit." : "Follow the login prompt, then type /quit."}`);
-        const r = spawnSync(exe, [], { stdio: "inherit", env, shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(exe) });
-        if (r.status === 0) accounts.markOk(a.id);
-        return r.status ?? 1;
+        const hint = openLoginWindow(a, accounts);
+        console.log(`opened a login window for ${a.id} (${a.provider}${a.configDir ? `, ${a.configDir}` : ""}). ${hint}`);
+        return 0;
       }
       default: {
         for (const a of accounts.list()) {
           const extra = a.status === "exhausted" ? `  reset ${a.resetAt}` : a.lastError ? `  ${a.lastError.slice(0, 80)}` : "";
-          console.log(`${a.id.padEnd(14)} ${a.provider.padEnd(7)} ${a.status.padEnd(10)} ${a.configDir ?? "(default login)"}${extra}`);
+          console.log(`${a.id.padEnd(14)} ${a.provider.padEnd(10)} ${a.status.padEnd(10)} ${a.configDir ?? "(default login)"}${extra}`);
         }
         return 0;
       }

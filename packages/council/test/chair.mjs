@@ -55,7 +55,7 @@ const chair = new Chair(council, { councilUrl: "http://127.0.0.1:1/mcp" });
 const res = await chair.turn("첫 지시\n두 번째 줄", () => {});
 check("turn succeeded via fake claude", !res.isError && res.text === "done" && res.sessionId === "s-1", JSON.stringify(res));
 const log = fs.readFileSync(chair.logFile(), "utf8");
-check("header with account/model/advisor", /chair turn account=claude model=sonnet .*advisor=opus resume=new/.test(log), log.split("\n")[0]);
+check("header with account/model/advisor", /chair turn account=claude model=opus .*advisor=off resume=new/.test(log), log.split("\n")[0]);
 check("prompt recorded on one line", log.includes("[prompt] 첫 지시 ⏎ 두 번째 줄"));
 check("stdout stream-json recorded", log.includes('[stdout] {"type":"result"'));
 check("stderr recorded", log.includes("[stderr] fake-warning-on-stderr"));

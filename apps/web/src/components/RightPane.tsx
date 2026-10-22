@@ -36,6 +36,8 @@ export function Sparkline({ data, color }: { data: number[]; color: string }) {
 
 function metaLine(m: Member): string {
   const parts: string[] = [m.id];
+  if (m.effort) parts.push(`추론 ${m.effort}`);
+  if (m.advisor) parts.push(`advisor ${m.advisor}`);
   if (m.account && m.account !== m.provider) parts.push(`계정 ${m.account}`);
   if (m.handoverFrom) parts.push(`${m.handoverFrom}에서 인계`);
   return parts.join(" · ");

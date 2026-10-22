@@ -1,0 +1,156 @@
+// Limits, model ladders, GPT parsing and folder mode — no LLM involved.
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { MemoryStore } from "@gencouncil/core";
+import {
+  AgendaStore,
+  Council,
+  ProjectRegistry,
+  createProject,
+  drivers,
+  ensureWorktree,
+  git,
+  memberDisplayName,
+  normalizeLimits,
+  parseCodexLine,
+  resolveAdvisor,
+  resolveEffort,
+  resolveModel,
+  tierOf,
+} from "@gencouncil/council";
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-limits-"));
+process.env.GENCOUNCIL_HOME = path.join(tmp, "home");
+
+let failed = 0;
+const check = (name, cond, extra = "") => {
+  console.log(`${cond ? "ok  " : "FAIL"} ${name}${extra ? " :: " + extra : ""}`);
+  if (!cond) failed++;
+};
+const throws = (fn, re) => {
+  try {
+    fn();
+    return false;
+  } catch (e) {
+    return re.test(e.message);
+  }
+};
+const rejects = (p, re) => p.then(() => false, (e) => re.test(e.message));
+
+// ---- ladders ----
+const lim = normalizeLimits({ claude: { maxMembers: 1, maxModel: "sonnet", maxEffort: "medium" }, gpt: { maxMembers: 0 }, "gemini-web": { maxMembers: 1 } });
+check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 1 && tierOf("gemini", "gemini-2.5-flash") === 1);
+check("default model is the workhorse within limit", resolveModel("claude", undefined, lim.claude) === "sonnet" && resolveModel("gpt", undefined, normalizeLimits({}).gpt) === "gpt-6.1-sol");
+check("model above limit rejected", throws(() => resolveModel("claude", "opus", lim.claude), /above the user's limit/));
+check("unknown model rejected", throws(() => resolveModel("claude", "gpt-6", lim.claude), /unknown claude model/));
+check("default effort medium", resolveEffort("claude", undefined, lim.claude) === "medium");
+check("effort above limit rejected", throws(() => resolveEffort("claude", "high", lim.claude), /above the user's limit/));
+check("gemini has no effort", resolveEffort("gemini", "high", lim.gemini) === undefined);
+check("advisor below main rejected", throws(() => resolveAdvisor("sonnet", "haiku", lim.claude), /ranks below/));
+check("advisor above limit rejected", throws(() => resolveAdvisor("haiku", "opus", lim.claude), /above the user's limit/));
+check("advisor ok", resolveAdvisor("haiku", "sonnet", lim.claude) === "sonnet");
+check("fable main needs fable advisor", throws(() => resolveAdvisor("fable", "opus", normalizeLimits({ claude: { maxMembers: 1, maxModel: "fable" } }).claude), /ranks below|Fable/));
+check("gpt display name", memberDisplayName({ id: "gpt-1", provider: "gpt", model: "gpt-6.1-sol" }) === "GPT-6.1 Sol");
+
+// ---- codex json ----
+const ev = [
+  '{"type":"thread.started","thread_id":"t1"}',
+  '{"type":"item.started","item":{"id":"i1","type":"command_execution","command":"npm test"}}',
+  '{"type":"item.completed","item":{"id":"i2","type":"agent_message","text":"끝났습니다"}}',
+  '{"type":"turn.completed","usage":{"input_tokens":1}}',
+].flatMap(parseCodexLine);
+check("codex events parsed", ev.map((e) => e.kind).join() === "init,tool,text,result" && ev[2].text === "끝났습니다" && ev[3].isError === false, JSON.stringify(ev));
+check("codex failure parsed", parseCodexLine('{"type":"turn.failed","error":{"message":"usage limit reached"}}')[0].isError === true);
+
+// ---- council slot limits with a hanging fake driver ----
+const repo = path.join(tmp, "repo");
+fs.mkdirSync(repo);
+const sh = (args, cwd = repo) => execFileSync("git", args, { cwd, encoding: "utf8" });
+sh(["init", "-q", "-b", "main"]);
+sh(["config", "user.email", "t@t"]);
+sh(["config", "user.name", "t"]);
+fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+sh(["add", "-A"]);
+sh(["commit", "-q", "-m", "init"]);
+
+const registry = new ProjectRegistry();
+const project = registry.add({ name: "한도", repo, baseBranch: "main", limits: { claude: { maxMembers: 1, maxModel: "sonnet", maxEffort: "medium" }, gpt: { maxMembers: 0 }, "gemini-web": { maxMembers: 1 } } });
+const store = AgendaStore.create(project, "안건", ["x"]);
+const memory = new MemoryStore({ git: false });
+await memory.init();
+const council = new Council(store, memory);
+await council.open();
+
+let release;
+const spawned = [];
+drivers.claude = {
+  provider: "claude",
+  spawn(spec) {
+    spawned.push(spec);
+    const done = new Promise((r) => (release = () => r({ code: 0, signal: null })));
+    return { pid: 1, child: {}, stop() {}, done };
+  },
+};
+const t = () => council.addTask({ title: "t" }).id;
+check("claude model above limit", await rejects(council.assign({ taskId: t(), provider: "claude", model: "opus", instructions: "xxxxxxxxxxxxxxxxxxxxxxxx" }), /above the user's limit/));
+const m1 = await council.assign({ taskId: t(), provider: "claude", model: "haiku", advisor: "sonnet", instructions: "xxxxxxxxxxxxxxxxxxxxxxxx" });
+check("claude member gets model/effort/advisor", m1.model === "haiku" && m1.effort === "medium" && m1.advisor === "sonnet");
+check("driver received effort and advisor", spawned[0].effort === "medium" && spawned[0].extraArgs.join(" ").includes("--advisor sonnet") && spawned[0].extraArgs.includes("--agents"));
+check("second claude blocked by count", await rejects(council.assign({ taskId: t(), provider: "claude", instructions: "xxxxxxxxxxxxxxxxxxxxxxxx" }), /limit reached \(1\/1/));
+check("gpt disabled", await rejects(council.assign({ taskId: t(), provider: "gpt", instructions: "xxxxxxxxxxxxxxxxxxxxxxxx" }), /disabled/));
+const r1 = await council.assign({ taskId: t(), provider: "relay", site: "gemini-web", instructions: "xxxxxxxxxxxxxxxxxxxxxxxx" });
+check("web gemini relay waiting with label", r1.status === "waiting" && r1.site === "gemini-web" && r1.label === "웹 제미나이");
+check("second web gemini blocked", await rejects(council.assign({ taskId: t(), provider: "relay", site: "gemini-web", instructions: "xxxxxxxxxxxxxxxxxxxxxxxx" }), /gemini-web limit reached/));
+const r2 = await council.assign({ taskId: t(), provider: "relay", label: "Antigravity", instructions: "xxxxxxxxxxxxxxxxxxxxxxxx" });
+check("site-less relay not limited", r2.status === "waiting");
+const active = council.activeCounts();
+check("active counts", active.claude === 1 && active["gemini-web"] === 1 && active.gpt === 0, JSON.stringify(active));
+check("limits table for the chair", council.limitsMarkdown().includes("| claude | 1 (1) |") && council.limitsMarkdown().includes("사용 안 함"));
+const finished = new Promise((r) => council.once("member:done", r));
+release();
+await finished;
+check("slot freed after finish", council.activeCounts().claude === 0);
+
+// ---- folder mode ----
+const src = path.join(tmp, "plain folder");
+fs.mkdirSync(path.join(src, "sub"), { recursive: true });
+fs.writeFileSync(path.join(src, "keep.txt"), "keep\n");
+fs.writeFileSync(path.join(src, "sub", "old.txt"), "old\n");
+fs.mkdirSync(path.join(src, "node_modules", "x"), { recursive: true });
+fs.writeFileSync(path.join(src, "node_modules", "x", "big.js"), "ignored\n");
+const fp = await createProject({ name: "폴더 작업", path: src });
+check("folder mode chosen for non-git folder", fp.mode === "folder" && fp.source === path.resolve(src) && fp.name === "폴더 작업 제작위원회");
+check("source folder untouched (no .git)", !fs.existsSync(path.join(src, ".git")));
+check("shadow has files but not node_modules", fs.existsSync(path.join(fp.repo, "keep.txt")) && !fs.existsSync(path.join(fp.repo, "node_modules")));
+const fstore = AgendaStore.create(fp, "폴더 안건", ["y"]);
+const fc = new Council(fstore, memory);
+await fc.open();
+// a "member": edits keep.txt, adds new.txt, deletes sub/old.txt on its branch
+const wt = fstore.memberWorktree("claude-1");
+await ensureWorktree(fp.repo, wt, fstore.memberBranch("claude-1"), fstore.agenda().branch);
+fs.writeFileSync(path.join(wt, "keep.txt"), "keep\nchanged by member\n");
+fs.writeFileSync(path.join(wt, "new.txt"), "new\n");
+fs.rmSync(path.join(wt, "sub", "old.txt"));
+await git(wt, ["add", "-A"]);
+await git(wt, ["commit", "-q", "-m", "member work"]);
+fstore.saveMembers([{ id: "claude-1", provider: "claude", taskId: "T1", branch: fstore.memberBranch("claude-1"), worktree: wt, status: "done", startedAt: "", toolCalls: 0 }]);
+fstore.saveTasks([{ id: "T1", title: "t", description: "", status: "review", created: "", updated: "" }]);
+const fc2 = new Council(fstore, memory);
+await fc2.open();
+check("member merge in shadow", (await fc2.merge("claude-1")).ok);
+// meanwhile the user edits another file in their folder
+fs.writeFileSync(path.join(src, "user.txt"), "user edit\n");
+const out = await fc2.finish();
+check("finish reports copy-back", /copied back to .*: 2 written, 1 deleted/.test(out), out.split("\n").pop());
+check("member change copied to folder", fs.readFileSync(path.join(src, "keep.txt"), "utf8").includes("changed by member") && fs.existsSync(path.join(src, "new.txt")));
+check("member deletion applied to folder", !fs.existsSync(path.join(src, "sub", "old.txt")));
+check("user's own edit kept", fs.readFileSync(path.join(src, "user.txt"), "utf8") === "user edit\n");
+check("ignored folders untouched", fs.existsSync(path.join(src, "node_modules", "x", "big.js")));
+check("still no .git in folder", !fs.existsSync(path.join(src, ".git")));
+
+memory.close();
+fs.rmSync(tmp, { recursive: true, force: true });
+console.log(failed ? `\n${failed} check(s) FAILED` : "\nall limits/folder checks passed");
+process.exit(failed ? 1 : 0);

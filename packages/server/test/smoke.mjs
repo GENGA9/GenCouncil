@@ -46,10 +46,10 @@ check("overview empty", ov0.status === 200 && ov0.json.projects.length === 0 && 
 
 const bad = await api("POST", "/api/projects", { name: "x", repo: path.join(tmp, "notrepo") });
 check("project rejects non-repo", bad.status === 400, JSON.stringify(bad.json));
-const proj = await api("POST", "/api/projects", { name: "웹 테스트 위원회", repo, chairModel: "claude-sonnet-5-5" });
-check("project created", proj.status === 200 && proj.json.id === "웹-테스트-위원회", JSON.stringify(proj.json));
+const proj = await api("POST", "/api/projects", { name: "웹 테스트", repo, chairModel: "claude-sonnet-5-5" });
+check("project created", proj.status === 200 && proj.json.id === "웹-테스트-제작위원회", JSON.stringify(proj.json));
 const ag = await api("POST", `/api/projects/${encodeURIComponent(proj.json.id)}/agendas`, { title: "첫 안건", goals: ["a.txt 수정", "b.txt 생성"] });
-check("agenda created", ag.status === 200 && ag.json.key === "웹-테스트-위원회/첫-안건", JSON.stringify(ag.json));
+check("agenda created", ag.status === 200 && ag.json.key === "웹-테스트-제작위원회/첫-안건", JSON.stringify(ag.json));
 
 const g = await api("GET", `/api/projects/${encodeURIComponent(proj.json.id)}/guidelines`);
 check("guidelines readable", g.status === 200 && g.json.text.includes("분장"));

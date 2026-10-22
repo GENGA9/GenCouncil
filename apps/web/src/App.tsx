@@ -5,7 +5,7 @@ import { CenterPane } from "./components/CenterPane";
 import { LeftPane } from "./components/LeftPane";
 import { MemoryView } from "./components/MemoryView";
 import { RightPane } from "./components/RightPane";
-import { GuidelinesModal, HandoverModal, MemberModal, NewAgendaModal, NewProjectModal, RelayModal } from "./components/Modals";
+import { GuidelinesModal, HandoverModal, MemberModal, NewAgendaModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
 import type { ChatItem, Overview, RuntimeState, TranscriptEntry } from "./types";
 
 const MEMORY_KEY = "__memory__";
@@ -44,6 +44,7 @@ export function App() {
     | { kind: "project" }
     | { kind: "agenda"; projectId: string }
     | { kind: "guidelines"; projectId: string }
+    | { kind: "settings"; projectId: string }
     | { kind: "member"; id: string }
     | { kind: "relay"; id: string }
     | { kind: "handover"; id: string }
@@ -230,6 +231,7 @@ export function App() {
       onNewProject={() => setModal({ kind: "project" })}
       onNewAgenda={(pid) => setModal({ kind: "agenda", projectId: pid })}
       onGuidelines={(pid) => setModal({ kind: "guidelines", projectId: pid })}
+      onSettings={(pid) => setModal({ kind: "settings", projectId: pid })}
       memoryKey={MEMORY_KEY}
       accountsKey={ACCOUNTS_KEY}
       wsUp={wsUp}
@@ -351,9 +353,26 @@ export function App() {
         />
       )}
       {modal?.kind === "guidelines" && <GuidelinesModal projectId={modal.projectId} onClose={() => setModal(null)} notify={notify} />}
+      {modal?.kind === "settings" && overview?.projects.find((p) => p.id === modal.projectId) && (
+        <ProjectSettingsModal
+          project={overview.projects.find((p) => p.id === modal.projectId)!}
+          onClose={() => setModal(null)}
+          onSaved={(m) => {
+            notify(m);
+            void refreshOverview();
+            if (selected) void refreshState(selected);
+          }}
+        />
+      )}
       {modal?.kind === "member" && selected && <MemberModal agendaKey={selected} memberId={modal.id} onClose={() => setModal(null)} />}
       {modal?.kind === "relay" && selected && (
-        <RelayModal agendaKey={selected} memberId={modal.id} onClose={() => setModal(null)} onDone={(m) => { notify(m); void refreshState(selected); }} />
+        <RelayModal
+          agendaKey={selected}
+          memberId={modal.id}
+          site={state?.members.find((m) => m.id === modal.id)?.site}
+          onClose={() => setModal(null)}
+          onDone={(m) => { notify(m); void refreshState(selected); }}
+        />
       )}
       {modal?.kind === "handover" && selected && (
         <HandoverModal

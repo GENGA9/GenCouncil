@@ -1,4 +1,4 @@
-import type { Account, MemoryHit, Overview, RuntimeState, TranscriptEntry } from "./types";
+import type { Account, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -47,6 +47,11 @@ export const api = {
       ...(advisor !== undefined ? { advisor } : {}),
     }),
   accounts: () => call<Account[]>("GET", "/api/accounts"),
+  accountLogin: (id: string) => call<{ hint: string }>("POST", `/api/accounts/${encodeURIComponent(id)}/login`),
+  models: () => call<ModelsInfo>("GET", "/api/models"),
+  fs: (p: string) => call<FolderListing>("GET", `/api/fs?path=${encodeURIComponent(p)}`),
+  projectSettings: (id: string, b: Record<string, unknown>) => call("PUT", `/api/projects/${encodeURIComponent(id)}/settings`, b),
+  openWeb: (key: string, id: string) => call("POST", `${a(key)}/members/${encodeURIComponent(id)}/open-web`),
   addAccount: (b: Record<string, unknown>) => call<Account>("POST", "/api/accounts", b),
   resetAccount: (id: string) => call<Account>("POST", `/api/accounts/${encodeURIComponent(id)}/reset`),
   removeAccount: (id: string) => call("DELETE", `/api/accounts/${encodeURIComponent(id)}`),

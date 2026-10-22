@@ -3,12 +3,35 @@ export interface Tailscale {
   dnsName?: string;
 }
 
-export type CliProvider = "claude" | "gemini";
+export type CliProvider = "claude" | "gemini" | "gpt";
 export type Provider = CliProvider | "relay";
+
+export interface LimitEntry {
+  maxMembers: number;
+  maxModel?: string;
+  maxEffort?: string;
+}
+export type Limits = Record<string, LimitEntry>;
+
+export interface ModelsInfo {
+  providers: Array<{ id: string; models: Array<{ id: string; label: string; note: string }>; effort: boolean }>;
+  sites: Array<{ id: string; label: string; url: string; family: string }>;
+  efforts: string[];
+  defaults: Limits;
+}
+
+export interface FolderListing {
+  path: string;
+  parent?: string;
+  entries: Array<{ name: string; path: string; git?: boolean }>;
+  roots: Array<{ name: string; path: string }>;
+}
 
 export interface Account {
   id: string;
-  provider: CliProvider;
+  /** claude | gemini | gpt | gemini-web | aistudio | chatgpt */
+  provider: string;
+  loginOpenedAt?: string;
   configDir?: string;
   priority?: number;
   status: "ok" | "exhausted" | "auth" | "disabled";
@@ -38,9 +61,11 @@ export interface ProjectOv {
   id: string;
   name: string;
   repo: string;
+  mode?: "git" | "folder";
+  source?: string;
   baseBranch: string;
   chair: { model?: string; effort?: string; advisor?: string; account?: string };
-  members: { autonomy: string; defaultProvider: string; claudeModel?: string; claudeAdvisor?: string; explorers?: boolean };
+  members: { autonomy: string; defaultProvider: string; limits?: Limits; explorers?: boolean };
   agendas: AgendaOv[];
 }
 
@@ -69,7 +94,10 @@ export interface Member {
   id: string;
   provider: Provider;
   label?: string;
+  site?: string;
   model?: string;
+  effort?: string;
+  advisor?: string;
   account?: string;
   taskId: string;
   branch: string;
@@ -101,6 +129,10 @@ export interface RuntimeState {
   chair: { model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean };
   activity: Record<string, number[]>;
   accounts: Account[];
+  limits: Limits;
+  active: Record<string, number>;
+  mode: "git" | "folder";
+  source?: string;
 }
 
 export interface TranscriptEntry {

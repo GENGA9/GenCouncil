@@ -101,6 +101,7 @@ export class Chair {
       chairState: store.chairState(),
       memoryIndex: this.council.memory.renderIndex(),
       integrationWorktree: store.integrationWorktree(),
+      limits: this.council.limitsMarkdown(),
     });
   }
 

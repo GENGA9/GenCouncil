@@ -4,7 +4,7 @@
 내 PC 전체의 공유 기억(Space)을 축적하며, 모바일에서도 작업을 이어가는 로컬 오케스트레이션 앱.
 전체 설계는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## 현재 상태: 5단계까지 (공유 기억 · 의장 루프 · 웹 UI/PWA · 핸드오버/계정/릴레이 · 상주/알림/회고)
+## 현재 상태: 5단계 + 위원 한도·GPT·폴더 모드
 
 ## 5단계: 상주 · 알림 · 회고 · 데스크탑
 
@@ -54,23 +54,41 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
 | `apps/desktop` | Tauri 2 트레이 앱 스캐폴드 (Rust 필요, 미검증) |
 | `packages/cli` | `gencouncil` 명령 전체 (memory · project · agenda · council · account · web · service · desktop) |
 
-## 모델 분담 (Sonnet 실행 · Haiku 탐색 · Opus 판단)
+## 제작위원회 만들기
 
-새 프로젝트의 기본값은 클로드 코드의 advisor 패턴을 따른다.
+- **이름**: 프로젝트 이름만 적으면 " 제작위원회"가 자동으로 붙는다 (`RF PROJECT` → `RF PROJECT 제작위원회`).
+- **폴더**: git 저장소가 아니어도 된다. "폴더 선택"으로 PC의 폴더를 고른다.
+  - git 저장소(최상위, 커밋 있음)면 그 저장소에서 바로 worktree로 작업한다.
+  - 그 밖의 폴더는 `~/.gencouncil/projects/<id>/shadow`에 사본 저장소를 만들어 거기서 작업한다. 원본 폴더에는 `.git`을 만들지 않는다. 안건을 열 때마다 원본의 최신 상태를 사본에 반영하고, 안건 종료 때 바뀐 파일만 원본으로 복사한다(추가·수정 복사, 삭제 반영). `node_modules`, `.venv`, `__pycache__` 등은 복사하지 않는다.
+- **의장**: 기본 Opus. 판단이 많고 토큰은 적게 쓰는 역할이라서다. 모델과 추론 수준은 프로젝트 설정(⚙)이나 의장 헤더에서 바꾼다.
 
-| 역할 | 기본 | 무엇을 |
-|------|------|--------|
-| 의장 | `sonnet` + advisor `opus` | 평범한 턴은 Sonnet. 분장 확정 전, 같은 실패 2회, 안건 종료 선언 전에만 Opus에 상담 |
-| 클로드 위원 | `sonnet` + advisor `opus` | 코드를 쓴다. 계획 확정 전·같은 오류 2회·완료 선언 전에 Opus 상담 (패킷 규칙 8) |
-| 탐색기 | Haiku 서브에이전트 `search` / `grep` / `docs` | 읽기 전용. 위원이 저장소를 직접 뒤지지 않고 병렬로 맡긴다 (`--agents`로 주입) |
+## 위원 한도와 모델 선택
 
-프로젝트 생성 시 `--chair-model/--chair-advisor/--member-model/--member-advisor`로 바꾸고, 웹의 의장 헤더에서 advisor를 바꿀 수 있다. 메인 모델이 Fable이면 Fable advisor만 허용되므로 그 외 advisor는 자동으로 붙이지 않는다. 위원 카드와 작업 칩에는 `claude-1` 같은 id 대신 **실제로 실행된 모델명**(Sonnet 5.5, Fable 5.1, Gemini 2.5 Pro …)이 표시된다. id는 작은 글씨와 브랜치명에 남는다.
+사용자는 위원 종류별 **동시 최대 인원, 최대 모델, 최대 추론 수준**만 정한다. 프로젝트를 만들 때 또는 프로젝트 이름 옆 ⚙에서 바꾼다.
+
+| 종류 | 실행 | 모델 단계 (낮음 → 높음) | 추론 |
+|------|------|------------------------|------|
+| 클로드 | Claude Code CLI | haiku · sonnet · opus · fable | low ~ max |
+| 제미나이 CLI | Gemini CLI | gemini-2.5-flash-lite · flash · pro | 없음 |
+| GPT | Codex CLI | gpt-6-luna · gpt-6.1-sol · gpt-6-astra | low ~ max |
+| 웹 제미나이 / AI Studio / ChatGPT 웹 | 릴레이 (사람이 전달) | 웹에서 고름 | - |
+
+의장은 이 한도 안에서 작업마다 provider·model·effort·advisor를 직접 고른다. 원칙은 "실행은 싸게, 판단은 비싸게"다. 쉬운 작업은 하위 모델, 일반 코딩은 주력 모델, 어려운 설계만 상위 모델을 쓴다. 여러 단계에 걸친 긴 클로드 작업에는 sonnet + advisor opus를 붙여 계획 확정 전·같은 오류 2회·완료 선언 전에만 opus에 상담하게 한다. 클로드 위원에게는 읽기 전용 Haiku 탐색기(search/grep/docs)가 자동으로 붙는다. 한도를 넘는 배정은 서버가 거절하고 허용 목록을 의장에게 돌려준다. 동시 인원이 차면 의장은 다른 종류를 쓰거나 하나가 끝나길 기다린다.
+
+CLI: `gencouncil project set <project> --limit claude=3,opus,high --limit gpt=2,gpt-6.1-sol,high --limit gemini-web=1`, 확인은 `gencouncil project limits <project>`.
+
+위원 카드와 작업 칩에는 `claude-1` 같은 id 대신 **실제로 실행된 모델명**(Sonnet 5.5, GPT-6.1 Sol, Gemini 2.5 Pro …)과 추론 수준·advisor가 표시된다.
 
 색: 클로드 주황 `#d97757`, 제미나이 구글 블루 `#4285f4`, GPT 그린 `#10a37f`, 그 외 릴레이 보라. 릴레이 위원은 라벨(제미나이/agy/aistudio → 블루, gpt/chatgpt → 그린)로 판별한다. 실행 중에는 레퍼런스의 회전 2×2 스피너가 그 색으로 돈다.
 
 ## 4단계: 핸드오버 · 계정 레지스트리 · 릴레이 위원
 
-### 계정 레지스트리
+### 계정 레지스트리와 다중 로그인 미리 해 두기
+
+웹의 "계정" 화면에서 종류(클로드, GPT, 제미나이 CLI, 웹 제미나이, AI Studio, ChatGPT 웹)와 ID만 넣고 "추가하고 로그인"을 누르면 이 PC에 로그인 창이 열린다. 한 번 로그인하면 그 계정 전용 폴더에 저장되어 다시 할 필요가 없다. 폴더를 비우면 `~/.gencouncil/accounts/<ID>`를 쓴다.
+
+- CLI 계정: 콘솔 창이 열린다. 클로드는 `/login`, GPT는 `codex login`이 자동 실행되어 브라우저로 로그인, 제미나이는 첫 실행 안내를 따른다.
+- 웹 계정: 그 계정 전용 Chrome 프로필로 사이트가 열린다. 구글/ChatGPT에 로그인하고 창을 닫으면 된다. 같은 종류의 웹 계정이 여럿이면 릴레이 위원마다 가장 오래 안 쓴 계정을 고른다. 릴레이 창의 "복사하고 사이트 열기"가 그 프로필로 사이트를 연다.
 
 `~/.gencouncil/accounts.json`. 기본 로그인은 `claude`, `gemini`라는 이름으로 항상 존재한다. 계정을 더 쓰려면:
 

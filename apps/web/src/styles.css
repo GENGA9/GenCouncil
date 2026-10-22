@@ -219,3 +219,21 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
   .msg { max-width: 96%; }
   .row2 { grid-template-columns: 1fr; }
 }
+
+/* limits editor, folder picker */
+.limits { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.limits-head, .limits-row { display: grid; grid-template-columns: 1.3fr 0.7fr 1.4fr 1fr; gap: 8px; align-items: center; }
+.limits-row input, .limits-row select { padding: 4px 6px; }
+.limits-name { font-weight: 600; }
+.fam-claude { color: var(--c-claude); }
+.fam-gemini { color: var(--c-gemini); }
+.fam-gpt { color: var(--c-gpt); }
+.name-preview { margin: -6px 0 10px; }
+.folder-row { display: flex; gap: 8px; margin-top: 4px; }
+.folder-row input { flex: 1; margin-top: 0; }
+.fp-roots { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.fp-path { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; word-break: break-all; }
+.fp-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.fp-item { display: flex; justify-content: space-between; width: 100%; border: none; border-bottom: 1px solid var(--border); border-radius: 0; text-align: left; background: transparent; }
+.fp-item:hover { background: var(--event); }
+@media (max-width: 900px) { .limits-head, .limits-row { grid-template-columns: 1fr 0.6fr 1.2fr 0.9fr; font-size: 12px; } }

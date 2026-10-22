@@ -7,15 +7,28 @@ import {
   AccountRegistry,
   AgendaRuntime,
   AgendaStore,
+  CLI_PROVIDERS,
+  DEFAULT_LIMITS,
+  EFFORTS,
+  LADDERS,
   ProjectRegistry,
-  currentBranch,
+  SITE_INFO,
+  SUPPORTS_EFFORT,
+  WEB_SITES,
+  createProject,
   handleCouncilMcpRequest,
-  hasCommits,
+  isCliProvider,
   isRepo,
+  isWebSite,
+  normalizeLimits,
+  openLoginWindow,
+  openWebSite,
+  type AccountProvider,
   type Autonomy,
   type CliProvider,
   type RuntimeEvent,
 } from "@gencouncil/council";
+import { listFolder } from "./fsbrowse.js";
 import { WebSocketServer, type WebSocket } from "ws";
 import { detectTailscale, loadServerConfig, saveServerConfig, type ServerConfig, type TailscaleInfo } from "./config.js";
 import { TelegramBridge } from "./telegram.js";
@@ -173,7 +186,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
               key,
               taskCounts: { total: tasks.length, done: tasks.filter((t) => t.status === "done").length },
               running: running.length,
-              runningFamilies: [...new Set(running.map((m) => m.provider))],
+              runningFamilies: [...new Set(running.map((m) => (m.provider === "relay" ? (m.site ? SITE_INFO[m.site].family : "relay") : m.provider)))],
               chairBusy: rt?.chair.isBusy() ?? false,
               open: Boolean(rt),
             };
@@ -205,26 +218,57 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   on("POST", "/api/projects", async ({ body }) => {
     const b = await body();
     const name = String(b.name ?? "").trim();
-    const repo = path.resolve(String(b.repo ?? ""));
-    if (!name || !b.repo) throw new HttpError(400, "name and repo required");
-    if (!(await isRepo(repo))) throw new HttpError(400, `not a git repository: ${repo}`);
-    if (!(await hasCommits(repo))) throw new HttpError(400, `repository has no commits yet: ${repo}`);
-    const p = registry.add({
-      name,
-      repo,
-      baseBranch: (b.baseBranch as string) || (await currentBranch(repo)),
-      chairModel: (b.chairModel as string) || undefined,
-      chairEffort: (b.chairEffort as string) || undefined,
-      chairAdvisor: b.chairAdvisor !== undefined ? String(b.chairAdvisor) : undefined,
-      claudeModel: (b.claudeModel as string) || undefined,
-      claudeAdvisor: b.claudeAdvisor !== undefined ? String(b.claudeAdvisor) : undefined,
-      autonomy: (b.autonomy as Autonomy) || undefined,
-      defaultProvider: (b.defaultProvider as CliProvider) || undefined,
-      chairAccount: (b.chairAccount as string) || undefined,
-    });
+    const folder = String(b.path ?? b.repo ?? "").trim();
+    if (!name || !folder) throw new HttpError(400, "name and folder required");
+    let p;
+    try {
+      p = await createProject({
+        name,
+        path: folder,
+        mode: (b.mode as "auto" | "git" | "folder") || "auto",
+        chairModel: (b.chairModel as string) || undefined,
+        chairEffort: (b.chairEffort as string) || undefined,
+        chairAccount: (b.chairAccount as string) || undefined,
+        autonomy: (b.autonomy as Autonomy) || undefined,
+        defaultProvider: (b.defaultProvider as CliProvider) || undefined,
+        limits: (b.limits as Record<string, never>) || undefined,
+      }, registry);
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
     broadcast({ type: "overview" });
     return p;
   });
+  on("PUT", "/api/projects/:id/settings", async ({ params, body }) => {
+    const p = registry.get(params.id);
+    if (!p) throw new HttpError(404, "unknown project");
+    const b = await body();
+    const chair = (b.chair ?? {}) as { model?: string; effort?: string };
+    const members = (b.members ?? {}) as { autonomy?: Autonomy; limits?: Record<string, never> };
+    if (chair.model !== undefined) p.chair.model = chair.model || undefined;
+    if (chair.effort !== undefined) p.chair.effort = chair.effort || undefined;
+    if (members.autonomy) p.members.autonomy = members.autonomy;
+    if (members.limits) p.members.limits = normalizeLimits(members.limits);
+    registry.save(p);
+    // open agendas keep their own copy of the project object: update it in place
+    for (const a of AgendaStore.list(p)) {
+      const rtp = runtimes.get(`${p.id}/${a.slug}`);
+      if (!rtp) continue;
+      const rt = await rtp;
+      Object.assign(rt.council.project.chair, { model: p.chair.model, effort: p.chair.effort });
+      Object.assign(rt.council.project.members, { autonomy: p.members.autonomy, limits: p.members.limits });
+      rt.chair.setOverrides({});
+    }
+    broadcast({ type: "overview" });
+    return p;
+  });
+  on("GET", "/api/models", () => ({
+    providers: CLI_PROVIDERS.map((p) => ({ id: p, models: LADDERS[p].map(({ id, label, note }) => ({ id, label, note })), effort: SUPPORTS_EFFORT[p] })),
+    sites: WEB_SITES.map((s) => ({ id: s, ...SITE_INFO[s] })),
+    efforts: EFFORTS,
+    defaults: DEFAULT_LIMITS,
+  }));
+  on("GET", "/api/fs", async ({ url }) => listFolder(url.searchParams.get("path") ?? "", isRepo));
   on("GET", "/api/projects/:id/guidelines", ({ params }) => {
     const p = registry.get(params.id);
     if (!p) throw new HttpError(404, "unknown project");
@@ -266,8 +310,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   on("POST", "/api/accounts", async ({ body }) => {
     const b = await body();
     const id = String(b.id ?? "").trim();
-    const provider = b.provider as CliProvider;
-    if (!id || !["claude", "gemini"].includes(provider)) throw new HttpError(400, "id and provider (claude|gemini) required");
+    const provider = String(b.provider ?? "") as AccountProvider;
+    if (!id || !(isCliProvider(provider) || isWebSite(provider))) throw new HttpError(400, "id and provider (claude|gemini|gpt|gemini-web|aistudio|chatgpt) required");
     const a = accounts.upsert({
       id,
       provider,
@@ -277,6 +321,15 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     });
     broadcast({ type: "overview" });
     return a;
+  });
+  on("POST", "/api/accounts/:id/login", ({ params }) => {
+    const a = accounts.get(params.id);
+    if (!a) throw new HttpError(404, "unknown account");
+    try {
+      return { hint: openLoginWindow(a, accounts) };
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
   });
   on("POST", "/api/accounts/:id/reset", ({ params }) => {
     const a = accounts.markOk(params.id);
@@ -328,6 +381,17 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   on("POST", "/api/a/:id/:slug/members/:mid/stop", async ({ params }) => {
     const rt = await getRuntime(params.id, params.slug);
     return { stopped: rt.council.stopMember(params.mid) };
+  });
+  on("POST", "/api/a/:id/:slug/members/:mid/open-web", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    const m = rt.council.members().find((x) => x.id === params.mid);
+    if (!m || m.provider !== "relay" || !m.site) throw new HttpError(400, "not a web relay member");
+    try {
+      openWebSite(m.site, m.account ? accounts.get(m.account) : undefined);
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
+    return { ok: true };
   });
   on("GET", "/api/a/:id/:slug/members/:mid/packet", async ({ params, res }) => {
     const rt = await getRuntime(params.id, params.slug);

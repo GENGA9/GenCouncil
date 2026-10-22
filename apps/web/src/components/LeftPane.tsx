@@ -12,6 +12,7 @@ interface Props {
   onNewProject: () => void;
   onNewAgenda: (projectId: string) => void;
   onGuidelines: (projectId: string) => void;
+  onSettings: (projectId: string) => void;
 }
 
 /** spinner color for an agenda: the chair (claude) when it is thinking, else the first running family */
@@ -21,7 +22,7 @@ function agendaSpinner(a: AgendaOv, size: number) {
   return null;
 }
 
-export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines }: Props) {
+export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings }: Props) {
   const ts = overview?.server.tailscale;
   const badAccounts = overview?.accounts.filter((a) => a.status !== "ok").length ?? 0;
   const current = overview?.projects.flatMap((p) => p.agendas.map((a) => ({ p, a }))).find((x) => x.a.key === selected);
@@ -39,6 +40,7 @@ export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onS
             <div className="project-row">
               <span className="project-name" title={p.repo}>{p.name}</span>
               <span className="row-actions">
+                <button className="icon" title="설정 (의장·위원 한도)" onClick={() => onSettings(p.id)}>⚙</button>
                 <button className="icon" title="가이드라인 편집" onClick={() => onGuidelines(p.id)}>✎</button>
                 <button className="icon" title="안건 추가" onClick={() => onNewAgenda(p.id)}>＋</button>
               </span>
