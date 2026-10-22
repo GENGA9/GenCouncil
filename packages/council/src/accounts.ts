@@ -58,7 +58,7 @@ export function isWebSite(p: string): p is WebSite {
 
 const IMPLICIT: Account[] = [
   { id: "claude", provider: "claude", priority: 50, status: "ok", note: "기본 로그인 (~/.claude)" },
-  { id: "gemini", provider: "gemini", priority: 50, status: "ok", note: "기본 로그인 (Antigravity)" },
+  { id: "gemini", provider: "gemini", priority: 50, status: "ok", note: "기본 로그인 (Antigravity, PC당 하나)" },
   { id: "gpt", provider: "gpt", priority: 50, status: "ok", note: "기본 로그인 (~/.codex)" },
 ];
 
@@ -115,6 +115,12 @@ export class AccountRegistry {
     const i = list.findIndex((a) => a.id === input.id);
     const prev = i >= 0 ? list[i] : undefined;
     const implicit = IMPLICIT.some((a) => a.id === input.id);
+    // an id names one login of one kind; never turn an existing account into another kind
+    if (prev && prev.provider !== input.provider)
+      throw new Error(`'${input.id}' 이름은 이미 ${providerLabel(prev.provider)} 계정이 쓰고 있습니다. 다른 이름으로 추가하세요.`);
+    // Antigravity CLI keeps a single login per Windows user (OS keyring), so extra folders would all be the same account
+    if (!prev && input.provider === "gemini")
+      throw new Error("안티그래비티 CLI는 이 PC(윈도우 사용자)에서 로그인 하나만 쓸 수 있어 제미나이 CLI 계정을 더 추가할 수 없습니다. 다른 구글 계정은 웹 제미나이나 AI Studio 계정으로 추가하세요.");
     const next: Account = { status: "ok", ...(prev ?? {}), ...input } as Account;
     if (!next.configDir && !implicit) next.configDir = defaultAccountDir(input.id);
     if (next.configDir) fs.mkdirSync(next.configDir, { recursive: true });
@@ -221,6 +227,12 @@ export interface LoginCommand {
   args: string[];
   env: Record<string, string>;
   hint: string;
+}
+
+/** Korean label of an account kind, for messages */
+export function providerLabel(p: AccountProvider): string {
+  if (isWebSite(p)) return SITE_INFO[p].label;
+  return p === "claude" ? "클로드" : p === "gpt" ? "GPT" : "제미나이(안티그래비티)";
 }
 
 export function loginCommand(account: Account, registry: AccountRegistry, chromeExe?: string): LoginCommand {

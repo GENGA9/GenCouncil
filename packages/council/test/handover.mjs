@@ -55,6 +55,11 @@ check("pick skips exhausted", reg.pick("claude").id === "claude-b");
 reg.markExhausted("claude-b", "limit", new Date(Date.now() - 1000).toISOString());
 check("lazy reset of expired cooldown", reg.get("claude-b").status === "ok");
 reg.markOk("claude");
+reg.upsert({ id: "web-a@x.com", provider: "gemini-web" });
+check("same id cannot change kind", (() => { try { reg.upsert({ id: "web-a@x.com", provider: "claude" }); return false; } catch (e) { return /이미/.test(e.message); } })());
+check("web account kept its kind", reg.get("web-a@x.com").provider === "gemini-web");
+check("no extra Antigravity accounts", (() => { try { reg.upsert({ id: "gem-b", provider: "gemini" }); return false; } catch (e) { return /하나만/.test(e.message); } })());
+check("built-in gemini account still editable", reg.upsert({ id: "gemini", provider: "gemini", priority: 40 }).priority === 40);
 
 // ---- project / agenda ----
 const registry = new ProjectRegistry();

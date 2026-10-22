@@ -76,6 +76,8 @@ sh(["add", "-A"]);
 sh(["commit", "-q", "-m", "init"]);
 
 const registry = new ProjectRegistry();
+const old = registry.add({ name: "옛 한도", repo, baseBranch: "main", limits: { gemini: { maxMembers: 2, maxModel: "gemini-2.5-pro" } } });
+check("old gemini limit loads as current ladder id", registry.get(old.id).members.limits.gemini.maxModel === "gemini-4-argon", JSON.stringify(registry.get(old.id).members.limits.gemini));
 const project = registry.add({ name: "한도", repo, baseBranch: "main", limits: { claude: { maxMembers: 1, maxModel: "sonnet", maxEffort: "medium" }, gpt: { maxMembers: 0 }, "gemini-web": { maxMembers: 1 } } });
 const store = AgendaStore.create(project, "안건", ["x"]);
 const memory = new MemoryStore({ git: false });

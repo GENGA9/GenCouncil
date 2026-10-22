@@ -66,7 +66,8 @@ export const COUNCIL_HELP = `council commands
   council relay packet <project> <agenda> <member>            print the packet to paste into a web AI
   council relay submit <project> <agenda> <member> --file answer.txt [--result-file r.md]
                      apply the web AI's answer (FILE/RESULT blocks) and finish the relay member
-  account add <id> --provider claude|gemini|gpt|gemini-web|aistudio|chatgpt [--config-dir <dir>] [--priority n] [--note ..]
+  account add <id> --provider claude|gpt|gemini-web|aistudio|chatgpt [--config-dir <dir>] [--priority n] [--note ..]
+                   (gemini = Antigravity CLI: one login per PC, the built-in "gemini" account)
                      (folder defaults to ~/.gencouncil/accounts/<id>; web accounts are Chrome profiles)
   account list | account reset <id> | account remove <id>
   account login <id>   open a login window for that account (CLI console or Chrome on the site); log in once

@@ -8,7 +8,7 @@ const STATUS_KO: Record<Account["status"], string> = { ok: "사용 가능", exha
 const PROVIDERS: Array<{ id: string; label: string; family: string; kind: "cli" | "web"; how: string }> = [
   { id: "claude", label: "클로드 (Claude Code)", family: "claude", kind: "cli", how: "콘솔 창에서 /login" },
   { id: "gpt", label: "GPT (Codex CLI)", family: "gpt", kind: "cli", how: "브라우저에서 ChatGPT 로그인" },
-  { id: "gemini", label: "제미나이 (Antigravity CLI)", family: "gemini", kind: "cli", how: "Antigravity 창에서 구글 로그인. 계정마다 따로 추가" },
+  { id: "gemini", label: "제미나이 (Antigravity CLI)", family: "gemini", kind: "cli", how: "Antigravity 창에서 구글 로그인. 이 PC에서는 계정 하나만 쓸 수 있음" },
   { id: "gemini-web", label: "웹 제미나이", family: "gemini", kind: "web", how: "전용 Chrome 창에서 구글 로그인" },
   { id: "aistudio", label: "AI Studio", family: "gemini", kind: "web", how: "전용 Chrome 창에서 구글 로그인" },
   { id: "chatgpt", label: "ChatGPT 웹", family: "gpt", kind: "web", how: "전용 Chrome 창에서 로그인" },
@@ -98,7 +98,7 @@ export function AccountsView({ notify }: { notify: (m: string) => void }) {
             <label>ID<input value={id} onChange={(e) => setId(e.target.value)} placeholder={provider === "claude" ? "claude-b" : `${provider}-2`} /></label>
             <label>종류
               <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                {PROVIDERS.filter((p) => p.id !== "gemini").map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
             </label>
           </div>

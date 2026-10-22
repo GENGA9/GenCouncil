@@ -230,7 +230,12 @@ export class ProjectRegistry {
       .readdirSync(dir)
       .map((d) => path.join(dir, d, "project.json"))
       .filter((f) => fs.existsSync(f))
-      .map((f) => readJson<ProjectConfig>(f, null as unknown as ProjectConfig));
+      .map((f) => readJson<ProjectConfig>(f, null as unknown as ProjectConfig))
+      .map((p) => {
+        // show and save limits in current ladder ids (old ids like gemini-2.5-pro map to their tier)
+        if (p?.members?.limits) p.members.limits = normalizeLimits(p.members.limits);
+        return p;
+      });
   }
 
   /** find by id or (case-insensitive) name */
