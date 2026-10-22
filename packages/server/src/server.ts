@@ -16,6 +16,7 @@ import {
   SUPPORTS_EFFORT,
   WEB_SITES,
   createProject,
+  updateProject,
   handleCouncilMcpRequest,
   handleMemberMcpRequest,
   runCurator,
@@ -250,6 +251,31 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const p = registry.get(params.id);
     if (!p) throw new HttpError(404, "unknown project");
     const b = await body();
+    let scanSummary: string | undefined;
+    if (b.name !== undefined || b.path !== undefined) {
+      const before = p.repo;
+      try {
+        const u = await updateProject(p.id, { name: b.name as string | undefined, path: b.path as string | undefined }, registry);
+        p.name = u.name;
+        p.repo = u.repo;
+        p.localGit = u.localGit;
+        p.baseBranch = u.baseBranch;
+        scanSummary = u.scanSummary;
+      } catch (e) {
+        throw new HttpError(400, (e as Error).message);
+      }
+      if (p.repo !== before) {
+        // agendas opened on the old folder must reopen on the new one
+        for (const a of AgendaStore.list(p)) {
+          const key = `${p.id}/${a.slug}`;
+          const rtp = runtimes.get(key);
+          if (rtp) {
+            (await rtp).close({ closeMemory: false });
+            runtimes.delete(key);
+          }
+        }
+      }
+    }
     const chair = (b.chair ?? {}) as { model?: string; effort?: string };
     const members = (b.members ?? {}) as { autonomy?: Autonomy; limits?: Record<string, never> };
     if (chair.model !== undefined) p.chair.model = chair.model || undefined;
@@ -262,12 +288,13 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       const rtp = runtimes.get(`${p.id}/${a.slug}`);
       if (!rtp) continue;
       const rt = await rtp;
+      Object.assign(rt.council.project, { name: p.name });
       Object.assign(rt.council.project.chair, { model: p.chair.model, effort: p.chair.effort });
       Object.assign(rt.council.project.members, { autonomy: p.members.autonomy, limits: p.members.limits });
       rt.chair.setOverrides({});
     }
     broadcast({ type: "overview" });
-    return p;
+    return { ...p, scanSummary };
   });
   on("GET", "/api/models", () => ({
     providers: CLI_PROVIDERS.map((p) => ({ id: p, models: LADDERS[p].map(({ id, label, note }) => ({ id, label, note })), effort: SUPPORTS_EFFORT[p] })),
@@ -352,8 +379,9 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const p = registry.get(params.id);
     if (!p) throw new HttpError(404, "unknown project");
     const b = await body();
-    const title = String(b.title ?? "").trim();
-    if (!title) throw new HttpError(400, "title required");
+    // a new agenda is just a new chat: the chair names it and sets goals from the first request
+    const existing = AgendaStore.list(p).filter((a) => a.title.startsWith("새 안건")).length;
+    const title = String(b.title ?? "").trim() || (existing ? `새 안건 ${existing + 1}` : "새 안건");
     const goals = Array.isArray(b.goals) ? b.goals.map(String).filter((g) => g.trim()) : [];
     const store = AgendaStore.create(p, title, goals);
     broadcast({ type: "overview" });

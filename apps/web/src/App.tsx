@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, connectWs } from "./api";
+import { familyOf } from "./model";
 import { AccountsView } from "./components/AccountsView";
 import { CenterPane } from "./components/CenterPane";
 import { LeftPane } from "./components/LeftPane";
 import { MemoryView } from "./components/MemoryView";
 import { RightPane } from "./components/RightPane";
-import { GuidelinesModal, HandoverModal, MemberModal, NewAgendaModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
+import { GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
 import type { ChatItem, Overview, RuntimeState, TranscriptEntry } from "./types";
 
 const MEMORY_KEY = "__memory__";
@@ -42,7 +43,6 @@ export function App() {
   const [modal, setModal] = useState<
     | null
     | { kind: "project" }
-    | { kind: "agenda"; projectId: string }
     | { kind: "guidelines"; projectId: string }
     | { kind: "settings"; projectId: string }
     | { kind: "member"; id: string }
@@ -146,6 +146,7 @@ export function App() {
       }
       switch (type) {
         case "chair:start":
+          void refreshOverview();
           setChat((c) => [...c, item(msg.role === "event" ? "event" : "user", String(msg.text))]);
           setState((s) => (s ? { ...s, chair: { ...s.chair, busy: true } } : s));
           setFirstTurn(false);
@@ -159,6 +160,7 @@ export function App() {
           break;
         }
         case "chair:done":
+          void refreshOverview();
           if (msg.isError) setChat((c) => [...c, item("error", String(msg.text))]);
           setState((s) => (s ? { ...s, chair: { ...s.chair, busy: false } } : s));
           scheduleState(key);
@@ -229,9 +231,27 @@ export function App() {
         if (mobile) setTab("center");
       }}
       onNewProject={() => setModal({ kind: "project" })}
-      onNewAgenda={(pid) => setModal({ kind: "agenda", projectId: pid })}
+      onNewAgenda={async (pid) => {
+        try {
+          const r = await api.createAgenda(pid);
+          await refreshOverview();
+          setSelected(r.key);
+          if (mobile) setTab("center");
+        } catch (e) {
+          notify((e as Error).message);
+        }
+      }}
       onGuidelines={(pid) => setModal({ kind: "guidelines", projectId: pid })}
       onSettings={(pid) => setModal({ kind: "settings", projectId: pid })}
+      live={
+        state && selected === state.key
+          ? {
+              key: state.key,
+              chairBusy: state.chair.busy,
+              families: [...new Set(state.members.filter((m) => m.status === "running" || m.status === "waiting").map((m) => familyOf(m)))],
+            }
+          : undefined
+      }
       memoryKey={MEMORY_KEY}
       accountsKey={ACCOUNTS_KEY}
       wsUp={wsUp}
@@ -348,18 +368,6 @@ export function App() {
             if (created.scanSummary) notify(created.scanSummary);
             setModal(null);
             void refreshOverview();
-          }}
-        />
-      )}
-      {modal?.kind === "agenda" && (
-        <NewAgendaModal
-          projectId={modal.projectId}
-          onClose={() => setModal(null)}
-          onCreate={async (title, goals) => {
-            const r = await api.createAgenda(modal.projectId, title, goals);
-            setModal(null);
-            await refreshOverview();
-            setSelected(r.key);
           }}
         />
       )}

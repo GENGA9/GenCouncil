@@ -100,6 +100,31 @@ check("ws rejects bad token", wsBadResult === "error");
 ws.close();
 
 check("close agenda", (await api("POST", `/api/a/${encodeURIComponent(proj.json.id)}/${encodeURIComponent("첫-안건")}/close`)).status === 200);
+
+// a new agenda is a blank chat; the chair names it and sets goals
+const blank = await api("POST", `/api/projects/${encodeURIComponent(proj.json.id)}/agendas`, {});
+check("blank agenda created", blank.status === 200 && blank.json.title === "새 안건" && blank.json.goals.length === 0, JSON.stringify(blank.json));
+const blank2 = await api("POST", `/api/projects/${encodeURIComponent(proj.json.id)}/agendas`, {});
+check("second blank agenda numbered", blank2.json.title === "새 안건 2", blank2.json.title);
+const [bid, bslug] = blank.json.key.split("/");
+await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`);
+const setRes = await fetch(`http://127.0.0.1:${srv.config.port}/mcp/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`, {
+  method: "POST",
+  headers: { authorization: "Bearer test-token", "content-type": "application/json", accept: "application/json, text/event-stream" },
+  body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "council_set_agenda", arguments: { title: "로그인 개선", goals: ["로그인 오류 수정", "테스트 추가"] } } }),
+});
+await setRes.text();
+const after = await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`);
+check("chair set title and goals", after.json.state.agenda.title === "로그인 개선" && after.json.state.agenda.goals.length === 2, JSON.stringify(after.json.state.agenda));
+
+// settings: rename and move to another folder
+const ren = await api("PUT", `/api/projects/${encodeURIComponent(proj.json.id)}/settings`, { name: "웹 테스트 개정" });
+check("rename keeps id, adds suffix", ren.status === 200 && ren.json.name === "웹 테스트 개정 제작위원회" && ren.json.id === proj.json.id, JSON.stringify(ren.json.name));
+const other = path.join(tmp, "other folder");
+fs.mkdirSync(other);
+fs.writeFileSync(path.join(other, "x.txt"), "x\n");
+const blockedMove = await api("PUT", `/api/projects/${encodeURIComponent(proj.json.id)}/settings`, { path: other });
+check("folder change works when no agenda has work", blockedMove.status === 200 && blockedMove.json.repo === path.resolve(other) && blockedMove.json.localGit === true && /git으로 관리/.test(blockedMove.json.scanSummary ?? ""), JSON.stringify(blockedMove.json).slice(0, 200));
 await srv.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall web checks passed");

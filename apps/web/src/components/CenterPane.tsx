@@ -121,7 +121,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
             <div className="goal-tasks">{orphanTasks.map((t) => <TaskChip key={t.id} t={t} member={t.memberId ? memberById.get(t.memberId) : undefined} />)}</div>
           </div>
         )}
-        {state.agenda.goals.length === 0 && <div className="muted small">목표가 없습니다. 의장에게 채팅으로 알려 주세요.</div>}
+        {state.agenda.goals.length === 0 && <div className="muted small">아직 목표가 없습니다. 아래 채팅으로 할 일을 말하면 의장이 제목과 목표를 정합니다.</div>}
       </div>
 
       {showState ? (
@@ -131,7 +131,11 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           {chat.length === 0 && firstTurn && (
             <div className="chat-empty">
               <p className="muted">아직 의장과 대화가 없습니다.</p>
-              <button className="primary" onClick={() => onSend("")} disabled={busy}>안건 시작 (의장이 목표를 분장)</button>
+              {state.agenda.goals.length > 0 ? (
+                <button className="primary" onClick={() => onSend("")} disabled={busy}>안건 시작 (의장이 목표를 분장)</button>
+              ) : (
+                <p className="small muted">무엇을 할지 아래 채팅창에 적어 주세요.</p>
+              )}
             </div>
           )}
           {chat.map((c) => (

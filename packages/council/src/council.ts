@@ -271,6 +271,16 @@ export class Council extends EventEmitter {
     return this.running.size;
   }
 
+  /** The chair names the agenda and sets its goals from the user's request. */
+  setAgenda(patch: { title?: string; goals?: string[] }): { title: string; goals: string[] } {
+    const a = this.store.agenda();
+    if (patch.title?.trim()) a.title = patch.title.trim();
+    if (patch.goals) a.goals = patch.goals.map((g) => g.trim()).filter(Boolean);
+    this.store.saveAgenda(a);
+    this.emit("agenda", a);
+    return { title: a.title, goals: a.goals };
+  }
+
   // ---------- tasks ----------
 
   addTask(input: { title: string; description?: string; goal?: number }): Task {

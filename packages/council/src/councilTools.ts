@@ -41,6 +41,21 @@ export function createCouncilMcp(council: Council): McpServer {
   );
 
   server.registerTool(
+    "council_set_agenda",
+    {
+      title: "Set agenda title and goals",
+      description:
+        "Name the agenda (short Korean title, a few words) and set its goals (outcomes, one line each) from what the user asked. " +
+        "Use it on the first request of a new agenda and whenever the user adds or changes what they want. Goals replace the previous list.",
+      inputSchema: {
+        title: z.string().min(1).max(60).optional(),
+        goals: z.array(z.string().min(1)).optional().describe("full goal list, in order"),
+      },
+    },
+    async (i) => guard(() => council.setAgenda(i)),
+  );
+
+  server.registerTool(
     "council_guidelines",
     { title: "Project guidelines", description: "The project's work-assignment guidelines (AI tendencies, rules).", inputSchema: {} },
     async () => text(council.registry.guidelines(council.project) || "(no guidelines)"),

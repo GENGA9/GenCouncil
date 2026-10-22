@@ -14,6 +14,8 @@ interface Props {
   onNewAgenda: (projectId: string) => void;
   onGuidelines: (projectId: string) => void;
   onSettings: (projectId: string) => void;
+  /** live status of the open agenda (more current than the overview) */
+  live?: { key: string; chairBusy: boolean; families: string[] };
 }
 
 /** spinner color for an agenda: the chair (claude) when it is thinking, else the first running family */
@@ -23,7 +25,7 @@ function agendaSpinner(a: AgendaOv, size: number) {
   return null;
 }
 
-export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings }: Props) {
+export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live }: Props) {
   const ts = overview?.server.tailscale;
   const [theme, cycleTheme] = useTheme();
   const badAccounts = overview?.accounts.filter((a) => a.status !== "ok").length ?? 0;
@@ -92,7 +94,10 @@ export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onS
           <>
             <div className="small muted">{current.p.name}</div>
             <div className="pinned-title">
-              {agendaSpinner(current.a, 18) ?? <span className="pinned-idle">▦</span>}
+              {(() => {
+                const a = live && live.key === current.a.key ? { ...current.a, chairBusy: live.chairBusy, running: live.families.length, runningFamilies: live.families } : current.a;
+                return agendaSpinner(a, 18) ?? <GridSpinner color="var(--muted)" size={18} spinning={false} title="대기 중" />;
+              })()}
               {current.a.title}
             </div>
             <div className="small muted mono">{current.a.branch}</div>

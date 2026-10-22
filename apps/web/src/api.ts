@@ -50,7 +50,7 @@ export const api = {
   accountLogin: (id: string) => call<{ hint: string }>("POST", `/api/accounts/${encodeURIComponent(id)}/login`),
   models: () => call<ModelsInfo>("GET", "/api/models"),
   fs: (p: string) => call<FolderListing>("GET", `/api/fs?path=${encodeURIComponent(p)}`),
-  projectSettings: (id: string, b: Record<string, unknown>) => call("PUT", `/api/projects/${encodeURIComponent(id)}/settings`, b),
+  projectSettings: (id: string, b: Record<string, unknown>) => call<{ scanSummary?: string }>("PUT", `/api/projects/${encodeURIComponent(id)}/settings`, b),
   curate: () => call<CurateStatus>("POST", "/api/memory/curate"),
   curateStatus: () => call<CurateStatus>("GET", "/api/memory/curate"),
   openWeb: (key: string, id: string) => call("POST", `${a(key)}/members/${encodeURIComponent(id)}/open-web`),
@@ -66,7 +66,7 @@ export const api = {
     call<{ id: string; status: string; summary?: string }>("POST", `${a(key)}/members/${encodeURIComponent(id)}/relay`, b),
   handover: (key: string, id: string, b: { provider?: string; account?: string; model?: string }) =>
     call<{ id: string; provider: string; account?: string }>("POST", `${a(key)}/members/${encodeURIComponent(id)}/handover`, b),
-  createAgenda: (id: string, title: string, goals: string[]) =>
+  createAgenda: (id: string, title?: string, goals?: string[]) =>
     call<{ key: string }>("POST", `/api/projects/${encodeURIComponent(id)}/agendas`, { title, goals }),
   agenda: (key: string) => call<{ state: RuntimeState; transcript: TranscriptEntry[]; firstTurn: boolean }>("GET", a(key)),
   chat: (key: string, message: string) => call<{ started: boolean }>("POST", `${a(key)}/chat`, { message }),

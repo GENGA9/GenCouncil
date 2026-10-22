@@ -79,6 +79,7 @@ export class AgendaRuntime extends EventEmitter {
     super();
     this.key = `${council.project.id}/${council.store.slug}`;
     council.on("log", (line: string) => this.emitEvent({ type: "log", line }));
+    council.on("agenda", () => this.emitEvent({ type: "state" }));
     council.on("member:start", (m: MemberRecord) => {
       this.emitEvent({ type: "member:start", member: m });
       this.emitEvent({ type: "state" });

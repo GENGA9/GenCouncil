@@ -108,26 +108,51 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
 
 export function ProjectSettingsModal({ project, onClose, onSaved }: { project: ProjectOv; onClose: () => void; onSaved: (msg: string) => void }) {
   const models = useModels();
+  const [name, setName] = useState(project.name.replace(/\s*제작위원회$/, ""));
+  const [folder, setFolder] = useState(project.repo);
+  const [picking, setPicking] = useState(false);
   const [chairModel, setChairModel] = useState(project.chair.model ?? "opus");
   const [chairEffort, setChairEffort] = useState(project.chair.effort ?? "");
   const [autonomy, setAutonomy] = useState(project.members.autonomy);
   const [limits, setLimits] = useState<Limits | null>(null);
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (models && !limits) setLimits({ ...models.defaults, ...(project.members.limits ?? {}) });
   }, [models, limits, project]);
+  const folderChanged = folder.trim() !== project.repo;
   const save = async () => {
+    setBusy(true);
+    setErr("");
     try {
-      await api.projectSettings(project.id, { chair: { model: chairModel, effort: chairEffort }, members: { autonomy, limits } });
-      onSaved("설정을 저장했습니다. 의장의 다음 턴부터 적용됩니다.");
+      const r = await api.projectSettings(project.id, {
+        name,
+        ...(folderChanged ? { path: folder.trim() } : {}),
+        chair: { model: chairModel, effort: chairEffort },
+        members: { autonomy, limits },
+      });
+      onSaved(r.scanSummary ? `설정을 저장했습니다. ${r.scanSummary}` : "설정을 저장했습니다. 의장의 다음 턴부터 적용됩니다.");
       onClose();
     } catch (e) {
       setErr((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
   return (
     <Modal title={`${project.name} 설정`} onClose={onClose} wide>
-      <div className="small muted mono">{`${project.localGit ? "로컬 git (GenCouncil이 만듦)" : "git"}: ${project.repo}`}</div>
+      <label>프로젝트 이름<input value={name} onChange={(e) => setName(e.target.value)} /></label>
+      {name.trim() && <div className="small muted name-preview">→ {withSuffix(name)}</div>}
+      <label>작업 폴더
+        <span className="folder-row">
+          <input value={folder} onChange={(e) => setFolder(e.target.value)} />
+          <button className="ghost" type="button" onClick={() => setPicking(true)}>폴더 선택</button>
+        </span>
+      </label>
+      <div className="small muted">
+        {project.localGit ? "로컬 git (GenCouncil이 만듦)" : "git 저장소"}
+        {folderChanged ? " · 폴더를 바꾸면 새 폴더 기준으로 다시 연결합니다. 진행 중인 안건이 있으면 바꿀 수 없습니다." : ""}
+      </div>
       <ChairFields model={chairModel} effort={chairEffort} setModel={setChairModel} setEffort={setChairEffort} />
       <label>위원 자율성
         <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
@@ -141,8 +166,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
       {err && <div className="err">{err}</div>}
       <div className="modal-actions">
         <button className="ghost" onClick={onClose}>취소</button>
-        <button className="primary" onClick={save}>저장</button>
+        <button className="primary" onClick={save} disabled={busy || !name.trim() || !folder.trim()}>{busy ? "저장 중…" : "저장"}</button>
       </div>
+      {picking && <FolderPicker start={folder || undefined} onClose={() => setPicking(false)} onPick={(p) => { setFolder(p); setPicking(false); }} />}
     </Modal>
   );
 }
