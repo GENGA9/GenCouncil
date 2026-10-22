@@ -90,6 +90,7 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
       <label>위원 자율성
         <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
           <option value="full">full (권한 확인 없음)</option>
+          <option value="chair">chair (의장이 대신 승인)</option>
           <option value="edits">edits (편집만 자동)</option>
         </select>
       </label>
@@ -131,6 +132,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
       <label>위원 자율성
         <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
           <option value="full">full (권한 확인 없음)</option>
+          <option value="chair">chair (의장이 대신 승인)</option>
           <option value="edits">edits (편집만 자동)</option>
         </select>
       </label>

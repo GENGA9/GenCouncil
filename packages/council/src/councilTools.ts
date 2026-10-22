@@ -6,6 +6,7 @@ import http from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import { permissionToolResult } from "./approval.js";
 import type { Council } from "./council.js";
 
 function text(s: string) {
@@ -230,6 +231,40 @@ export function createCouncilMcp(council: Council): McpServer {
   return server;
 }
 
+/** MCP server a claude member talks to for permission decisions (autonomy "chair"). */
+export function createMemberMcp(council: Council, memberId: string): McpServer {
+  const server = new McpServer({ name: "council_member", version: "0.1.0" });
+  server.registerTool(
+    "permission",
+    {
+      title: "Ask the chair for permission",
+      description: "Permission prompt handler: the chair approves or denies a tool call on behalf of the user.",
+      inputSchema: { tool_name: z.string(), input: z.record(z.unknown()), tool_use_id: z.string().optional() },
+    },
+    async ({ tool_name, input }) => {
+      const d = await council.requestPermission(memberId, tool_name, input as Record<string, unknown>);
+      return text(permissionToolResult(d, input as Record<string, unknown>));
+    },
+  );
+  return server;
+}
+
+export async function handleMemberMcpRequest(council: Council, memberId: string, req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  const mcp = createMemberMcp(council, memberId);
+  res.on("close", () => {
+    void transport.close();
+    void mcp.close();
+  });
+  try {
+    await mcp.connect(transport);
+    await transport.handleRequest(req, res);
+  } catch (e) {
+    if (!res.headersSent) res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: (e as Error).message }));
+  }
+}
+
 export interface CouncilHttp {
   url: string;
   port: number;
@@ -257,6 +292,11 @@ export async function handleCouncilMcpRequest(council: Council, req: http.Incomi
 export function startCouncilHttp(council: Council, port = 0): Promise<CouncilHttp> {
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
+      const member = /^\/member\/([^/]+)\/mcp\/?$/.exec(req.url ?? "");
+      if (member) {
+        await handleMemberMcpRequest(council, decodeURIComponent(member[1]), req, res);
+        return;
+      }
       if (!req.url?.startsWith("/mcp")) {
         res.writeHead(404).end();
         return;
@@ -267,6 +307,7 @@ export function startCouncilHttp(council: Council, port = 0): Promise<CouncilHtt
     server.listen(port, "127.0.0.1", () => {
       const addr = server.address();
       const p = typeof addr === "object" && addr ? addr.port : port;
+      council.setMemberMcp((id) => ({ url: `http://127.0.0.1:${p}/member/${encodeURIComponent(id)}/mcp` }));
       resolve({
         url: `http://127.0.0.1:${p}/mcp`,
         port: p,

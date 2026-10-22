@@ -5,7 +5,8 @@ import { normalizeLimits, type CliProvider, type Effort, type Limits, type WebSi
 
 /** claude/gemini/gpt run as headless CLIs; relay = a human copies the packet into a web AI and pastes the answer back */
 export type Provider = CliProvider | "relay";
-export type Autonomy = "full" | "edits";
+/** full: no checks; chair: the chair's model approves each permission request; edits: file edits only */
+export type Autonomy = "full" | "chair" | "edits";
 /** git: work in the user's repository; folder: work in a private shadow repo and copy results back on finish */
 export type ProjectMode = "git" | "folder";
 

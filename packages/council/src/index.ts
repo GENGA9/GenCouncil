@@ -16,3 +16,5 @@ export * from "./models.js";
 export * from "./shadow.js";
 export * from "./launch.js";
 export * from "./projects.js";
+export * from "./approval.js";
+export * from "./curator.js";

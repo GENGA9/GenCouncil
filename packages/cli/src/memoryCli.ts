@@ -17,19 +17,34 @@ export const MEMORY_HELP = `memory commands
   update <id> [--title ..] [--append ..] [--body-file f] [--tags a,b]
   proposals                    list pending proposals
   approve <id> | reject <id> [--reason ..] | remove <id>
+  curate [--model fable] [--effort high]   let Fable review pending proposals (improve, merge, approve, reject)
   install <claude|gemini|antigravity|all> [--role owner|chair|member] [--no-rules] [--dry-run]
   server-path                  print the absolute path of the MCP server entry
 `;
 
 export const MEMORY_COMMANDS = new Set([
   "init", "serve", "status", "index", "search", "read", "list", "add", "propose", "update",
-  "proposals", "approve", "reject", "remove", "install", "server-path",
+  "proposals", "approve", "reject", "remove", "install", "server-path", "curate",
 ]);
 
 export async function memoryMain(cmd: string, rest: string[]): Promise<number> {
   if (cmd === "serve") {
     await serveStdio();
     return -1; // keep running
+  }
+  if (cmd === "curate") {
+    const { values } = parseArgs({ args: rest, options: { model: { type: "string" }, effort: { type: "string" } } });
+    const { runCurator } = await import("@gencouncil/council");
+    console.log(`curating with ${values.model ?? "fable"} / ${values.effort ?? "high"} …`);
+    const r = await runCurator({
+      model: values.model,
+      effort: values.effort,
+      onEvent: (e) => {
+        if (e.kind === "tool") console.log(`  · ${e.name.replace(/^mcp__gencouncil__/, "")} ${JSON.stringify(e.input ?? {}).slice(0, 100)}`);
+      },
+    });
+    console.log(r.isError ? `error: ${r.text}` : r.text);
+    return r.isError ? 1 : 0;
   }
   if (cmd === "server-path") {
     console.log(serverEntry());

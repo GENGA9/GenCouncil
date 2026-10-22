@@ -310,6 +310,7 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
       const instructions = values["instructions-file"] ? fs.readFileSync(values["instructions-file"], "utf8") : values.instructions;
       if (!values.task || !instructions) throw new Error('usage: council run <project> <agenda> --task "<title>" --instructions "<brief>"');
       const council = await openCouncil(positionals[0], positionals[1]);
+      const memberHttp = await startCouncilHttp(council); // permission endpoint for autonomy "chair"
       council.on("log", (l: string) => console.log(`  [council] ${l}`));
       council.on("member:line", (m: MemberRecord, l: string) => console.log(`  [${m.id}] ${l}`));
       const task = council.addTask({ title: values.task, description: instructions });
@@ -318,6 +319,7 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
       });
       console.log(`member ${member.id} running in ${member.worktree}`);
       const done = await council.waitAny(6 * 60 * 60 * 1000);
+      await memberHttp.close();
       council.memory.close();
       for (const m of done) printMember(m);
       return done.every((m) => m.status === "done") ? 0 : 1;
@@ -366,6 +368,7 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
         options: { provider: { type: "string" }, account: { type: "string" }, model: { type: "string" }, reason: { type: "string" } },
       });
       const council = await openCouncil(positionals[0], positionals[1]);
+      const memberHttp = await startCouncilHttp(council); // permission endpoint for autonomy "chair"
       council.on("log", (l: string) => console.log(`  [council] ${l}`));
       council.on("member:line", (m: MemberRecord, l: string) => console.log(`  [${m.id}] ${l}`));
       const next = await council.handover(positionals[2] ?? "", {
@@ -373,6 +376,7 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
       });
       console.log(`handover → ${next.id} (${next.provider}/${next.account}) on ${next.branch}`);
       const done = await council.waitAny(6 * 60 * 60 * 1000);
+      await memberHttp.close();
       council.memory.close();
       for (const m of done) printMember(m);
       return done.every((m) => m.status === "done") ? 0 : 1;

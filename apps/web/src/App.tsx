@@ -256,6 +256,16 @@ export function App() {
           notify(account !== undefined ? `의장 계정을 ${account}로 바꿨습니다. 새 세션으로 시작합니다.` : "의장 설정을 저장했습니다. 다음 턴부터 적용됩니다.");
           if (selected) void refreshState(selected);
         }}
+        onSetAutonomy={async (autonomy) => {
+          if (!currentProject) return;
+          try {
+            await api.projectSettings(currentProject.id, { members: { autonomy } });
+            notify(autonomy === "chair" ? "위원 권한 요청을 의장이 대신 승인합니다. 다음에 시작하는 위원부터 적용됩니다." : "위원 자율성을 바꿨습니다. 다음에 시작하는 위원부터 적용됩니다.");
+            void refreshOverview();
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
         onReset={async () => {
           if (!selected) return;
           await api.reset(selected);

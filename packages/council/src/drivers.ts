@@ -134,7 +134,7 @@ export const claudeDriver: Driver = {
     if (spec.model) args.push("--model", spec.model);
     if (spec.effort) args.push("--effort", spec.effort);
     if (spec.autonomy === "full") args.push("--dangerously-skip-permissions");
-    else args.push("--permission-mode", "acceptEdits");
+    else args.push("--permission-mode", "acceptEdits"); // "chair" adds --permission-prompt-tool via extraArgs
     if (spec.extraArgs) args.push(...spec.extraArgs);
     const env: NodeJS.ProcessEnv = { ...process.env, ...spec.env };
     // never let a member inherit the parent's interactive session

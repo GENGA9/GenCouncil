@@ -20,6 +20,17 @@ export interface ModelsInfo {
   defaults: Limits;
 }
 
+export interface CurateStatus {
+  running: boolean;
+  startedAt?: string;
+  finishedAt?: string;
+  pending?: number;
+  steps?: number;
+  text?: string;
+  isError?: boolean;
+  costUsd?: number;
+}
+
 export interface FolderListing {
   path: string;
   parent?: string;

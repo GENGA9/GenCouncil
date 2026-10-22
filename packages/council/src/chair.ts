@@ -39,7 +39,7 @@ export class Chair {
     const store = council.store;
     this.mcpFile = path.join(store.chairDir(), "mcp.json");
     const env: Record<string, string> = {
-      GENCOUNCIL_ROLE: "chair",
+      GENCOUNCIL_ROLE: "member",
       GENCOUNCIL_AGENT: `chair:${council.project.id}/${store.slug}`,
     };
     if (process.env.GENCOUNCIL_HOME) env.GENCOUNCIL_HOME = process.env.GENCOUNCIL_HOME;

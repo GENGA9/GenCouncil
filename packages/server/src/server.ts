@@ -17,6 +17,8 @@ import {
   WEB_SITES,
   createProject,
   handleCouncilMcpRequest,
+  handleMemberMcpRequest,
+  runCurator,
   isCliProvider,
   isRepo,
   isWebSite,
@@ -123,6 +125,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     for (const c of clients) if (c.readyState === c.OPEN) c.send(data);
   };
   let telegram: TelegramBridge | undefined;
+  let curate: { running: boolean; startedAt?: string; finishedAt?: string; pending?: number; steps?: number; text?: string; isError?: boolean; costUsd?: number } = { running: false };
   let telegramUser: string | undefined;
 
   const findAgenda = (id: string, slug: string) => {
@@ -142,6 +145,10 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         councilUrl: `http://127.0.0.1:${config.port}/mcp/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}`,
         councilHeaders: { Authorization: `Bearer ${config.token}` },
       }).then((rt) => {
+        rt.council.setMemberMcp((mid) => ({
+          url: `http://127.0.0.1:${config.port}/mcp-member/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}/${encodeURIComponent(mid)}`,
+          headers: { Authorization: `Bearer ${config.token}` },
+        }));
         rt.on("event", (e: RuntimeEvent) => {
           broadcast({ key, ts: new Date().toISOString(), ...e });
           telegram?.notify(key, e);
@@ -472,6 +479,22 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     });
   });
   on("GET", "/api/memory/proposals", () => memory.list({ status: "proposed" }));
+  on("GET", "/api/memory/curate", () => curate);
+  on("POST", "/api/memory/curate", () => {
+    if (curate.running) throw new HttpError(409, "already running");
+    const pending = memory.list({ status: "proposed" }).length;
+    curate = { running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
+    broadcast({ type: "curate", running: true });
+    void runCurator({ onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
+      memory.load();
+      memory.writeIndex();
+      curate = { running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
+      broadcast({ type: "curate", running: false, isError: r.isError });
+      broadcast({ type: "overview" });
+      log(`curator finished (${r.isError ? "error" : "ok"})`);
+    });
+    return curate;
+  });
   on("GET", "/api/memory/recent", () => memory.list({ status: "verified", limit: 30 }));
   on("GET", "/api/memory/entry/:id", ({ params }) => {
     const e = memory.get(params.id);
@@ -494,6 +517,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
           location: "/",
         });
         res.end();
+        return;
+      }
+      // member permission endpoint (autonomy "chair")
+      const mm = /^\/mcp-member\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
+      if (mm) {
+        if (!authorized(req, url)) throw new HttpError(401, "unauthorized");
+        const rt = await getRuntime(decodeURIComponent(mm[1]), decodeURIComponent(mm[2]));
+        await handleMemberMcpRequest(rt.council, decodeURIComponent(mm[3]), req, res);
         return;
       }
       // chair MCP endpoints

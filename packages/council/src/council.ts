@@ -4,6 +4,7 @@ import path from "node:path";
 import { type EntryType, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
 import { AccountRegistry, type Account } from "./accounts.js";
+import { ChairApprover, chairReview, type PermissionDecision, type Reviewer } from "./approval.js";
 import { drivers, parseClaudeLine, parseCodexLine, parseGeminiLine, type RunningProc } from "./drivers.js";
 import {
   currentBranch,
@@ -106,6 +107,11 @@ export class Council extends EventEmitter {
   private running = new Map<string, RunningProc>();
   private finished: MemberRecord[] = [];
   private waiters: Array<() => void> = [];
+  /** where claude members reach the permission tool (set by whoever hosts the council MCP) */
+  private memberMcp?: (memberId: string) => { url: string; headers?: Record<string, string> };
+  /** decides permission requests the rules can't; replaceable in tests */
+  reviewer: Reviewer;
+  private approver: ChairApprover;
 
   constructor(
     readonly store: AgendaStore,
@@ -113,6 +119,35 @@ export class Council extends EventEmitter {
   ) {
     super();
     this.project = store.project;
+    this.reviewer = (req) =>
+      chairReview(req, {
+        model: this.project.chair.model,
+        env: this.accounts.env(this.accounts.get(this.project.chair.account ?? "claude")),
+      });
+    this.approver = new ChairApprover(
+      (req) => this.reviewer(req),
+      (req, d) => {
+        const what = typeof req.input.command === "string" ? req.input.command : typeof req.input.file_path === "string" ? req.input.file_path : "";
+        const line = `의장 ${d.behavior === "allow" ? "승인" : "거절"} ${req.memberId}: ${req.toolName} ${String(what).slice(0, 120)} (${d.by}${d.reason ? ": " + d.reason : ""})`;
+        this.log(line);
+        try {
+          fs.appendFileSync(this.store.memberLog(req.memberId), `=== ${new Date().toISOString()} ${line}\n`);
+        } catch {
+          /* ignore */
+        }
+      },
+    );
+  }
+
+  setMemberMcp(fn: (memberId: string) => { url: string; headers?: Record<string, string> }): void {
+    this.memberMcp = fn;
+  }
+
+  /** Permission request from a claude member running with autonomy "chair". */
+  async requestPermission(memberId: string, toolName: string, input: Record<string, unknown>): Promise<PermissionDecision> {
+    const m = this.member(memberId);
+    const task = this.task(m.taskId);
+    return this.approver.decide({ memberId, toolName, input, task: `${task.title}\n${task.description}`, worktree: m.worktree });
   }
 
   private log(line: string): void {
@@ -384,7 +419,14 @@ export class Council extends EventEmitter {
     const task = this.task(member.taskId);
     const councilDir = path.join(member.worktree, ".council");
     const agentLabel = `${provider}:${this.project.id}/${agenda.slug}/${member.id}`;
-    const mcpCfg = this.memoryMcpConfig(agentLabel);
+    const mcpCfg = this.memoryMcpConfig(agentLabel) as { mcpServers: Record<string, unknown> };
+    const chairApproves = provider === "claude" && this.project.members.autonomy === "chair" && Boolean(this.memberMcp);
+    if (provider === "claude" && this.project.members.autonomy === "chair" && !this.memberMcp)
+      this.log(`member ${member.id}: chair approval unavailable here (no council endpoint); running with file edits only`);
+    if (chairApproves) {
+      const t = this.memberMcp!(member.id);
+      mcpCfg.mcpServers.council_member = { type: "http", url: t.url, ...(t.headers ? { headers: t.headers } : {}) };
+    }
     const mcpFile = path.join(councilDir, "mcp.json");
     fs.writeFileSync(mcpFile, JSON.stringify(mcpCfg, null, 2), "utf8");
     if (provider === "gemini") {
@@ -395,6 +437,7 @@ export class Council extends EventEmitter {
     const extraArgs: string[] = [];
     if (provider === "claude") {
       extraArgs.push("--mcp-config", mcpFile, "--strict-mcp-config");
+      if (chairApproves) extraArgs.push("--permission-prompt-tool", "mcp__council_member__permission");
       if (member.advisor) extraArgs.push("--advisor", member.advisor);
       if (this.project.members.explorers ?? true) {
         const agentsFile = path.join(councilDir, "agents.json");

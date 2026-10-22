@@ -16,11 +16,12 @@ interface Props {
   onSend: (message: string) => Promise<void>;
   onSetChair: (model: string, effort: string, account?: string, advisor?: string) => Promise<void>;
   onReset: () => Promise<void>;
+  onSetAutonomy: (autonomy: string) => Promise<void>;
   onRetrospect: () => Promise<void>;
   onFinish: () => Promise<void>;
 }
 
-export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onRetrospect, onFinish }: Props) {
+export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onFinish }: Props) {
   const [text, setText] = useState("");
   const [showState, setShowState] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -80,6 +81,18 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           {busy && <GridSpinner color="var(--c-claude)" size={16} title="의장이 생각 중" />}
         </div>
         <div className="chair-actions">
+          {project && (
+            <select
+              className="autonomy-select"
+              value={project.members.autonomy}
+              title="위원 자율성: 위원이 명령 실행 등 권한이 필요한 일을 할 때 누가 허락하는지"
+              onChange={(e) => onSetAutonomy(e.target.value)}
+            >
+              <option value="full">위원: 권한 확인 없음</option>
+              <option value="chair">위원: 의장이 승인</option>
+              <option value="edits">위원: 편집만 자동</option>
+            </select>
+          )}
           <button className="ghost small" onClick={() => setShowState((v) => !v)}>{showState ? "대화" : "의장 상태"}</button>
           <button className="ghost small" onClick={onReset} title="의장 세션을 새로 시작 (state.md 유지)">세션 초기화</button>
           <button className="ghost small" onClick={onRetrospect} disabled={busy || firstTurn} title="의장이 교훈·모델 성향을 공유 기억에 기록하고 제안을 검토">회고</button>
