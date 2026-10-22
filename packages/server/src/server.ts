@@ -29,8 +29,11 @@ import {
   type AccountProvider,
   type Autonomy,
   type CliProvider,
+  type Attachment,
   type RuntimeEvent,
 } from "@gencouncil/council";
+
+const MAX_UPLOAD = 25 * 1024 * 1024;
 import { listFolder } from "./fsbrowse.js";
 import { WebSocketServer, type WebSocket } from "ws";
 import { detectTailscale, loadServerConfig, saveServerConfig, type ServerConfig, type TailscaleInfo } from "./config.js";
@@ -397,8 +400,31 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const b = await body();
     if (rt.chair.isBusy()) throw new HttpError(409, "chair is busy");
     const message = String(b.message ?? "");
-    void rt.send(message).catch((e) => log(`turn failed: ${(e as Error).message}`));
+    const attachments = (Array.isArray(b.attachments) ? (b.attachments as Attachment[]) : []).filter((a) => a && typeof a.id === "string" && rt.attachmentPath(a.id));
+    void rt.send(message, "user", attachments).catch((e) => log(`turn failed: ${(e as Error).message}`));
     return { started: true };
+  });
+  on("POST", "/api/a/:id/:slug/attachments", async ({ params, req, url }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const c of req) {
+      size += (c as Buffer).length;
+      if (size > MAX_UPLOAD) throw new HttpError(413, `file too large (max ${MAX_UPLOAD / 1024 / 1024}MB)`);
+      chunks.push(c as Buffer);
+    }
+    const name = url.searchParams.get("name") ?? "file";
+    const type = String(req.headers["content-type"] ?? "application/octet-stream");
+    return rt.saveAttachment(name, type, Buffer.concat(chunks));
+  });
+  on("GET", "/api/a/:id/:slug/attachments/:file", async ({ params, res }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    const p = rt.attachmentPath(params.file);
+    if (!p) throw new HttpError(404, "not found");
+    const ext = path.extname(p).toLowerCase();
+    const types: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf", ".txt": "text/plain; charset=utf-8", ".md": "text/plain; charset=utf-8" };
+    res.writeHead(200, { "content-type": types[ext] ?? "application/octet-stream", "cache-control": "private, max-age=86400" });
+    fs.createReadStream(p).pipe(res);
   });
   on("GET", "/api/a/:id/:slug/members/:mid", async ({ params, url }) => {
     const rt = await getRuntime(params.id, params.slug);

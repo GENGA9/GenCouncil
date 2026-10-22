@@ -1,4 +1,4 @@
-import type { Account, CurateStatus, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry } from "./types";
+import type { Account, Attachment, CurateStatus, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -69,7 +69,19 @@ export const api = {
   createAgenda: (id: string, title?: string, goals?: string[]) =>
     call<{ key: string }>("POST", `/api/projects/${encodeURIComponent(id)}/agendas`, { title, goals }),
   agenda: (key: string) => call<{ state: RuntimeState; transcript: TranscriptEntry[]; firstTurn: boolean }>("GET", a(key)),
-  chat: (key: string, message: string) => call<{ started: boolean }>("POST", `${a(key)}/chat`, { message }),
+  chat: (key: string, message: string, attachments: Attachment[] = []) => call<{ started: boolean }>("POST", `${a(key)}/chat`, { message, attachments }),
+  upload: async (key: string, file: File) => {
+    const res = await fetch(`${a(key)}/attachments?name=${encodeURIComponent(file.name || "image.png")}`, {
+      method: "POST",
+      headers: { "content-type": file.type || "application/octet-stream" },
+      body: file,
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({ error: res.statusText }));
+    if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? res.statusText);
+    return data as Attachment;
+  },
+  attachmentUrl: (key: string, id: string) => `${a(key)}/attachments/${encodeURIComponent(id)}`,
   member: (key: string, id: string, opts: { tail?: number; diff?: boolean }) =>
     call<Record<string, unknown> & { logTail: string[]; diff?: string }>(
       "GET",

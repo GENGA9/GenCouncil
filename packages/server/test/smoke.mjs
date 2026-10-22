@@ -117,6 +117,19 @@ await setRes.text();
 const after = await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`);
 check("chair set title and goals", after.json.state.agenda.title === "로그인 개선" && after.json.state.agenda.goals.length === 2, JSON.stringify(after.json.state.agenda));
 
+// attachments: upload then read back
+const upRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments?name=${encodeURIComponent("사진 1.png")}`, {
+  method: "POST",
+  headers: { authorization: "Bearer test-token", "content-type": "image/png" },
+  body: Buffer.from([137, 80, 78, 71, 1, 2, 3]),
+});
+const up = await upRes.json();
+check("attachment uploaded", upRes.status === 200 && up.size === 7 && up.type === "image/png" && up.id.endsWith("사진 1.png"), JSON.stringify(up));
+const getRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments/${encodeURIComponent(up.id)}`, { headers: { authorization: "Bearer test-token" } });
+check("attachment served", getRes.status === 200 && getRes.headers.get("content-type") === "image/png" && (await getRes.arrayBuffer()).byteLength === 7);
+const missRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments/${encodeURIComponent("../state.md")}`, { headers: { authorization: "Bearer test-token" } });
+check("attachment path traversal blocked", missRes.status === 404);
+
 // settings: rename and move to another folder
 const ren = await api("PUT", `/api/projects/${encodeURIComponent(proj.json.id)}/settings`, { name: "웹 테스트 개정" });
 check("rename keeps id, adds suffix", ren.status === 200 && ren.json.name === "웹 테스트 개정 제작위원회" && ren.json.id === proj.json.id, JSON.stringify(ren.json.name));

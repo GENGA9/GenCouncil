@@ -162,11 +162,14 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .chair-actions { display: flex; gap: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 /* rotating 2x2 squares loader (from the reference mockup) */
-.grid-spinner { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 14%; vertical-align: -2px; margin-right: 6px; animation: spin 1.2s linear infinite; flex: none; }
-.grid-spinner i { display: block; background: currentColor; border-radius: 1px; }
-.grid-spinner i:nth-child(2) { opacity: 0.75; }
-.grid-spinner i:nth-child(3) { opacity: 0.5; }
-.grid-spinner i:nth-child(4) { opacity: 0.25; }
+/* squares fill one by one clockwise (TL, TR, BR, BL), then empty in the same order */
+.grid-spinner { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 14%; vertical-align: -2px; margin-right: 6px; flex: none; }
+.grid-spinner i { display: block; border-radius: 1px; box-shadow: inset 0 0 0 1px currentColor; background: transparent; animation: gc-fill 1.6s infinite; }
+.grid-spinner i:nth-child(1) { animation-delay: 0s; }
+.grid-spinner i:nth-child(2) { animation-delay: 0.2s; }
+.grid-spinner i:nth-child(4) { animation-delay: 0.4s; }
+.grid-spinner i:nth-child(3) { animation-delay: 0.6s; }
+@keyframes gc-fill { 0%, 49.9% { background: currentColor; } 50%, 100% { background: transparent; } }
 .pinned-idle { color: var(--muted); margin-right: 6px; }
 .agenda-title { display: inline-flex; align-items: center; }
 .pinned-title { display: flex; align-items: center; }
@@ -284,4 +287,14 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .curate-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .curate-bar h3 { margin-bottom: 6px; }
 .curate-result { margin: 6px 0 10px; }
-.grid-spinner.idle { animation: none; opacity: 0.55; }
+.grid-spinner.idle i { animation: none; background: currentColor; opacity: 0.45; }
+
+/* attachments */
+.attach-btn { align-self: stretch; padding: 0 10px; font-size: 16px; }
+.composer.drag { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.pending-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 0; }
+.file-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--event); color: var(--text); text-decoration: none; max-width: 240px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.file-chip img { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; }
+.msg-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.msg-attachments img { max-width: 220px; max-height: 160px; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.msg.user .msg-attachments { justify-content: flex-end; }

@@ -153,15 +153,24 @@ export interface TranscriptEntry {
   text: string;
   isError?: boolean;
   costUsd?: number;
+  attachments?: Attachment[];
 }
 
 export type ChatRole = "user" | "assistant" | "event" | "tool" | "error" | "system";
+
+export interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+}
 
 export interface ChatItem {
   id: number;
   role: ChatRole;
   text: string;
   ts: string;
+  attachments?: Attachment[];
 }
 
 export interface MemoryHit {

@@ -120,12 +120,17 @@ export class Chair {
     return next;
   }
 
-  async turn(message: string, onEvent: (e: ClaudeEvent) => void): Promise<ChairTurnResult> {
+  async turn(
+    message: string,
+    onEvent: (e: ClaudeEvent) => void,
+    attachments: Array<{ id: string; name: string; type: string; size: number }> = [],
+    shownText?: string,
+  ): Promise<ChairTurnResult> {
     if (this.busy) throw new Error("chair is busy");
     this.busy = true;
     try {
       const store = this.council.store;
-      store.appendTranscript({ role: "user", text: message });
+      store.appendTranscript({ role: "user", text: shownText ?? message, ...(attachments.length ? { attachments } : {}) });
       let account = this.currentAccount();
       const tried: string[] = [];
       let res: Awaited<ReturnType<Chair["runOnce"]>> | undefined;
@@ -189,6 +194,9 @@ export class Chair {
     args.push("--disallowedTools", ...CHAIR_DISALLOWED);
     args.push("--append-system-prompt", this.systemPrompt());
     args.push("--add-dir", store.worktreeRoot());
+    // files the user attached in the chat
+    const attachDir = path.join(store.dir, "attachments");
+    if (fs.existsSync(attachDir)) args.push("--add-dir", attachDir);
     const model = this.model();
     const effort = this.effort();
     if (model) args.push("--model", model);

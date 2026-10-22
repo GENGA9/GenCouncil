@@ -7,7 +7,7 @@ import { LeftPane } from "./components/LeftPane";
 import { MemoryView } from "./components/MemoryView";
 import { RightPane } from "./components/RightPane";
 import { GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
-import type { ChatItem, Overview, RuntimeState, TranscriptEntry } from "./types";
+import type { Attachment, ChatItem, Overview, RuntimeState, TranscriptEntry } from "./types";
 
 const MEMORY_KEY = "__memory__";
 const ACCOUNTS_KEY = "__accounts__";
@@ -80,9 +80,10 @@ export function App() {
         setState(r.state);
         setFirstTurn(r.firstTurn);
         setChat(
-          r.transcript.map((t: TranscriptEntry) =>
-            item(t.role === "assistant" && t.isError ? "error" : t.role, t.text, t.ts),
-          ),
+          r.transcript.map((t: TranscriptEntry) => ({
+            ...item(t.role === "assistant" && t.isError ? "error" : t.role, t.text, t.ts),
+            attachments: t.attachments,
+          })),
         );
       } catch (e) {
         notify((e as Error).message);
@@ -147,7 +148,7 @@ export function App() {
       switch (type) {
         case "chair:start":
           void refreshOverview();
-          setChat((c) => [...c, item(msg.role === "event" ? "event" : "user", String(msg.text))]);
+          setChat((c) => [...c, { ...item(msg.role === "event" ? "event" : "user", String(msg.text)), attachments: (msg.attachments as Attachment[] | undefined) ?? undefined }]);
           setState((s) => (s ? { ...s, chair: { ...s.chair, busy: true } } : s));
           setFirstTurn(false);
           break;
@@ -184,12 +185,15 @@ export function App() {
   }, [authed, refreshOverview, refreshState]);
 
   const send = useCallback(
-    async (message: string) => {
+    async (message: string, files: File[] = []) => {
       if (!selected || isSpecial(selected)) return;
       try {
-        await api.chat(selected, message);
+        const attachments = [];
+        for (const f of files) attachments.push(await api.upload(selected, f));
+        await api.chat(selected, message, attachments);
       } catch (e) {
         notify((e as Error).message);
+        throw e;
       }
     },
     [selected, notify],

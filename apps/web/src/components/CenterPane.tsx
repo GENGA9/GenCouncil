@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "../api";
 import { familyColor, memberName } from "../model";
 import type { ChatItem, Member, ProjectOv, RuntimeState, Task } from "../types";
 import { GridSpinner } from "./GridSpinner";
@@ -13,7 +14,7 @@ interface Props {
   firstTurn: boolean;
   loading: boolean;
   project?: ProjectOv;
-  onSend: (message: string) => Promise<void>;
+  onSend: (message: string, files?: File[]) => Promise<void>;
   onSetChair: (model: string, effort: string, account?: string, advisor?: string) => Promise<void>;
   onReset: () => Promise<void>;
   onSetAutonomy: (autonomy: string) => Promise<void>;
@@ -23,7 +24,15 @@ interface Props {
 
 export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onFinish }: Props) {
   const [text, setText] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [showState, setShowState] = useState(false);
+  const addFiles = (list: FileList | File[] | null | undefined) => {
+    const arr = Array.from(list ?? []).filter((f) => f.size > 0);
+    if (arr.length) setFiles((cur) => [...cur, ...arr].slice(0, 10));
+  };
   const listRef = useRef<HTMLDivElement>(null);
   const busy = state?.chair.busy ?? false;
 
@@ -38,9 +47,17 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
 
   const submit = async () => {
     const t = text.trim();
-    if (!t || busy) return;
-    setText("");
-    await onSend(t);
+    if ((!t && files.length === 0) || busy || sending) return;
+    setSending(true);
+    try {
+      await onSend(t, files);
+      setText("");
+      setFiles([]);
+    } catch {
+      /* the app shows the error; keep the draft */
+    } finally {
+      setSending(false);
+    }
   };
 
   const model = state.chair.model ?? "";
@@ -143,7 +160,20 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
               {c.role === "assistant" && <span className="who">의장</span>}
               {c.role === "user" && <span className="who">나</span>}
               {c.role === "event" && <span className="who">이벤트</span>}
-              <div className="msg-text">{c.text}</div>
+              {c.text && <div className="msg-text">{c.text}</div>}
+              {c.attachments && c.attachments.length > 0 && state && (
+                <div className="msg-attachments">
+                  {c.attachments.map((a) =>
+                    a.type.startsWith("image/") ? (
+                      <a key={a.id} href={api.attachmentUrl(state.key, a.id)} target="_blank" rel="noreferrer">
+                        <img src={api.attachmentUrl(state.key, a.id)} alt={a.name} />
+                      </a>
+                    ) : (
+                      <a key={a.id} className="file-chip" href={api.attachmentUrl(state.key, a.id)} target="_blank" rel="noreferrer">📎 {a.name}</a>
+                    ),
+                  )}
+                </div>
+              )}
             </div>
           ))}
           {busy && (
@@ -154,11 +184,42 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
         </div>
       )}
 
-      <div className="composer">
+      {files.length > 0 && (
+        <div className="pending-files">
+          {files.map((f, i) => (
+            <span key={i} className="file-chip">
+              {f.type.startsWith("image/") ? <img src={URL.createObjectURL(f)} alt="" /> : "📎"} {f.name || "붙여넣은 이미지"}
+              <button className="icon" title="빼기" onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}>✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div
+        className={`composer ${dragOver ? "drag" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          addFiles(e.dataTransfer.files);
+        }}
+      >
+        <button className="ghost attach-btn" title="파일·사진 첨부" onClick={() => fileInput.current?.click()} disabled={busy || sending}>📎</button>
+        <input ref={fileInput} type="file" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={busy ? "의장이 응답 중입니다…" : "의장에게 말하기 (Enter 전송, Shift+Enter 줄바꿈)"}
+          onPaste={(e) => {
+            const pasted = Array.from(e.clipboardData.files);
+            if (pasted.length) {
+              e.preventDefault();
+              addFiles(pasted);
+            }
+          }}
+          placeholder={busy ? "의장이 응답 중입니다…" : "의장에게 말하기 (Enter 전송, Shift+Enter 줄바꿈, 사진은 붙여넣기·끌어놓기)"}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -167,7 +228,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           }}
           rows={2}
         />
-        <button className="primary" onClick={submit} disabled={busy || !text.trim()}>전송</button>
+        <button className="primary" onClick={submit} disabled={busy || sending || (!text.trim() && files.length === 0)}>{sending ? "올리는 중…" : "전송"}</button>
       </div>
       {project && (
         <div className="small muted center-foot">

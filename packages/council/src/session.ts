@@ -13,10 +13,19 @@ import type { ClaudeEvent } from "./drivers.js";
 import { memberDisplayName, type AgendaStore, type MemberRecord } from "./model.js";
 import { firstTurnPreamble, retrospectivePrompt } from "./prompts.js";
 
+export interface Attachment {
+  /** stored file name inside the agenda's attachments folder */
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
 export interface TranscriptEntry {
   ts: string;
   role: "user" | "assistant" | "event";
   text: string;
+  attachments?: Attachment[];
   isError?: boolean;
   costUsd?: number;
 }
@@ -29,7 +38,7 @@ export interface RuntimeState extends CouncilState {
 }
 
 export type RuntimeEvent =
-  | { type: "chair:start"; role: "user" | "event"; text: string }
+  | { type: "chair:start"; role: "user" | "event"; text: string; attachments?: Attachment[] }
   | { type: "chair:text"; text: string }
   | { type: "chair:tool"; name: string; input: unknown }
   | { type: "chair:done"; text: string; isError: boolean; costUsd?: number }
@@ -190,11 +199,36 @@ export class AgendaRuntime extends EventEmitter {
   }
 
   /** Send a user message (or the first-turn preamble) to the chair. Rejects while busy. */
-  async send(message: string, role: "user" | "event" = "user"): Promise<ChairTurnResult> {
+  attachmentsDir(): string {
+    return path.join(this.council.store.dir, "attachments");
+  }
+
+  /** Save an uploaded file for this agenda. */
+  saveAttachment(name: string, type: string, data: Buffer): Attachment {
+    const dir = this.attachmentsDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const safe = (name || "file").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(-80) || "file";
+    const id = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}-${safe}`;
+    fs.writeFileSync(path.join(dir, id), data);
+    return { id, name: safe, type: type || "application/octet-stream", size: data.length };
+  }
+
+  attachmentPath(id: string): string | undefined {
+    const p = path.join(this.attachmentsDir(), path.basename(id));
+    return fs.existsSync(p) ? p : undefined;
+  }
+
+  async send(message: string, role: "user" | "event" = "user", attachments: Attachment[] = []): Promise<ChairTurnResult> {
     if (this.chair.isBusy()) throw new Error("chair is busy");
-    const text = message || (this.isFirstTurn() ? firstTurnPreamble() : "");
+    let text = message || (attachments.length ? "첨부한 파일을 확인해 주세요." : this.isFirstTurn() ? firstTurnPreamble() : "");
     if (!text) throw new Error("empty message");
-    this.emitEvent({ type: "chair:start", role, text });
+    if (attachments.length) {
+      const lines = attachments.map((a) => `- ${path.join(this.attachmentsDir(), a.id)} (${a.name}, ${a.type}, ${Math.max(1, Math.round(a.size / 1024))}KB)`);
+      text +=
+        "\n\n[첨부 파일] 사용자가 붙인 파일이다. Read 도구로 열어 본다(이미지도 읽을 수 있다). 위원이 써야 하면 지시에 이 경로를 적어 준다.\n" +
+        lines.join("\n");
+    }
+    this.emitEvent({ type: "chair:start", role, text: message || text, attachments });
     const onEvent = (e: ClaudeEvent) => {
       if (e.kind === "text") this.emitEvent({ type: "chair:text", text: e.text });
       else if (e.kind === "tool") this.emitEvent({ type: "chair:tool", name: e.name, input: e.input });
@@ -202,7 +236,7 @@ export class AgendaRuntime extends EventEmitter {
     };
     let res: ChairTurnResult;
     try {
-      res = await this.chair.turn(text, onEvent);
+      res = await this.chair.turn(text, onEvent, attachments, message);
     } catch (e) {
       res = { text: (e as Error).message, isError: true };
     }
