@@ -37,10 +37,10 @@ gencouncil service start | stop | status | logs
 ### 데스크탑
 
 ```bash
-gencouncil desktop             # 서버가 없으면 띄우고, Edge/Chrome 앱 모드 창으로 콘솔을 연다 (Rust 불필요)
+gencouncil desktop             # 서버가 없으면 띄우고, Chrome 앱 모드 창으로 콘솔을 연다 (Rust 불필요)
 ```
 
-앱 모드 창은 전용 프로필을 써서 토큰 쿠키가 일반 브라우징과 섞이지 않는다. 트레이 상주형 네이티브 앱은 [apps/desktop](apps/desktop/README.md)에 Tauri 2 스캐폴드(트레이 메뉴, 서버 자식 프로세스, 창 닫아도 상주)가 있다. 이 환경에 Rust가 없어 빌드는 검증하지 못했다.
+Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가 일반 브라우징과 섞이지 않는다. Chrome이 없으면 Edge 기본 프로필로 연다(Edge 새 프로필은 앱 모드에서 첫 실행 마법사에 막혀 빈 창이 된다). 트레이 상주형 네이티브 앱은 [apps/desktop](apps/desktop/README.md)에 Tauri 2 스캐폴드(트레이 메뉴, 서버 자식 프로세스, 창 닫아도 상주)가 있다. 이 환경에 Rust가 없어 빌드는 검증하지 못했다.
 
 ## 패키지
 

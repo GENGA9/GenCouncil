@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { loadServerConfig } from "@gencouncil/server";
 
 export const DESKTOP_HELP = `desktop
-  desktop [--browser edge|chrome] [--no-start]   open the console in an app-mode window (starts the server if needed)
+  desktop [--browser chrome|edge] [--no-start]   open the console in an app-mode window (starts the server if needed)
 `;
 
 const BROWSERS: Record<string, string[]> = {
@@ -23,10 +23,22 @@ const BROWSERS: Record<string, string[]> = {
   ],
 };
 
-function findBrowser(prefer?: string): string | undefined {
-  const order = prefer ? [prefer, ...Object.keys(BROWSERS).filter((b) => b !== prefer)] : ["edge", "chrome"];
-  for (const b of order) for (const p of BROWSERS[b] ?? []) if (fs.existsSync(p)) return p;
+function findBrowser(prefer?: string): { kind: string; exe: string } | undefined {
+  // Chrome first: a fresh Edge profile stalls on Edge's first-run wizard in --app mode (blank window,
+  // and --no-first-run does not skip it), so Edge is only used with the user's normal profile.
+  const order = prefer ? [prefer, ...Object.keys(BROWSERS).filter((b) => b !== prefer)] : ["chrome", "edge"];
+  for (const kind of order) for (const exe of BROWSERS[kind] ?? []) if (fs.existsSync(exe)) return { kind, exe };
   return undefined;
+}
+
+/** app-mode command line for the browser */
+export function appArgs(kind: string, url: string, localAppData: string): string[] {
+  const args = [`--app=${url}`, "--window-size=1400,900"];
+  if (kind === "chrome") {
+    // own profile: the token cookie stays out of normal browsing
+    args.push(`--user-data-dir=${path.join(localAppData, "GenCouncilDesktop-chrome")}`, "--no-first-run", "--no-default-browser-check");
+  }
+  return args;
 }
 
 async function serverUp(port: number): Promise<boolean> {
@@ -57,16 +69,12 @@ export async function desktopMain(rest: string[]): Promise<number> {
     console.log(`started web server on port ${cfg.port} (pid ${child.pid})`);
   }
   const url = `http://localhost:${cfg.port}/auth?token=${encodeURIComponent(cfg.token)}`;
-  const exe = findBrowser(prefer);
-  if (process.platform === "win32" && exe) {
-    // a separate browser profile so the app window keeps its own cookie and never mixes with normal browsing
-    const profile = path.join(process.env.LOCALAPPDATA ?? process.env.TEMP ?? ".", "GenCouncilDesktop");
-    spawn(exe, [`--app=${url}`, "--window-size=1400,900", `--user-data-dir=${profile}`], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    }).unref();
-    console.log(`opened ${path.basename(exe)} app window at http://localhost:${cfg.port}`);
+  const browser = findBrowser(prefer);
+  if (process.platform === "win32" && browser) {
+    const args = appArgs(browser.kind, url, process.env.LOCALAPPDATA ?? process.env.TEMP ?? ".");
+    // windowsHide must stay off: it starts the browser with SW_HIDE and the app window comes up blank and frameless
+    spawn(browser.exe, args, { detached: true, stdio: "ignore", windowsHide: false }).unref();
+    console.log(`opened ${browser.kind} app window at http://localhost:${cfg.port}`);
     return 0;
   }
   // fallback: default browser
