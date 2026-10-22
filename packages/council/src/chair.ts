@@ -147,6 +147,7 @@ export class Chair {
           res.text = `의장 계정 ${account.id} ${failure.kind === "quota" ? "한도 소진" : "로그인 필요"}: ${failure.message}. 쓸 수 있는 다른 claude 계정이 없습니다. 'gencouncil account add'로 계정을 추가하거나 리셋을 기다리세요.`;
           break;
         }
+        this.appendLog(`=== ${new Date().toISOString()} account switch ${account.id} -> ${next.id} (${failure.kind}: ${failure.message})`);
         onEvent({ kind: "handover", from: account.id, to: next.id, reason: `${failure.kind}: ${failure.message}` });
         onEvent({ kind: "text", text: `(의장 계정 ${account.id} → ${next.id} 로 전환. state.md를 바탕으로 새 세션을 시작합니다.)` });
         account = next;
@@ -157,6 +158,19 @@ export class Chair {
       return { text: res.text, sessionId: res.sessionId, isError: res.isError, costUsd: res.costUsd };
     } finally {
       this.busy = false;
+    }
+  }
+
+  /** chair/chair.log: raw stream-json + stderr of every chair run, for debugging and quota-pattern tuning */
+  logFile(): string {
+    return path.join(this.council.store.chairDir(), "chair.log");
+  }
+
+  private appendLog(line: string): void {
+    try {
+      fs.appendFileSync(this.logFile(), line + "\n", "utf8");
+    } catch {
+      /* logging must never break a turn */
     }
   }
 
@@ -184,7 +198,19 @@ export class Chair {
     const env: NodeJS.ProcessEnv = { ...process.env, ...this.council.accounts.env(account), GENCOUNCIL_ROLE: "chair" };
     delete env.CLAUDECODE;
     this.council.accounts.touch(account.id);
-    const child = spawnCli("claude", args, { cwd: store.integrationWorktree(), env });
+    fs.mkdirSync(store.chairDir(), { recursive: true });
+    const log = fs.createWriteStream(this.logFile(), { flags: "a" });
+    log.write(
+      `=== ${new Date().toISOString()} chair turn account=${account.id} model=${model ?? "default"} effort=${effort ?? "default"} advisor=${advisor ?? "off"} resume=${resume ?? "new"}\n` +
+        `[prompt] ${message.slice(0, 4000).replace(/\r?\n/g, " ⏎ ")}\n`,
+    );
+    let child;
+    try {
+      child = spawnCli("claude", args, { cwd: store.integrationWorktree(), env });
+    } catch (e) {
+      log.end(`=== spawn failed: ${(e as Error).message}\n`);
+      throw e;
+    }
     let sessionId: string | undefined;
     let finalText = "";
     let isError = false;
@@ -192,6 +218,7 @@ export class Chair {
     let stderr = "";
     const texts: string[] = [];
     const proc = wireProcess(child, { cwd: store.integrationWorktree(), prompt: message, autonomy: "edits" }, (stream, line) => {
+      log.write(`[${stream}] ${line}\n`);
       if (stream === "stderr") {
         stderr += line + "\n";
         return;
@@ -208,7 +235,8 @@ export class Chair {
         if (ev.kind !== "result" && ev.kind !== "other") onEvent(ev);
       }
     });
-    return proc.done.then((exit) => {
+    return proc.done.then(async (exit) => {
+      await new Promise<void>((r) => log.end(`=== exit code=${exit.code} signal=${exit.signal}\n`, () => r()));
       const resumeFailed = Boolean(resume) && (/no conversation found/i.test(stderr) || /no conversation found/i.test(finalText));
       if (exit.code !== 0 && !finalText) {
         isError = true;

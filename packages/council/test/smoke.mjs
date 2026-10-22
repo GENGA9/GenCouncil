@@ -56,6 +56,10 @@ const simulate = async (id, file, content, msg) => {
   const wt = store.memberWorktree(id);
   await ensureWorktree(repo, wt, store.memberBranch(id), store.agenda().branch);
   fs.writeFileSync(path.join(wt, file), content);
+  fs.mkdirSync(path.join(wt, ".council"), { recursive: true });
+  fs.writeFileSync(path.join(wt, ".council", "RESULT.md"), `## 결과\n${msg}\n`);
+  fs.writeFileSync(path.join(wt, ".council", "STATE.md"), `한 일: ${msg}\n`);
+  fs.writeFileSync(path.join(wt, ".council", "mcp.json"), "{}");
   await git(wt, ["add", "-A"]);
   await git(wt, ["commit", "-q", "-m", msg]);
   return wt;
@@ -85,6 +89,11 @@ const out = await council2.finish();
 const mainContent = fs.readFileSync(path.join(repo, "a.txt"), "utf8");
 check("finish merged into main", mainContent.replace(/\r/g, "") === "two\n", JSON.stringify(mainContent) + " " + out);
 check("worktrees removed", !fs.existsSync(store.worktreeRoot()));
+const arch = path.join(store.dir, "archive", "claude-1");
+check("council notes archived before removal", fs.existsSync(path.join(arch, "RESULT.md")) && fs.existsSync(path.join(arch, "STATE.md")) && !fs.existsSync(path.join(arch, "mcp.json")));
+check("both member worktrees archived", fs.existsSync(path.join(store.dir, "archive", "gemini-1", "RESULT.md")));
+const info = await council2.memberInfo("claude-1");
+check("memberInfo reads STATE.md from archive", info.stateMd === "한 일: a: two\n", JSON.stringify(info.stateMd));
 check("agenda closed", store.agenda().status === "closed");
 
 fs.rmSync(tmp, { recursive: true, force: true });

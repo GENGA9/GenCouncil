@@ -309,6 +309,21 @@ updated: 2026-10-22T05:00:00.000Z
 
 직접 편집해도 된다. 서버가 변경을 감지해 다시 읽고, 쓰기마다 git 커밋이 남는다.
 
+## 로그
+
+안건별 기록은 `~/.gencouncil/projects/<프로젝트>/agendas/<안건>/` 아래에 남는다.
+
+| 파일 | 내용 |
+|------|------|
+| `members/<id>.log` | 위원 CLI의 stdout/stderr 원문, 시작 계정·브랜치, 종료 코드 |
+| `chair/chair.log` | 의장 매 턴의 계정·모델·advisor·재개 세션, 프롬프트, stream-json·stderr 원문, 종료 코드, 계정 전환 |
+| `transcript.jsonl` | 의장과의 대화 (내 메시지, 최종 답변, 오류, 비용) |
+| `members.json` | 위원 상태, 커밋, 실패 분류와 리셋 시각, 인계 관계 |
+| `chair/state.md` | 의장 체크포인트 |
+| `archive/<worktree>/` | 안건 종료·정리 때 worktree를 지우기 전에 복사한 `.council/*.md` (TASK, RESULT, STATE, HANDOVER) |
+
+계정 오류는 `~/.gencouncil/accounts.json`, 상주 서버 로그는 `~/.gencouncil/service/web.log`에 있다. 한도 오류 감지가 틀리면 `chair.log`나 위원 `.log`의 stderr 줄을 보고 `packages/council/src/quota.ts`의 패턴을 보강한다. 로그 정리(로테이션)는 아직 없다.
+
 ## 테스트
 
 ```bash

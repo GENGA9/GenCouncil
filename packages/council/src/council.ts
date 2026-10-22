@@ -601,8 +601,9 @@ export class Council extends EventEmitter {
         diff = `(diff failed: ${(e as Error).message})`;
       }
     }
-    const stateFile = path.join(m.worktree, ".council", "STATE.md");
-    const stateMd = fs.existsSync(stateFile) ? fs.readFileSync(stateFile, "utf8") : undefined;
+    // after the agenda is closed the worktree is gone; fall back to the archived copy
+    const stateFile = [path.join(m.worktree, ".council", "STATE.md"), path.join(this.archiveDir(m.worktree), "STATE.md")].find((f) => fs.existsSync(f));
+    const stateMd = stateFile ? fs.readFileSync(stateFile, "utf8") : undefined;
     return { ...m, result: m.result ? { ...m.result, raw: undefined } : undefined, logTail: tail, diff, stateMd };
   }
 
@@ -682,10 +683,37 @@ export class Council extends EventEmitter {
     return res.output;
   }
 
+  /** <agenda>/archive/<worktree name>/ keeps a worktree's .council/*.md after the worktree is removed */
+  archiveDir(worktree: string): string {
+    return path.join(this.store.dir, "archive", path.basename(worktree));
+  }
+
+  /** Copy TASK/RESULT/STATE/HANDOVER notes out of a worktree before it is deleted. Returns files copied. */
+  archiveCouncilFiles(worktree: string): string[] {
+    const src = path.join(worktree, ".council");
+    if (!fs.existsSync(src)) return [];
+    const dest = this.archiveDir(worktree);
+    const copied: string[] = [];
+    for (const f of fs.readdirSync(src)) {
+      if (!f.endsWith(".md")) continue;
+      fs.mkdirSync(dest, { recursive: true });
+      fs.copyFileSync(path.join(src, f), path.join(dest, f));
+      copied.push(f);
+    }
+    return copied;
+  }
+
   async clean(opts: { deleteBranches?: boolean } = {}): Promise<void> {
     if (this.running.size) throw new Error("members still running");
     const repo = this.project.repo;
+    const archived = new Set<string>();
     for (const m of this.members()) {
+      // handed-over members share a worktree; archive it once
+      if (!archived.has(m.worktree)) {
+        archived.add(m.worktree);
+        const files = this.archiveCouncilFiles(m.worktree);
+        if (files.length) this.log(`archived ${files.length} notes from ${path.basename(m.worktree)}`);
+      }
       await removeWorktree(repo, m.worktree);
       if (opts.deleteBranches) await deleteBranch(repo, m.branch);
     }
