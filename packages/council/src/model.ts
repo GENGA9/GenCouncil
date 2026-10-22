@@ -41,6 +41,8 @@ export interface ProjectConfig {
     advisor?: string;
     /** account id from the registry (default: "claude" = the normal login) */
     account?: string;
+    /** the chair may edit files in the integration worktree itself (auto-committed after each turn) */
+    directEdit?: boolean;
   };
   members: {
     autonomy: Autonomy;
@@ -258,6 +260,7 @@ export class ProjectRegistry {
     chairModel?: string;
     chairEffort?: string;
     chairAdvisor?: string;
+    chairDirectEdit?: boolean;
     chairAccount?: string;
     autonomy?: Autonomy;
     defaultProvider?: CliProvider;
@@ -280,6 +283,7 @@ export class ProjectRegistry {
         model: input.chairModel ?? "opus",
         effort: input.chairEffort,
         advisor: input.chairAdvisor || undefined,
+        directEdit: input.chairDirectEdit || undefined,
         account: input.chairAccount,
       },
       members: {

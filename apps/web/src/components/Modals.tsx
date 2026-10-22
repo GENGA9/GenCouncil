@@ -58,6 +58,7 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
   const [chairModel, setChairModel] = useState("opus");
   const [chairEffort, setChairEffort] = useState("");
   const [autonomy, setAutonomy] = useState("full");
+  const [directEdit, setDirectEdit] = useState(false);
   const [limits, setLimits] = useState<Limits | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,7 +69,7 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
     setBusy(true);
     setErr("");
     try {
-      await onCreate({ name, path: folder, chairModel, chairEffort, autonomy, limits });
+      await onCreate({ name, path: folder, chairModel, chairEffort, chairDirectEdit: directEdit, autonomy, limits });
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -87,6 +88,13 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
       </label>
       <div className="small muted">이 폴더에서 바로 작업합니다. git 저장소가 아니면 폴더 안에 로컬 git을 만듭니다(어디에도 올라가지 않음). 파이썬 가상환경·바이너리·큰 이미지/영상/압축 파일은 git에서 제외되고 폴더에는 그대로 남습니다.</div>
       <ChairFields model={chairModel} effort={chairEffort} setModel={setChairModel} setEffort={setChairEffort} />
+      <label className="check-row">
+        <input type="checkbox" checked={directEdit} onChange={(e) => setDirectEdit(e.target.checked)} />
+        의장 직접 수정 허용
+      </label>
+      <div className="small muted">
+        켜면 의장이 통합 작업 폴더의 파일을 직접 고치고 머지 충돌을 풀 수 있습니다. 고친 내용은 턴이 끝날 때마다 안건 브랜치에 자동 커밋됩니다. 큰 작업은 계속 위원에게 맡깁니다. 읽기 전용 명령(git 확인, 테스트 실행)과 웹 검색은 항상 허용됩니다.
+      </div>
       <label>위원 자율성
         <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
           <option value="full">full (권한 확인 없음)</option>
@@ -114,6 +122,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
   const [chairModel, setChairModel] = useState(project.chair.model ?? "opus");
   const [chairEffort, setChairEffort] = useState(project.chair.effort ?? "");
   const [autonomy, setAutonomy] = useState(project.members.autonomy);
+  const [directEdit, setDirectEdit] = useState(Boolean(project.chair.directEdit));
   const [limits, setLimits] = useState<Limits | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -128,7 +137,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
       const r = await api.projectSettings(project.id, {
         name,
         ...(folderChanged ? { path: folder.trim() } : {}),
-        chair: { model: chairModel, effort: chairEffort },
+        chair: { model: chairModel, effort: chairEffort, directEdit },
         members: { autonomy, limits },
       });
       onSaved(r.scanSummary ? `설정을 저장했습니다. ${r.scanSummary}` : "설정을 저장했습니다. 의장의 다음 턴부터 적용됩니다.");
@@ -154,6 +163,13 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
         {folderChanged ? " · 폴더를 바꾸면 새 폴더 기준으로 다시 연결합니다. 진행 중인 안건이 있으면 바꿀 수 없습니다." : ""}
       </div>
       <ChairFields model={chairModel} effort={chairEffort} setModel={setChairModel} setEffort={setChairEffort} />
+      <label className="check-row">
+        <input type="checkbox" checked={directEdit} onChange={(e) => setDirectEdit(e.target.checked)} />
+        의장 직접 수정 허용
+      </label>
+      <div className="small muted">
+        켜면 의장이 통합 작업 폴더의 파일을 직접 고치고 머지 충돌을 풀 수 있습니다. 고친 내용은 턴이 끝날 때마다 안건 브랜치에 자동 커밋됩니다. 큰 작업은 계속 위원에게 맡깁니다. 읽기 전용 명령(git 확인, 테스트 실행)과 웹 검색은 항상 허용됩니다.
+      </div>
       <label>위원 자율성
         <select value={autonomy} onChange={(e) => setAutonomy(e.target.value)}>
           <option value="full">full (권한 확인 없음)</option>

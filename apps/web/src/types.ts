@@ -76,7 +76,7 @@ export interface ProjectOv {
   source?: string;
   localGit?: boolean;
   baseBranch: string;
-  chair: { model?: string; effort?: string; advisor?: string; account?: string };
+  chair: { model?: string; effort?: string; advisor?: string; account?: string; directEdit?: boolean };
   members: { autonomy: string; defaultProvider: string; limits?: Limits; explorers?: boolean };
   agendas: AgendaOv[];
 }

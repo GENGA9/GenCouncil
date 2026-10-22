@@ -17,6 +17,7 @@ export interface CreateProjectInput {
   chairModel?: string;
   chairEffort?: string;
   chairAdvisor?: string;
+  chairDirectEdit?: boolean;
   chairAccount?: string;
   autonomy?: Autonomy;
   defaultProvider?: CliProvider;
@@ -70,6 +71,7 @@ export async function createProject(input: CreateProjectInput, registry = new Pr
     chairModel: input.chairModel,
     chairEffort: input.chairEffort,
     chairAdvisor: input.chairAdvisor,
+    chairDirectEdit: input.chairDirectEdit,
     chairAccount: input.chairAccount,
     autonomy: input.autonomy,
     defaultProvider: input.defaultProvider,

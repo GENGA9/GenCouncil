@@ -256,6 +256,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         mode: (b.mode as "auto" | "git" | "folder") || "auto",
         chairModel: (b.chairModel as string) || undefined,
         chairEffort: (b.chairEffort as string) || undefined,
+        chairDirectEdit: b.chairDirectEdit === true,
         chairAccount: (b.chairAccount as string) || undefined,
         autonomy: (b.autonomy as Autonomy) || undefined,
         defaultProvider: (b.defaultProvider as CliProvider) || undefined,
@@ -296,10 +297,11 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         }
       }
     }
-    const chair = (b.chair ?? {}) as { model?: string; effort?: string };
+    const chair = (b.chair ?? {}) as { model?: string; effort?: string; directEdit?: boolean };
     const members = (b.members ?? {}) as { autonomy?: Autonomy; limits?: Record<string, never> };
     if (chair.model !== undefined) p.chair.model = chair.model || undefined;
     if (chair.effort !== undefined) p.chair.effort = chair.effort || undefined;
+    if (chair.directEdit !== undefined) p.chair.directEdit = Boolean(chair.directEdit) || undefined;
     if (members.autonomy) p.members.autonomy = members.autonomy;
     if (members.limits) p.members.limits = normalizeLimits(members.limits);
     registry.save(p);

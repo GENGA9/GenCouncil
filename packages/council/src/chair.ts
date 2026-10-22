@@ -7,6 +7,7 @@ import { parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent, type RunningP
 import { advisorFor } from "./model.js";
 import { chairSystemPrompt } from "./prompts.js";
 import { classifyFailure } from "./quota.js";
+import { git, isClean } from "./git.js";
 
 export interface ChairOptions {
   /** URL of the council MCP server (startCouncilHttp or the web server's /mcp/<project>/<agenda>) */
@@ -24,8 +25,49 @@ export interface ChairTurnResult {
   costUsd?: number;
 }
 
-const CHAIR_ALLOWED = ["Read", "Grep", "Glob", "LS", "mcp__council", "mcp__gencouncil"];
-const CHAIR_DISALLOWED = ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash", "Task", "WebFetch", "WebSearch"];
+/**
+ * What the chair may use. Reading, web research and read-only commands (git inspection, running
+ * tests/type checks) are always allowed. Editing is opt-in per project (chair.directEdit) and
+ * limited to the integration worktree (the chair's cwd); the server commits it after each turn.
+ * Anything not listed is denied: headless runs never prompt.
+ */
+export const CHAIR_READ_TOOLS = ["Read", "Grep", "Glob", "LS", "WebSearch", "WebFetch", "mcp__council", "mcp__gencouncil"];
+export const CHAIR_READONLY_BASH = [
+  "Bash(git status:*)",
+  "Bash(git log:*)",
+  "Bash(git diff:*)",
+  "Bash(git show:*)",
+  "Bash(git branch:*)",
+  "Bash(git blame:*)",
+  "Bash(git ls-files:*)",
+  "Bash(cd:*)",
+  "Bash(ls:*)",
+  "Bash(npm test:*)",
+  "Bash(npm run test:*)",
+  "Bash(npm run typecheck:*)",
+  "Bash(npm run lint:*)",
+  "Bash(npx vitest:*)",
+  "Bash(npx tsc --noEmit:*)",
+  "Bash(npx jest:*)",
+  "Bash(pytest:*)",
+  "Bash(python -m pytest:*)",
+  "Bash(cargo test:*)",
+  "Bash(go test:*)",
+];
+export const CHAIR_EDIT_TOOLS = [
+  // one Edit path rule covers every file-editing tool (Write, MultiEdit too)
+  "Edit(./**)",
+  "Bash(git merge:*)",
+  "Bash(git add:*)",
+  "Bash(git restore:*)",
+];
+const CHAIR_ALWAYS_DENIED = ["NotebookEdit", "Task"];
+
+export function chairToolArgs(directEdit: boolean): { allowed: string[]; disallowed: string[] } {
+  const allowed = [...CHAIR_READ_TOOLS, ...CHAIR_READONLY_BASH, ...(directEdit ? CHAIR_EDIT_TOOLS : [])];
+  const disallowed = [...CHAIR_ALWAYS_DENIED, ...(directEdit ? [] : ["Edit", "Write", "MultiEdit"])];
+  return { allowed, disallowed };
+}
 const MAX_ACCOUNT_SWITCHES = 3;
 
 export class Chair {
@@ -63,6 +105,30 @@ export class Chair {
 
   isBusy(): boolean {
     return this.busy;
+  }
+
+  /**
+   * Commit what the chair changed in the integration worktree during this turn, so the agenda
+   * branch records it and later merges see it. Unresolved conflicts are left for the next turn.
+   */
+  private async commitOwnEdits(request: string): Promise<string | undefined> {
+    const dir = this.council.store.integrationWorktree();
+    try {
+      const unresolved = (await git(dir, ["diff", "--name-only", "--diff-filter=U"])).trim();
+      if (unresolved) return `(의장 직접 수정: 아직 해결되지 않은 충돌이 있어 커밋하지 않았습니다: ${unresolved.split("\n").join(", ")})`;
+      if (await isClean(dir)) {
+        // a merge the chair finished by hand still needs its commit
+        if (!fs.existsSync(path.join(dir, ".git")) || !(await git(dir, ["rev-parse", "-q", "--verify", "MERGE_HEAD"]).catch(() => ""))) return undefined;
+      }
+      await git(dir, ["add", "-A"]);
+      const subject = request.replace(/\s+/g, " ").trim().slice(0, 60) || "직접 수정";
+      await git(dir, ["commit", "-q", "--no-verify", "-m", `chair: ${subject}`]);
+      const sha = (await git(dir, ["rev-parse", "--short", "HEAD"])).trim();
+      this.appendLog(`=== ${new Date().toISOString()} chair edits committed ${sha}`);
+      return `(의장 직접 수정을 통합 브랜치에 커밋했습니다: ${sha})`;
+    } catch (e) {
+      return `(의장 직접 수정 커밋 실패: ${(e as Error).message.split("\n")[0]})`;
+    }
   }
 
   /** stop the running turn (agenda close / app shutdown) */
@@ -170,6 +236,10 @@ export class Chair {
         account = next;
       }
       if (!res) throw new Error("no attempt made");
+      if (this.council.project.chair.directEdit) {
+        const note = await this.commitOwnEdits(shownText ?? message);
+        if (note) res.text = `${res.text}\n\n${note}`;
+      }
       if (res.sessionId && !res.isError) store.saveChairSession({ sessionId: res.sessionId, model: this.model() });
       store.appendTranscript({ role: "assistant", text: res.text, isError: res.isError, costUsd: res.costUsd });
       return { text: res.text, sessionId: res.sessionId, isError: res.isError, costUsd: res.costUsd };
@@ -201,8 +271,9 @@ export class Chair {
     const args = ["-p", message, "--output-format", "stream-json", "--verbose"];
     if (resume) args.push("--resume", resume);
     args.push("--mcp-config", this.mcpFile, "--strict-mcp-config");
-    args.push("--allowedTools", ...CHAIR_ALLOWED);
-    args.push("--disallowedTools", ...CHAIR_DISALLOWED);
+    const tools = chairToolArgs(Boolean(this.council.project.chair.directEdit));
+    args.push("--allowedTools", ...tools.allowed);
+    args.push("--disallowedTools", ...tools.disallowed);
     args.push("--append-system-prompt", this.systemPrompt());
     args.push("--add-dir", store.worktreeRoot());
     // files the user attached in the chat
