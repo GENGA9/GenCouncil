@@ -1,5 +1,6 @@
 import { familyColorByName } from "../model";
 import type { AgendaOv, Overview } from "../types";
+import { THEME_LABEL, useTheme } from "../theme";
 import { GridSpinner } from "./GridSpinner";
 
 interface Props {
@@ -24,13 +25,17 @@ function agendaSpinner(a: AgendaOv, size: number) {
 
 export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings }: Props) {
   const ts = overview?.server.tailscale;
+  const [theme, cycleTheme] = useTheme();
   const badAccounts = overview?.accounts.filter((a) => a.status !== "ok").length ?? 0;
   const current = overview?.projects.flatMap((p) => p.agendas.map((a) => ({ p, a }))).find((x) => x.a.key === selected);
   return (
     <div className="left-inner">
       <div className="space-head">
         <span className="space-title">SPACE</span>
-        <span className={`dot ${wsUp ? "up" : ""}`} title={wsUp ? "실시간 연결됨" : "연결 끊김"} />
+        <span className="space-tools">
+          <button className="theme-btn" onClick={cycleTheme} title="화면 테마 (자동 → 라이트 → 다크)">{THEME_LABEL[theme]}</button>
+          <span className={`dot ${wsUp ? "up" : ""}`} title={wsUp ? "실시간 연결됨" : "연결 끊김"} />
+        </span>
       </div>
 
       <div className="tree">
