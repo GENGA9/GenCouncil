@@ -19,10 +19,12 @@ interface Props {
   onReset: () => Promise<void>;
   onSetAutonomy: (autonomy: string) => Promise<void>;
   onRetrospect: () => Promise<void>;
+  onResume: () => Promise<void>;
+  onDismissResume: () => Promise<void>;
   onFinish: () => Promise<void>;
 }
 
-export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onFinish }: Props) {
+export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onResume, onDismissResume, onFinish }: Props) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -176,6 +178,24 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
               )}
             </div>
           ))}
+          {state.resume && !busy && (
+            <div className="resume-card">
+              <div className="resume-title">지난번 작업이 중간에 멈췄습니다</div>
+              <ul className="small">
+                {state.resume.members.map((m) => (
+                  <li key={m.id}>
+                    위원 {m.id}{m.model ? ` (${m.model})` : ""}: {m.taskTitle}
+                  </li>
+                ))}
+                {state.resume.chair && <li>의장 응답: “{state.resume.chair.message.slice(0, 80)}{state.resume.chair.message.length > 80 ? "…" : ""}”</li>}
+              </ul>
+              <div className="small muted">이어서 하면 위원은 같은 작업 폴더에서 남긴 기록(STATE.md)을 보고 계속하고, 의장은 하던 일을 다시 이어갑니다.</div>
+              <div className="resume-actions">
+                <button className="primary" onClick={() => void onResume()}>이어서 하기</button>
+                <button className="ghost small" onClick={() => void onDismissResume()}>무시</button>
+              </div>
+            </div>
+          )}
           {busy && (
             <div className="msg thinking muted">
               <GridSpinner color="var(--c-claude)" size={12} /> 의장이 작업 중…

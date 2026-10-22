@@ -19,3 +19,4 @@ export * from "./projects.js";
 export * from "./approval.js";
 export * from "./curator.js";
 export * from "./usage.js";
+export * from "./interrupt.js";

@@ -51,6 +51,7 @@ import {
 } from "./model.js";
 import { buildHandoverPacket, buildPacket, MEMBER_PROMPT, parseResult } from "./packet.js";
 import { classifyFailure } from "./quota.js";
+import { stopLeftover } from "./interrupt.js";
 import { applyRelayFiles, bundleFiles, parseRelayResponse, RELAY_FORMAT } from "./relay.js";
 
 export { accountsFile, loadAccounts, type Account } from "./accounts.js";
@@ -74,6 +75,8 @@ export interface AssignInput {
 }
 
 export interface HandoverOptions {
+  /** continue after an interruption: same account if usable, no handover-count limit */
+  resume?: boolean;
   provider?: CliProvider;
   model?: string;
   effort?: string;
@@ -174,8 +177,11 @@ export class Council extends EventEmitter {
     let changed = false;
     for (const m of members) {
       if (m.status === "running" || m.status === "starting") {
+        // the CLI may still be running on its own (Windows keeps children alive); stop it first
+        if (await stopLeftover(m.pid, m.startedAt)) this.log(`member ${m.id}: stopped a leftover process (pid ${m.pid})`);
         m.status = "stopped";
-        m.error = "council process exited while member was running";
+        m.interrupted = true;
+        m.error = "앱이 꺼지면서 중단됨";
         m.endedAt = new Date().toISOString();
         changed = true;
       }
@@ -183,11 +189,25 @@ export class Council extends EventEmitter {
     if (changed) this.saveMembers(members);
   }
 
+  /** stop every running member; they are marked interrupted so the work can be resumed later */
   stopAll(): void {
+    const members = this.members();
     for (const [id, proc] of this.running) {
       this.log(`stopping ${id}`);
+      const m = members.find((x) => x.id === id);
+      if (m) {
+        m.status = "stopped";
+        m.interrupted = true;
+        m.error = "안건을 닫으면서 중단됨";
+      }
       proc.stop();
     }
+    if (this.running.size) this.saveMembers(members);
+  }
+
+  /** members cut off by a shutdown/close that nobody has continued yet */
+  interruptedMembers(): MemberRecord[] {
+    return this.members().filter((m) => m.interrupted && m.status === "stopped" && !m.handoverTo);
   }
 
   // ---------- state ----------
@@ -195,6 +215,10 @@ export class Council extends EventEmitter {
   members(): MemberRecord[] {
     if (!this.membersCache) this.membersCache = this.store.members();
     return this.membersCache;
+  }
+
+  persistMembers(): void {
+    this.saveMembers(this.members());
   }
 
   private saveMembers(list: MemberRecord[]): void {
@@ -629,12 +653,24 @@ export class Council extends EventEmitter {
     if (this.running.has(memberId)) throw new Error(`member ${memberId} is still running; stop it first`);
     if (prev.provider === "relay" && !opts.provider) throw new Error("relay member: specify provider claude|gemini|gpt to hand over to a CLI member");
     if (prev.handoverTo) throw new Error(`member ${memberId} was already handed over to ${prev.handoverTo}`);
+    // check before changing any record, so a failed handover leaves nothing half-done
+    if (!fs.existsSync(path.join(prev.worktree, ".council"))) throw new Error(`member ${memberId}: 작업 폴더가 없습니다 (${prev.worktree})`);
     const max = this.project.members.maxHandovers ?? 2;
-    if (this.handoverCount(prev) >= max) throw new Error(`task ${prev.taskId} already handed over ${max} times`);
+    if (!opts.resume && this.handoverCount(prev) >= max) throw new Error(`task ${prev.taskId} already handed over ${max} times`);
 
     const wantProvider = (opts.provider ?? (prev.provider === "relay" ? this.project.members.defaultProvider : prev.provider)) as CliProvider;
-    const exclude = prev.account && !opts.account ? [prev.account] : [];
-    const pick = this.chooseAccount(wantProvider, opts.account, exclude);
+    let pick: ReturnType<Council["chooseAccount"]>;
+    if (opts.resume) {
+      // same login as before when it is still usable, otherwise any usable one
+      try {
+        pick = this.chooseAccount(wantProvider, opts.account ?? prev.account, []);
+      } catch {
+        pick = this.chooseAccount(wantProvider, undefined, []);
+      }
+    } else {
+      const exclude = prev.account && !opts.account ? [prev.account] : [];
+      pick = this.chooseAccount(wantProvider, opts.account, exclude);
+    }
     const provider = pick.provider;
     const limits = this.limits();
     this.checkSlot(provider);
@@ -667,6 +703,7 @@ export class Council extends EventEmitter {
     };
     const members = this.members();
     prev.handoverTo = id;
+    prev.interrupted = false;
     if (prev.status !== "failed") prev.status = "handed_over";
     members.push(next);
     this.saveMembers(members);

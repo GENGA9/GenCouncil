@@ -312,6 +312,21 @@ export function App() {
             notify((e as Error).message);
           }
         }}
+        onResume={async () => {
+          if (!selected) return;
+          try {
+            const r = await api.resume(selected);
+            notify(`이어서 시작: 위원 ${r.resumed.length}명${r.failed.length ? `, 실패 ${r.failed.length}명 (${r.failed.map((f) => f.error).join("; ").slice(0, 120)})` : ""}`);
+            void refreshState(selected);
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+        onDismissResume={async () => {
+          if (!selected) return;
+          await api.dismissResume(selected).catch((e) => notify((e as Error).message));
+          void refreshState(selected);
+        }}
         onFinish={async () => {
           if (!selected || !confirm("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?")) return;
           const retro = confirm("종료 전에 의장이 회고(교훈·성향을 공유 기억에 기록, 제안 승인)를 먼저 할까요?\n확인 = 회고 후 종료 / 취소 = 바로 종료");

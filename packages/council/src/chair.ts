@@ -3,7 +3,7 @@ import path from "node:path";
 import { serverEntry } from "@gencouncil/mcp/install";
 import type { Account } from "./accounts.js";
 import type { Council } from "./council.js";
-import { parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent } from "./drivers.js";
+import { parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
 import { advisorFor } from "./model.js";
 import { chairSystemPrompt } from "./prompts.js";
 import { classifyFailure } from "./quota.js";
@@ -31,6 +31,7 @@ const MAX_ACCOUNT_SWITCHES = 3;
 export class Chair {
   private readonly mcpFile: string;
   private busy = false;
+  private current?: RunningProc;
 
   constructor(
     readonly council: Council,
@@ -62,6 +63,16 @@ export class Chair {
 
   isBusy(): boolean {
     return this.busy;
+  }
+
+  /** stop the running turn (agenda close / app shutdown) */
+  stop(): void {
+    this.current?.stop();
+  }
+
+  /** file that exists while a chair turn runs; left behind when the app dies mid-turn */
+  runningFile(): string {
+    return path.join(this.council.store.chairDir(), "running.json");
   }
 
   setOverrides(o: { model?: string; effort?: string }): void {
@@ -226,6 +237,11 @@ export class Chair {
     let costUsd: number | undefined;
     let stderr = "";
     const texts: string[] = [];
+    try {
+      fs.writeFileSync(this.runningFile(), JSON.stringify({ pid: child.pid, startedAt: new Date().toISOString(), message: message.slice(0, 2000) }), "utf8");
+    } catch {
+      /* best effort */
+    }
     const proc = wireProcess(child, { cwd: store.integrationWorktree(), prompt: message, autonomy: "edits" }, (stream, line) => {
       log.write(`[${stream}] ${line}\n`);
       if (stream === "stderr") {
@@ -244,7 +260,10 @@ export class Chair {
         if (ev.kind !== "result" && ev.kind !== "other") onEvent(ev);
       }
     });
+    this.current = proc;
     return proc.done.then(async (exit) => {
+      this.current = undefined;
+      fs.rmSync(this.runningFile(), { force: true });
       await new Promise<void>((r) => log.end(`=== exit code=${exit.code} signal=${exit.signal}\n`, () => r()));
       const resumeFailed = Boolean(resume) && (/no conversation found/i.test(stderr) || /no conversation found/i.test(finalText));
       if (exit.code !== 0 && !finalText) {

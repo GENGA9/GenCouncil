@@ -165,6 +165,11 @@ export interface RuntimeState {
   active: Record<string, number>;
   mode: "git" | "folder";
   source?: string;
+  /** work cut off by an app shutdown or agenda close */
+  resume?: {
+    members: Array<{ id: string; provider: string; model?: string; taskId: string; taskTitle: string }>;
+    chair?: { at: string; message: string };
+  };
 }
 
 export interface TranscriptEntry {

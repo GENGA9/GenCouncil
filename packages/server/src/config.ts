@@ -29,7 +29,8 @@ export function loadServerConfig(overrides: ServerConfigPatch = {}): ServerConfi
   const merged: ServerConfig = {
     token: overrides.token ?? cfg.token ?? crypto.randomBytes(18).toString("base64url"),
     port: overrides.port ?? cfg.port ?? 7700,
-    host: overrides.host ?? cfg.host ?? "0.0.0.0",
+    // loopback by default: phones and other PCs come in through "tailscale serve", never straight from the network
+    host: overrides.host ?? cfg.host ?? "127.0.0.1",
     telegram: overrides.telegram === null ? undefined : (overrides.telegram ?? cfg.telegram),
   };
   if (!fs.existsSync(f) || JSON.stringify(cfg) !== JSON.stringify(merged)) {

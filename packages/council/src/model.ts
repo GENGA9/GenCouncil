@@ -77,6 +77,8 @@ export interface AgendaConfig {
   baseBranch: string;
   created: string;
   closed?: string;
+  /** the chair was in the middle of a turn when the app stopped */
+  chairInterrupted?: { at: string; message: string };
 }
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "blocked";
@@ -157,6 +159,8 @@ export interface MemberRecord {
   diffstat?: string;
   merged?: boolean;
   error?: string;
+  /** cut off by an app shutdown / agenda close; can be resumed */
+  interrupted?: boolean;
 }
 
 // ---------- model names ----------

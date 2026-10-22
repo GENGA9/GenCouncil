@@ -504,6 +504,17 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     rt.resetChair();
     return { ok: true };
   });
+  on("POST", "/api/a/:id/:slug/resume", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    const res = await rt.resume();
+    broadcast({ type: "overview" });
+    return res;
+  });
+  on("POST", "/api/a/:id/:slug/resume/dismiss", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    rt.dismissResume();
+    return { ok: true };
+  });
   on("POST", "/api/a/:id/:slug/retrospect", async ({ params }) => {
     const rt = await getRuntime(params.id, params.slug);
     if (rt.chair.isBusy()) throw new HttpError(409, "chair is busy");

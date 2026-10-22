@@ -92,6 +92,8 @@ export const api = {
   stop: (key: string, id: string) => call("POST", `${a(key)}/members/${encodeURIComponent(id)}/stop`),
   reset: (key: string) => call("POST", `${a(key)}/reset`),
   finish: (key: string, retro: boolean) => call<{ ok: boolean; output: string; retro?: string }>("POST", `${a(key)}/finish`, { retro }),
+  resume: (key: string) => call<{ resumed: Array<{ from: string; to: string }>; failed: Array<{ id: string; error: string }> }>("POST", `${a(key)}/resume`),
+  dismissResume: (key: string) => call<{ ok: boolean }>("POST", `${a(key)}/resume/dismiss`),
   retrospect: (key: string) => call<{ ran: boolean; isError: boolean; text: string }>("POST", `${a(key)}/retrospect`),
   memorySearch: (q: string, all: boolean) => call<MemoryHit[]>("GET", `/api/memory/search?q=${encodeURIComponent(q)}&all=${all ? 1 : 0}`),
   memoryProposals: () => call<MemoryHit[]>("GET", "/api/memory/proposals"),

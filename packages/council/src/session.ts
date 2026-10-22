@@ -12,6 +12,23 @@ import { Council, type CouncilState } from "./council.js";
 import type { ClaudeEvent } from "./drivers.js";
 import { memberDisplayName, type AgendaStore, type MemberRecord } from "./model.js";
 import { firstTurnPreamble, retrospectivePrompt } from "./prompts.js";
+import { stopLeftover } from "./interrupt.js";
+
+/** last thing the user (not a council event) said to the chair */
+function lastUserText(store: AgendaStore): string | undefined {
+  const f = path.join(store.dir, "transcript.jsonl");
+  if (!fs.existsSync(f)) return undefined;
+  const lines = fs.readFileSync(f, "utf8").split("\n").filter(Boolean).reverse();
+  for (const l of lines) {
+    try {
+      const e = JSON.parse(l) as { role?: string; text?: string };
+      if (e.role === "user" && e.text && !e.text.startsWith("[council event]")) return e.text;
+    } catch {
+      /* skip */
+    }
+  }
+  return undefined;
+}
 
 export interface Attachment {
   /** stored file name inside the agenda's attachments folder */
@@ -30,8 +47,15 @@ export interface TranscriptEntry {
   costUsd?: number;
 }
 
+/** what was cut off by a shutdown/close and can be continued */
+export interface ResumeInfo {
+  members: Array<{ id: string; provider: string; model?: string; taskId: string; taskTitle: string }>;
+  chair?: { at: string; message: string };
+}
+
 export interface RuntimeState extends CouncilState {
   key: string;
+  resume?: ResumeInfo;
   chair: { model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean };
   /** tool/text events per minute for the last ACTIVITY_MINUTES minutes, per member */
   activity: Record<string, number[]>;
@@ -109,7 +133,74 @@ export class AgendaRuntime extends EventEmitter {
     const council = new Council(store, memory);
     await council.open();
     const chair = new Chair(council, chairOpts);
+    // a chair turn that was cut off by an app shutdown leaves its marker file behind
+    const marker = chair.runningFile();
+    if (fs.existsSync(marker)) {
+      try {
+        const m = JSON.parse(fs.readFileSync(marker, "utf8")) as { pid?: number; startedAt?: string; message?: string };
+        await stopLeftover(m.pid, m.startedAt);
+        const agenda = store.agenda();
+        agenda.chairInterrupted = { at: m.startedAt ?? new Date().toISOString(), message: lastUserText(store) ?? m.message ?? "" };
+        store.saveAgenda(agenda);
+      } catch {
+        /* unreadable marker: ignore */
+      }
+      fs.rmSync(marker, { force: true });
+    }
     return new AgendaRuntime(council, chair);
+  }
+
+  /** members and chair turn that were cut off and not continued yet */
+  resumeInfo(): ResumeInfo | undefined {
+    const tasks = this.council.store.tasks();
+    const members = this.council.interruptedMembers().map((m) => ({
+      id: m.id,
+      provider: m.provider,
+      model: m.model,
+      taskId: m.taskId,
+      taskTitle: tasks.find((t) => t.id === m.taskId)?.title ?? m.taskId,
+    }));
+    const chair = this.council.store.agenda().chairInterrupted;
+    if (!members.length && !chair) return undefined;
+    return { members, chair };
+  }
+
+  /** Continue what was cut off: restart interrupted members from their notes and tell the chair. */
+  async resume(): Promise<{ resumed: Array<{ from: string; to: string }>; failed: Array<{ id: string; error: string }> }> {
+    const info = this.resumeInfo();
+    const resumed: Array<{ from: string; to: string }> = [];
+    const failed: Array<{ id: string; error: string }> = [];
+    if (!info) return { resumed, failed };
+    for (const m of info.members) {
+      try {
+        const next = await this.council.handover(m.id, { resume: true, reason: "중단된 작업 이어서 하기" });
+        resumed.push({ from: m.id, to: next.id });
+      } catch (e) {
+        failed.push({ id: m.id, error: (e as Error).message });
+      }
+    }
+    const agenda = this.council.store.agenda();
+    delete agenda.chairInterrupted;
+    this.council.store.saveAgenda(agenda);
+    const lines = [
+      "[council event] 앱이나 안건이 중간에 꺼졌다가 다시 열렸고, 사용자가 이어서 하기를 눌렀다.",
+      resumed.length ? `이어서 시작한 위원: ${resumed.map((r) => `${r.from} → ${r.to}`).join(", ")} (같은 worktree·브랜치, STATE.md와 HANDOVER.md로 이어감). 완료 이벤트를 기다려라.` : "",
+      failed.length ? `이어가지 못한 위원: ${failed.map((f) => `${f.id} (${f.error})`).join(", ")}. council_state로 확인하고 다시 배정하거나 사용자에게 알려라.` : "",
+      info.chair ? `네 응답도 중간에 끊겼다. 끊기기 전 요청: "${info.chair.message.slice(0, 1500)}". council_state로 상태를 확인하고 그 일을 이어서 해라.` : "council_state로 상태를 확인하고 하던 일을 이어서 해라.",
+    ].filter(Boolean);
+    this.enqueue(lines.join("\n"));
+    this.emitEvent({ type: "state" });
+    return { resumed, failed };
+  }
+
+  /** forget the interruption without continuing */
+  dismissResume(): void {
+    for (const m of this.council.interruptedMembers()) m.interrupted = false;
+    this.council.persistMembers();
+    const agenda = this.council.store.agenda();
+    delete agenda.chairInterrupted;
+    this.council.store.saveAgenda(agenda);
+    this.emitEvent({ type: "state" });
   }
 
   private emitEvent(e: RuntimeEvent): void {
@@ -153,6 +244,7 @@ export class AgendaRuntime extends EventEmitter {
         busy: this.chair.isBusy(),
       },
       activity: this.activity(),
+      resume: this.resumeInfo(),
     };
   }
 
@@ -266,6 +358,13 @@ export class AgendaRuntime extends EventEmitter {
 
   close(opts: { closeMemory?: boolean } = {}): void {
     this.closed = true;
+    if (this.chair.isBusy()) {
+      // remember the cut-off turn so the user can continue it next time
+      const agenda = this.council.store.agenda();
+      agenda.chairInterrupted = { at: new Date().toISOString(), message: lastUserText(this.council.store) ?? "" };
+      this.council.store.saveAgenda(agenda);
+      this.chair.stop();
+    }
     this.council.stopAll();
     if (opts.closeMemory ?? true) this.council.memory.close();
   }

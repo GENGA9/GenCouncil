@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 import { loadServerConfig, resetToken, saveServerConfig, serverConfigFile, startServer, TelegramBridge } from "@gencouncil/server";
 
 export const WEB_HELP = `web
-  web [--port 7700] [--host 0.0.0.0]     start the web UI + API server (foreground)
+  web [--port 7700] [--host 127.0.0.1]   start the web UI + API server (foreground)
   web token [--reset]                     print (or regenerate) the access token
   web telegram --token <bot token> --chat <chat id> [--agenda project/slug]   enable the Telegram bot
   web telegram --off                      disable it
@@ -59,10 +59,12 @@ export async function webMain(rest: string[]): Promise<number> {
   console.log(`GenCouncil web : ${srv.url}`);
   console.log(`token          : ${srv.config.token}   (gencouncil web token)`);
   if (srv.telegram) console.log(`Telegram       : @${srv.telegram} (chat ${srv.config.telegram?.chatId})`);
+  const loopback = ["127.0.0.1", "localhost", "::1"].includes(srv.config.host);
+  if (loopback) console.log("접속 범위      : 이 PC만 (다른 기기는 tailscale serve 주소로)");
   if (ts.dnsName) {
-    console.log(`Tailscale      : http://${ts.dnsName}:${srv.config.port}  (same network as your phone)`);
-    console.log(`PWA 설치용 HTTPS : tailscale serve --bg ${srv.config.port}   ->  https://${ts.dnsName}`);
-  } else if (ts.ip) {
+    if (!loopback) console.log(`Tailscale      : http://${ts.dnsName}:${srv.config.port}  (same network as your phone)`);
+    console.log(`Tailscale HTTPS: https://${ts.dnsName}   (처음 한 번: tailscale serve --bg http://127.0.0.1:${srv.config.port})`);
+  } else if (ts.ip && !loopback) {
     console.log(`Tailscale IP   : http://${ts.ip}:${srv.config.port}`);
   } else {
     console.log(`Tailscale      : 감지되지 않음. 설치 후 'tailscale serve --bg ${srv.config.port}' 로 https 주소를 만들면 폰에서 PWA로 설치할 수 있다.`);
