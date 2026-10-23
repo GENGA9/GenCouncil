@@ -247,6 +247,23 @@ export function createCouncilMcp(council: Council): McpServer {
   );
 
   server.registerTool(
+    "council_ask_user",
+    {
+      title: "Ask the user for a decision",
+      description:
+        "Mark this agenda as waiting for the user's decision. The UI shows a badge on the agenda and the question with answer buttons, " +
+        "and Telegram notifies the user. Use it whenever you stop because only the user can decide (a choice between options, an approval, " +
+        "information you cannot find). Ask one question, give 2-4 short options when they exist, then end your turn. " +
+        "Work that needs no decision continues meanwhile.",
+      inputSchema: {
+        question: z.string().min(5).describe("one short question, in the user's language"),
+        options: z.array(z.string()).max(6).optional().describe("short answers the user can tap, e.g. [\"A안으로 진행\", \"B안으로 진행\"]"),
+      },
+    },
+    async ({ question, options }) => guard(() => council.askUser(question, options)),
+  );
+
+  server.registerTool(
     "council_finish",
     {
       title: "Finish the agenda",

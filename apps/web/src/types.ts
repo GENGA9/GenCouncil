@@ -54,10 +54,17 @@ export interface Account {
   note?: string;
 }
 
+export interface WaitingForUser {
+  question: string;
+  options?: string[];
+  at: string;
+}
+
 export interface AgendaOv {
   slug: string;
   title: string;
   goals: string[];
+  waitingForUser?: WaitingForUser;
   status: "open" | "closed";
   branch: string;
   key: string;
@@ -154,7 +161,7 @@ export interface Member {
 export interface RuntimeState {
   key: string;
   project: { id: string; name: string; repo: string; baseBranch: string };
-  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string };
+  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: WaitingForUser };
   tasks: Task[];
   members: Member[];
   integrationWorktree: string;

@@ -125,6 +125,36 @@ rt2.close({ closeMemory: false });
   r3.close({ closeMemory: false });
 }
 
+// ---- 4c. the chair waiting for the user's decision ----
+{
+  const { trailingQuestion } = await import("@gencouncil/council");
+  const s4 = AgendaStore.create(project, "결정 대기", ["x"]);
+  const r4 = await AgendaRuntime.open(s4, memory, chairOpts);
+  const evs = [];
+  r4.on("event", (e) => evs.push(e));
+  let reply = "";
+  r4.chair.turn = async (msg) => {
+    if (msg === "A냐 B냐") r4.council.askUser("세트 효과를 A안으로 할까요, B안으로 할까요?", ["A안", "B안"]);
+    return { text: reply, isError: false };
+  };
+  reply = "두 안을 정리했습니다.";
+  await r4.send("A냐 B냐");
+  const w = s4.agenda().waitingForUser;
+  check("ask marks the agenda as waiting with options", w?.question.includes("A안으로") && w.options?.join() === "A안,B안");
+  check("ask event goes out (UI + Telegram)", evs.some((e) => e.type === "chair:ask" && e.options?.length === 2));
+  check("runtime state carries the question", r4.state().agenda.waitingForUser?.options?.length === 2);
+  await r4.send("[council event] 위원 끝남", "event");
+  check("a council event does not clear it", Boolean(s4.agenda().waitingForUser));
+  reply = "A안으로 진행합니다.";
+  await r4.send("A안");
+  check("the user's answer clears it", !s4.agenda().waitingForUser);
+  reply = "작업을 나눴습니다.\n\n**로그인 화면도 같이 바꿀까요?**";
+  await r4.send("진행해");
+  check("a reply ending in a question still shows waiting", s4.agenda().waitingForUser?.question === "로그인 화면도 같이 바꿀까요?", JSON.stringify(s4.agenda().waitingForUser));
+  check("plain statements are not questions", trailingQuestion("배정했습니다.\n위원 3명이 작업 중입니다.") === undefined && trailingQuestion("") === undefined);
+  r4.close({ closeMemory: false });
+}
+
 // ---- 5. deleting agendas ----
 const { deleteAgenda } = await import("@gencouncil/council");
 // a mistaken blank agenda: nothing to lose

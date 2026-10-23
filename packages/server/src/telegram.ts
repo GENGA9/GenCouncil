@@ -93,6 +93,8 @@ export class TelegramBridge {
       }
       case "member:start":
         return e.member.status === "waiting" ? `${tag} 릴레이 위원 ${memberDisplayName(e.member)} 패킷 대기 중 (웹 UI에서 복사)` : undefined;
+      case "chair:ask":
+        return `${tag} 의장이 결정을 기다립니다: ${e.question}${e.options?.length ? "\n선택지: " + e.options.join(" / ") : ""}`;
       case "chair:handover":
         return `${tag} 의장 계정 전환 ${e.from} → ${e.to} (${e.reason})`;
       default:

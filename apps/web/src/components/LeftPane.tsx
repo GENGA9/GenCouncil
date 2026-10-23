@@ -37,6 +37,9 @@ function AgendaRow({ a, on, onSelect }: { a: AgendaOv; on: boolean; onSelect: (k
         {a.title}
       </span>
       <span className="agenda-meta">
+        {a.waitingForUser && !a.chairBusy && a.status !== "closed" && (
+          <span className="badge waiting" title={`의장 질문: ${a.waitingForUser.question}`}>결정 대기</span>
+        )}
         {a.running > 0 && <span className="badge" style={{ color: familyColorByName(a.runningFamilies[0] ?? "relay") }}>{a.running} 실행</span>}
         {a.status === "closed" ? <span className="badge">종료</span> : <span className="badge">{a.taskCounts.done}/{a.taskCounts.total}</span>}
       </span>

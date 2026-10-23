@@ -192,6 +192,10 @@ export function App() {
           setChat((c) => [...c, item("event", `의장 계정 전환: ${String(msg.from)} → ${String(msg.to)} (${String(msg.reason)})`)]);
           void refreshOverview();
           break;
+        case "chair:ask":
+          void refreshOverview();
+          void refreshState(key);
+          break;
         case "agenda:finished":
           setChat((c) => [...c, item("event", `의장이 안건을 종료했습니다: ${String(msg.reason)} (베이스 브랜치에 머지함)`)]);
           void refreshOverview();
@@ -401,7 +405,9 @@ export function App() {
         <>
           <div className="tabs">
             <button className={tab === "left" ? "on" : ""} onClick={() => setTab("left")}>안건</button>
-            <button className={tab === "center" ? "on" : ""} onClick={() => setTab("center")}>의장</button>
+            <button className={tab === "center" ? "on" : ""} onClick={() => setTab("center")}>
+              의장{state?.agenda.waitingForUser && !state.chair.busy ? <span className="tab-ask" title="의장이 결정을 기다립니다">?</span> : null}
+            </button>
             <button className={tab === "right" ? "on" : ""} onClick={() => setTab("right")}>
               위원{state?.members.some((m) => m.status === "running") ? " ●" : ""}
             </button>

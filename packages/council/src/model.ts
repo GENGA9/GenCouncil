@@ -85,6 +85,8 @@ export interface AgendaConfig {
   chairInterrupted?: { at: string; message: string };
   /** worktree folders a finish could not delete yet (locked); retried when the agenda is opened */
   cleanupPending?: string[];
+  /** the chair asked the user something and is waiting (council_ask_user); cleared by the user's next message */
+  waitingForUser?: { question: string; options?: string[]; at: string };
 }
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "blocked";

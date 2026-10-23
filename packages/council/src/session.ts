@@ -12,7 +12,18 @@ import { Council, type CouncilState } from "./council.js";
 import type { ClaudeEvent } from "./drivers.js";
 import { memberDisplayName, type AgendaStore, type MemberRecord } from "./model.js";
 import { firstTurnPreamble, retrospectivePrompt } from "./prompts.js";
-import { stopLeftover } from "./interrupt.js";
+import { stopLeftover, stopProcessesUnder } from "./interrupt.js";
+
+/** the last line of a reply when it is a question to the user ("…할까요?"), else undefined */
+export function trailingQuestion(text: string): string | undefined {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[\s>*_#-]+|[\s*_]+$/g, "").trim())
+    .filter(Boolean);
+  const last = lines[lines.length - 1];
+  if (!last || last.length > 300) return undefined;
+  return /[?？]$/.test(last) ? last : undefined;
+}
 
 /** last thing the user (not a council event) said to the chair */
 function lastUserText(store: AgendaStore): string | undefined {
@@ -72,6 +83,7 @@ export type RuntimeEvent =
   | { type: "member:done"; member: MemberRecord }
   | { type: "log"; line: string }
   | { type: "agenda:finished"; reason: string; output: string }
+  | { type: "chair:ask"; question: string; options?: string[] }
   | { type: "state" };
 
 const ACTIVITY_MINUTES = 20;
@@ -123,6 +135,7 @@ export class AgendaRuntime extends EventEmitter {
     this.key = `${council.project.id}/${council.store.slug}`;
     council.on("log", (line: string) => this.emitEvent({ type: "log", line }));
     council.on("agenda", () => this.emitEvent({ type: "state" }));
+    council.on("ask", (w: { question: string; options?: string[] }) => this.emitEvent({ type: "chair:ask", question: w.question, options: w.options }));
     council.on("member:start", (m: MemberRecord) => {
       this.emitEvent({ type: "member:start", member: m });
       this.emitEvent({ type: "state" });
@@ -183,6 +196,9 @@ export class AgendaRuntime extends EventEmitter {
     if (!info) return { resumed, failed };
     for (const m of info.members) {
       try {
+        // never start the continuation next to an orphan of the cut-off run
+        const rec = this.council.members().find((x) => x.id === m.id);
+        if (rec) await stopProcessesUnder(rec.worktree);
         const next = await this.council.handover(m.id, { resume: true, reason: "중단된 작업 이어서 하기" });
         resumed.push({ from: m.id, to: next.id });
       } catch (e) {
@@ -322,6 +338,8 @@ export class AgendaRuntime extends EventEmitter {
 
   async send(message: string, role: "user" | "event" = "user", attachments: Attachment[] = []): Promise<ChairTurnResult> {
     if (this.chair.isBusy()) throw new Error("chair is busy");
+    // the user answered: the agenda is no longer waiting on them
+    if (role === "user") this.council.clearWaiting();
     if (this.council.store.agenda().status === "closed") throw new Error("이 안건은 종료되었습니다. 새 안건을 열어 주세요.");
     let text = message || (attachments.length ? "첨부한 파일을 확인해 주세요." : this.isFirstTurn() ? firstTurnPreamble() : "");
     if (!text) throw new Error("empty message");
@@ -342,6 +360,11 @@ export class AgendaRuntime extends EventEmitter {
       res = await this.chair.turn(text, onEvent, attachments, message);
     } catch (e) {
       res = { text: (e as Error).message, isError: true };
+    }
+    // the chair ended on a question but forgot council_ask_user: still show that it waits for the user
+    if (!res.isError && !this.council.store.agenda().waitingForUser) {
+      const q = trailingQuestion(res.text);
+      if (q) this.council.askUser(q);
     }
     this.emitEvent({ type: "chair:done", text: res.text, isError: res.isError, costUsd: res.costUsd });
     this.emitEvent({ type: "state" });

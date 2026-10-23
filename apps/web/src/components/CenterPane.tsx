@@ -206,6 +206,20 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
         </div>
       )}
 
+      {state.agenda.waitingForUser && !busy && state.agenda.status !== "closed" && (
+        <div className="ask-card">
+          <div className="ask-head">의장이 결정을 기다립니다</div>
+          <div className="ask-question">{state.agenda.waitingForUser.question}</div>
+          {(state.agenda.waitingForUser.options?.length ?? 0) > 0 && (
+            <div className="ask-options">
+              {state.agenda.waitingForUser.options!.map((o) => (
+                <button key={o} className="ghost small" disabled={sending} onClick={() => void onSend(o)}>{o}</button>
+              ))}
+            </div>
+          )}
+          <div className="small muted">버튼을 누르거나 아래에 직접 답하세요.</div>
+        </div>
+      )}
       {files.length > 0 && (
         <div className="pending-files">
           {files.map((f, i) => (

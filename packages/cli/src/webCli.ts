@@ -49,6 +49,16 @@ export async function webMain(rest: string[]): Promise<number> {
     }
   }
   const { values } = parseArgs({ args: rest, options: { port: { type: "string" }, host: { type: "string" } } });
+  // the server is long-lived: a pipe to a child process that already exited must not take it down
+  const PIPE_ERRORS = new Set(["EPIPE", "ECONNRESET", "ERR_STREAM_DESTROYED", "ERR_STREAM_WRITE_AFTER_END"]);
+  process.on("uncaughtException", (e: NodeJS.ErrnoException) => {
+    if (e.code && PIPE_ERRORS.has(e.code)) {
+      console.error(`[web] ignored ${e.code}: ${e.message}`);
+      return;
+    }
+    console.error(e);
+    process.exit(1);
+  });
   const srv = await startServer({
     port: values.port ? Number(values.port) : undefined,
     host: values.host,

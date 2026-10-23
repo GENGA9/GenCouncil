@@ -108,6 +108,8 @@ export function wireProcess(child: ChildProcess, spec: SpawnSpec, onLine: LineHa
     child.on("close", (code, signal) => resolve({ code, signal }));
   });
   if (child.stdin) {
+    // a CLI that exits before reading its input makes the write fail (EPIPE); without a handler that kills the server
+    child.stdin.on("error", (e) => onLine("stderr", `stdin closed early: ${e.message}`));
     if (spec.stdinText) child.stdin.write(spec.stdinText);
     child.stdin.end();
   }

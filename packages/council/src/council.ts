@@ -58,7 +58,7 @@ import {
 } from "./model.js";
 import { buildHandoverPacket, buildPacket, buildVerifyPacket, MEMBER_PROMPT, parseResult } from "./packet.js";
 import { classifyFailure } from "./quota.js";
-import { stopLeftover } from "./interrupt.js";
+import { stopLeftover, stopProcessesUnder } from "./interrupt.js";
 import { applyRelayFiles, bundleFiles, parseRelayResponse, RELAY_FORMAT } from "./relay.js";
 
 export { accountsFile, loadAccounts, type Account } from "./accounts.js";
@@ -101,7 +101,7 @@ export interface HandoverOptions {
 
 export interface CouncilState {
   project: { id: string; name: string; repo: string; baseBranch: string };
-  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string };
+  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: { question: string; options?: string[]; at: string } };
   tasks: Task[];
   members: Array<Omit<MemberRecord, "result"> & { result?: { summary: string; unfinished: string } }>;
   integrationWorktree: string;
@@ -200,6 +200,9 @@ export class Council extends EventEmitter {
       if (m.status === "running" || m.status === "starting") {
         // the CLI may still be running on its own (Windows keeps children alive); stop it first
         if (await stopLeftover(m.pid, m.startedAt)) this.log(`member ${m.id}: stopped a leftover process (pid ${m.pid})`);
+        // the recorded root may be gone while its children still run (e.g. cmd.exe -> codex); find them by worktree path
+        const orphans = await stopProcessesUnder(m.worktree);
+        if (orphans.length) this.log(`member ${m.id}: stopped ${orphans.length} orphaned process(es) in its worktree`);
         m.status = "stopped";
         m.interrupted = true;
         m.error = "앱이 꺼지면서 중단됨";
@@ -263,7 +266,7 @@ export class Council extends EventEmitter {
     const a = this.store.agenda();
     return {
       project: { id: this.project.id, name: this.project.name, repo: this.project.repo, baseBranch: this.project.baseBranch },
-      agenda: { slug: a.slug, title: a.title, goals: a.goals, branch: a.branch, status: a.status },
+      agenda: { slug: a.slug, title: a.title, goals: a.goals, branch: a.branch, status: a.status, waitingForUser: a.waitingForUser },
       tasks: this.store.tasks(),
       members: this.members().map((m) => ({
         ...m,
@@ -976,6 +979,26 @@ export class Council extends EventEmitter {
   }
 
   // ---------- agenda end ----------
+
+  /** The chair needs a decision from the user: mark the agenda as waiting until the user answers. */
+  askUser(question: string, options?: string[]): { waiting: true } {
+    const a = this.store.agenda();
+    a.waitingForUser = { question: question.trim(), options: options?.map((o) => o.trim()).filter(Boolean).slice(0, 6), at: new Date().toISOString() };
+    this.store.saveAgenda(a);
+    this.log(`chair is waiting for the user: ${a.waitingForUser.question.slice(0, 120)}`);
+    this.emit("ask", a.waitingForUser);
+    this.emit("agenda");
+    return { waiting: true };
+  }
+
+  /** the user answered (any message): no longer waiting */
+  clearWaiting(): void {
+    const a = this.store.agenda();
+    if (!a.waitingForUser) return;
+    delete a.waitingForUser;
+    this.store.saveAgenda(a);
+    this.emit("agenda");
+  }
 
   /** set by the chair's council_finish; the runtime finishes the agenda once the chair's turn is over */
   finishRequest?: { reason: string; at: string };

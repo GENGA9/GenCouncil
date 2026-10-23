@@ -99,6 +99,11 @@ export async function gptUsage(codexHome?: string): Promise<UsageData> {
         clearTimeout(timer);
         reject(e);
       });
+      // codex app-server may exit before we finish writing (update, login problem): never let that crash the host
+      child.stdin.on("error", (e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (d: string) => {
         buf += d;
