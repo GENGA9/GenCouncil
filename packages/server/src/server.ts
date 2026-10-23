@@ -620,7 +620,20 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const projects = registry.list().map((p) => ({ key: projectMemoryKey(p), name: p.name }));
     curate = { kind: "reorganize", running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
     broadcast({ type: "curate", running: true });
-    void runReorganize(projects, { onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
+    const verifiedList = memory.list({ status: "verified" });
+    const lens = verifiedList.map((m) => ({ title: m.title.length, body: memory.get(m.id)?.body.length ?? 0 }));
+    const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
+    const stats = {
+      entries: verifiedList.length,
+      common: verifiedList.filter((m) => entryScope(m) === "common").length,
+      project: verifiedList.filter((m) => entryScope(m) === "project").length,
+      avgTitle: avg(lens.map((l) => l.title)),
+      longTitles: lens.filter((l) => l.title > 60).length,
+      avgBody: avg(lens.map((l) => l.body)),
+      longBodies: lens.filter((l) => l.body > 1500).length,
+      totalChars: lens.reduce((a, l) => a + l.title + l.body, 0),
+    };
+    void runReorganize(projects, { stats, onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
       memory.load();
       memory.writeIndex();
       curate = { kind: "reorganize", running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };

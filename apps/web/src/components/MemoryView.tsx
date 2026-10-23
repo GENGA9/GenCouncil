@@ -18,7 +18,7 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
         const s = await api.curateStatus();
         setCurate((prev) => {
           if (prev?.running && !s.running) {
-            notify(s.isError ? `기억 정리 실패: ${(s.text ?? "").slice(0, 100)}` : s.kind === "reorganize" ? "Fable이 공용/프로젝트 재분류와 정리를 마쳤습니다." : "Fable이 제안 처리를 마쳤습니다.");
+            notify(s.isError ? `기억 정리 실패: ${(s.text ?? "").slice(0, 100)}` : s.kind === "reorganize" ? "Fable이 기억 압축 정리를 마쳤습니다." : "Fable이 제안 처리를 마쳤습니다.");
             void reload();
           }
           return s;
@@ -40,7 +40,7 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
   };
   const [stats, setStats] = useState<{ verified: number; common: number; byProject: Record<string, number> } | null>(null);
   const startReorganize = async () => {
-    if (!confirm("Fable(추론 높음)이 승인된 기억 전체를 공용 지식과 프로젝트 전용 지식으로 다시 나누고, 겹치는 항목을 합칩니다. 몇 분 걸리고 Fable 사용량이 듭니다. 진행할까요?")) return;
+    if (!confirm("Fable(추론 높음)이 승인된 기억 전체를 압축 정리합니다: 같은 주제는 하나로 합치고, 제목은 짧은 검색어로, 본문은 핵심 명령·경로·값만 남기고, 공용/프로젝트로 다시 나눕니다. 합쳐진 항목은 기록으로 보존됩니다. 몇 분 걸리고 Fable 사용량이 듭니다. 진행할까요?")) return;
     try {
       setCurate(await api.reorganize());
     } catch (e) {
@@ -117,8 +117,8 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
             <button className="primary small" disabled={curate?.running || proposals.length === 0} onClick={startCurate} title="Fable(추론 높음)이 제안을 다듬고, 중복은 병합하고, 승인 또는 거절합니다">
               {curate?.running && curate.kind !== "reorganize" ? "Fable 처리 중…" : "Fable로 제안 처리"}
             </button>
-            <button className="ghost small" disabled={curate?.running} onClick={startReorganize} title="Fable(추론 높음)이 승인된 기억 전체를 공용 지식과 프로젝트 전용 지식으로 다시 나누고, 겹치는 항목을 합치고, 낡은 항목을 정리합니다">
-              {curate?.running && curate.kind === "reorganize" ? "재분류 중…" : "Fable로 공용·프로젝트 재분류"}
+            <button className="ghost small" disabled={curate?.running} onClick={startReorganize} title="Fable(추론 높음)이 승인된 기억 전체를 컨텍스트 압축하듯 정리합니다: 주제별로 합치고, 제목·본문을 짧게 줄이고, 공용/프로젝트로 나누고, 낡은 항목을 정리합니다">
+              {curate?.running && curate.kind === "reorganize" ? "압축 정리 중…" : "Fable로 압축 정리"}
             </button>
           </div>
           {stats && (
@@ -126,10 +126,10 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
               승인된 기억 {stats.verified}개 · 공용 {stats.common}개 · 프로젝트 전용 {Object.entries(stats.byProject).map(([k, n]) => `${k} ${n}`).join(", ") || "0"}
             </div>
           )}
-          {curate?.running && <div className="small muted">{curate.kind === "reorganize" ? "재분류" : "처리"} 중 · 도구 호출 {curate.steps ?? 0}회</div>}
+          {curate?.running && <div className="small muted">{curate.kind === "reorganize" ? "압축 정리" : "처리"} 중 · 도구 호출 {curate.steps ?? 0}회</div>}
           {!curate?.running && curate?.text && (
             <details className="curate-result">
-              <summary className="small muted">마지막 {curate.kind === "reorganize" ? "재분류" : "처리"} 결과 ({curate.finishedAt ? new Date(curate.finishedAt).toLocaleString() : ""}{curate.costUsd !== undefined ? ` · $${curate.costUsd.toFixed(2)}` : ""})</summary>
+              <summary className="small muted">마지막 {curate.kind === "reorganize" ? "압축 정리" : "처리"} 결과 ({curate.finishedAt ? new Date(curate.finishedAt).toLocaleString() : ""}{curate.costUsd !== undefined ? ` · $${curate.costUsd.toFixed(2)}` : ""})</summary>
               <pre className="mem-text">{curate.text}</pre>
             </details>
           )}

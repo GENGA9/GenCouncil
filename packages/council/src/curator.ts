@@ -19,7 +19,7 @@ export function curatorPrompt(): string {
 1. memory_list(status: proposed)로 제안을 모두 본다. 없으면 "처리할 제안 없음"이라고만 답하고 끝낸다.
 2. 제안마다 memory_read로 읽고, memory_search로 비슷한 기존 기억이 있는지 찾는다.
 3. 판단:
-   - 재사용 가치가 있고 정확하면: 필요하면 memory_update로 제목(나중에 검색할 문장), 본문("문제 / 해결 / 적용 방법" 구조, 명령·경로 그대로), tags(소문자 키워드)를 다듬은 뒤 memory_approve.
+   - 재사용 가치가 있고 정확하면: memory_update로 제목(45자 이내 검색어 문장), 본문("## 문제 / ## 해결 / ## 적용" 각 1~3줄 글머리표, 공용 600자·프로젝트 350자 이내, 명령·경로·값은 그대로, 경위·날짜별 기록은 뺀다), tags(소문자 키워드)를 압축해 다듬은 뒤 memory_approve.
    - 기존 기억과 겹치면: 새로 알게 된 부분만 기존 기억에 memory_update(append)로 보강하고, 제안은 memory_reject(reason: "중복: <기존 id>에 병합").
    - 일회성 사실, 틀리거나 검증 안 된 내용, 너무 모호한 것: memory_reject(reason에 이유).
    - persona(모델 성향) 제안은 같은 모델의 기존 persona가 있으면 append로 합친다.
@@ -35,24 +35,53 @@ export interface MemoryProjectInfo {
   name: string;
 }
 
-export function reorganizePrompt(projects: MemoryProjectInfo[]): string {
+/** size of the verified memory, shown to the reorganize run so it knows how hard to compress */
+export interface MemoryStats {
+  entries: number;
+  common: number;
+  project: number;
+  avgTitle: number;
+  longTitles: number;
+  avgBody: number;
+  longBodies: number;
+  totalChars: number;
+}
+
+/** compression targets for the reorganize run */
+export const COMPRESS_TARGETS = { title: 45, commonBody: 600, projectBody: 350, personaBody: 500 };
+
+export function reorganizePrompt(projects: MemoryProjectInfo[], stats?: MemoryStats): string {
   const list = projects.length ? projects.map((p) => `- ${p.key} (${p.name})`).join("\n") : "- (등록된 프로젝트 없음)";
-  return `너는 공유 기억(Space Memory)의 관리자다. 이번 일은 이미 승인된(verified) 기억 전체를 다시 분류하고 정리하는 것이다. 목표는 모든 프로젝트가 함께 쓸 공용 지식이 잘 보이고, 프로젝트 전용 팁은 그 프로젝트에만 붙게 하는 것이다.
+  const t = COMPRESS_TARGETS;
+  const now = stats
+    ? `지금 상태: 승인된 기억 ${stats.entries}개(공용 ${stats.common}, 프로젝트 ${stats.project}), 전체 ${stats.totalChars.toLocaleString()}자. 제목 평균 ${stats.avgTitle}자(60자 넘는 것 ${stats.longTitles}개), 본문 평균 ${stats.avgBody}자(1500자 넘는 것 ${stats.longBodies}개).`
+    : "";
+  return `너는 공유 기억(Space Memory)의 관리자다. 이번 일은 승인된(verified) 기억 전체를 "컨텍스트 압축"하듯 다시 분류하고, 합치고, 짧게 줄이는 것이다.
+이 기억은 모든 의장과 위원의 지시문에 색인으로 들어가고 매 작업마다 검색된다. 길고 중복된 기억은 토큰을 낭비하고 중요한 것을 가린다. 목표는 같은 지식을 훨씬 적은 글자로, 찾기 쉽게 남기는 것이다.
+${now}
+
+목표치
+- 항목 수: 지금의 절반 안팎. 같은 주제(같은 도구, 같은 절차, 같은 루틴·시스템, 같은 모델)는 한 항목으로 합친다.
+- 제목: ${t.title}자 이내. 나중에 검색할 핵심어 위주의 짧은 문장. 설명·근거·괄호 나열을 빼고 "무엇을 / 어떻게"만 남긴다.
+  예) "브라우저 MCP 도구 없이 Windows에서 실제 Chrome 창·마우스로 Gemini 이미지를 원본 그대로 일괄 다운로드하는 방법" → "Gemini 웹 이미지 원본 일괄 다운로드 (Chrome)"
+- 본문: 공용 ${t.commonBody}자, 프로젝트 ${t.projectBody}자, 모델 성향 ${t.personaBody}자 이내. "## 문제 / ## 해결 / ## 적용" 세 절을 각각 1~3줄 글머리표로 쓴다.
+  남길 것: 정확한 명령, 경로, 옵션, 주소·값, 오류 문구, 하지 말아야 할 것. 지울 것: 경위·발견 과정·날짜별 기록("## 추가 (날짜)" 누적분 포함), 같은 말 반복, 확인 과정 서술, 길게 붙인 로그.
 
 프로젝트 키(project 필드에 쓰는 값):
 ${list}
 
-1. memory_list(status: verified, limit: 200)로 전부 본다. 필요한 것은 memory_read로 본문을 읽는다.
-2. 항목마다 scope를 정해 memory_update로 기록한다.
-   - common(공용 지식): 다른 프로젝트에서도 그대로 쓸 수 있는 것. 예: 공통 도구 사용법(음원 생성 도구, 이미지 생성 절차), 크롬으로 웹 서비스(제미나이 웹 등)에서 결과물을 받는 절차, Windows·셸·git·Node·테스트 도구 문제 해결, NAS·계정·GenCouncil 사용법, AI 모델별 성향.
-   - project(프로젝트 전용): 한 프로젝트의 코드·데이터·도메인에만 맞는 사실. 예: ROM 주소와 루틴, 게임 규칙, 그 저장소의 파일 구조와 테스트 스크립트.
-   - 프로젝트가 붙어 있어도 내용이 일반적이면 common으로 바꾸고, 제목과 본문을 그 프로젝트를 몰라도 이해되게 일반화한다(프로젝트 예시는 "예: seisen에서는 …" 한 줄로 남긴다). project 필드는 출처로 그대로 둔다.
-   - project로 남는 항목은 project 값을 위 프로젝트 키 중 하나로 맞춘다(대소문자·별칭 통일).
-3. 겹치는 항목은 하나로 합친다. 가장 좋은 항목을 남겨 memory_update(body)로 두 내용을 모두 담은 본문을 쓰고, 나머지는 memory_retire(id, reason, merged_into: 남긴 id).
-4. 틀렸거나 이미 의미가 없어진 일회성 상태 기록은 memory_retire(reason에 이유).
-5. persona(모델 성향)는 모델별로 하나씩 남도록 합친다. 프로젝트 특화 관찰은 "예:"로 줄인다.
-6. 기억을 새로 지어내지 않는다. 있는 내용만 옮기고 다듬는다. 모르는 사실을 추가하지 않는다.
-7. 끝나면 한국어로 보고한다: 공용 n개, 프로젝트별 n개, 병합 n건, 정리(retire) n건, 그리고 common으로 바꾼 항목과 병합한 항목을 한 줄씩.`;
+순서
+1. memory_list(status: verified, limit: 200)로 전부 본다. 제목만으로 주제별 묶음을 먼저 만든다. 묶음마다 memory_read로 본문을 읽는다.
+2. 묶음마다 하나만 남긴다: 가장 좋은 항목에 memory_update로 짧은 제목·압축한 본문(body 전체 교체)·scope·tags를 쓰고, 나머지는 memory_retire(id, reason: "압축: <남긴 id>에 병합", merged_into: 남긴 id). 합칠 때 나머지 항목의 고유한 사실(명령·값·주의점)은 빠짐없이 옮긴다.
+3. 혼자 남는 항목도 제목과 본문을 목표치로 줄인다(memory_update).
+4. scope:
+   - common(공용 지식): 다른 프로젝트에서도 그대로 쓰는 것. 공통 도구 사용법(음원·이미지 생성), 크롬으로 웹 서비스에서 결과물 받는 절차, Windows·셸·git·Node·테스트 도구 문제 해결, NAS·계정·GenCouncil 사용법, AI 모델별 성향.
+   - project(프로젝트 전용): 한 프로젝트의 코드·데이터·도메인 사실(ROM 주소와 루틴, 게임 규칙, 저장소 구조, 테스트 스크립트). project 값은 위 키 중 하나로 맞춘다.
+   - 프로젝트가 붙었어도 내용이 일반적이면 common으로 바꾸고 일반화한다. 프로젝트 예시는 "예: seisen" 한 줄로만 남기고 project 필드는 출처로 둔다.
+5. 지운다(memory_retire): 이미 해결되어 다시 쓸 일 없는 일회성 상태, 코드에 이미 반영되어 저장소를 보면 아는 사실의 단순 기록, 틀린 내용, 다른 항목에 완전히 포함된 것.
+6. persona(모델 성향)는 모델별로 하나: "잘하는 일 / 실수하는 곳 / 지시 요령"만 짧게.
+7. 새 사실을 지어내지 않는다. 줄이면서 뜻을 바꾸지 않는다. 확실하지 않은 사실은 지우지 말고 짧게 남긴다. retire한 항목은 기록으로 보존되므로 과감하게 합쳐도 된다.
+8. 끝나면 한국어로 보고한다: 전과 후의 항목 수와 대략 글자 수, 공용/프로젝트별 개수, 병합 n건, 정리 n건, 그리고 크게 합친 주제를 한 줄씩.`;
 }
 
 export interface CuratorResult {
@@ -66,8 +95,11 @@ export function curatorLogFile(): string {
 }
 
 /** Fable relabels every verified entry as common/project knowledge and merges duplicates. */
-export function runReorganize(projects: MemoryProjectInfo[], opts: { account?: string; model?: string; effort?: string; onEvent?: (e: ClaudeEvent) => void } = {}): Promise<CuratorResult> {
-  return runCurator({ ...opts, prompt: reorganizePrompt(projects), label: "reorganize" });
+export function runReorganize(
+  projects: MemoryProjectInfo[],
+  opts: { account?: string; model?: string; effort?: string; stats?: MemoryStats; onEvent?: (e: ClaudeEvent) => void } = {},
+): Promise<CuratorResult> {
+  return runCurator({ ...opts, prompt: reorganizePrompt(projects, opts.stats), label: "reorganize" });
 }
 
 export function runCurator(opts: { account?: string; model?: string; effort?: string; prompt?: string; label?: string; onEvent?: (e: ClaudeEvent) => void } = {}): Promise<CuratorResult> {
