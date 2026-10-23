@@ -58,7 +58,7 @@ import {
 } from "./model.js";
 import { buildHandoverPacket, buildPacket, buildVerifyPacket, MEMBER_PROMPT, parseResult } from "./packet.js";
 import { classifyFailure } from "./quota.js";
-import { stopLeftover, stopProcessesUnder } from "./interrupt.js";
+import { snapshotDescendants, stopLeftover, stopProcessesUnder, stopTracked } from "./interrupt.js";
 import { applyRelayFiles, bundleFiles, parseRelayResponse, RELAY_FORMAT } from "./relay.js";
 
 export { accountsFile, loadAccounts, type Account } from "./accounts.js";
@@ -124,6 +124,45 @@ export class Council extends EventEmitter {
   readonly accounts = new AccountRegistry();
   private membersCache: MemberRecord[] | null = null;
   private running = new Map<string, RunningProc>();
+  private trackTimer?: NodeJS.Timeout;
+
+  /** while members run, remember their child processes every minute (see snapshotDescendants) */
+  private ensureTracking(): void {
+    if (this.trackTimer) return;
+    this.trackTimer = setInterval(() => void this.trackDescendants(), 60_000);
+    this.trackTimer.unref?.();
+  }
+
+  private async trackDescendants(): Promise<void> {
+    if (this.running.size === 0) {
+      if (this.trackTimer) clearInterval(this.trackTimer);
+      this.trackTimer = undefined;
+      return;
+    }
+    const byPid = new Map<number, MemberRecord>();
+    for (const id of this.running.keys()) {
+      const m = this.members().find((x) => x.id === id);
+      if (m?.pid) byPid.set(m.pid, m);
+    }
+    try {
+      const snap = await snapshotDescendants([...byPid.keys()]);
+      let changed = false;
+      for (const [root, found] of snap) {
+        const m = byPid.get(root);
+        if (!m || found.length === 0) continue;
+        const known = new Set((m.descendants ?? []).map((d) => `${d.pid}@${d.startedAt}`));
+        for (const d of found) {
+          if (known.has(`${d.pid}@${d.startedAt}`)) continue;
+          (m.descendants ??= []).push(d);
+          changed = true;
+        }
+        if (m.descendants && m.descendants.length > 300) m.descendants = m.descendants.slice(-300);
+      }
+      if (changed) this.saveMembers(this.members());
+    } catch {
+      /* best effort */
+    }
+  }
   private finished: MemberRecord[] = [];
   private waiters: Array<() => void> = [];
   /** where claude members reach the permission tool (set by whoever hosts the council MCP) */
@@ -201,6 +240,8 @@ export class Council extends EventEmitter {
         // the CLI may still be running on its own (Windows keeps children alive); stop it first
         if (await stopLeftover(m.pid, m.startedAt)) this.log(`member ${m.id}: stopped a leftover process (pid ${m.pid})`);
         // the recorded root may be gone while its children still run (e.g. cmd.exe -> codex); find them by worktree path
+        const tracked = await stopTracked(m.descendants);
+        if (tracked) this.log(`member ${m.id}: stopped ${tracked} remembered child process(es)`);
         const orphans = await stopProcessesUnder(m.worktree);
         if (orphans.length) this.log(`member ${m.id}: stopped ${orphans.length} orphaned process(es) in its worktree`);
         m.status = "stopped";
@@ -584,6 +625,7 @@ export class Council extends EventEmitter {
     member.status = "running";
     this.saveMembers(this.members());
     this.running.set(member.id, proc);
+    this.ensureTracking();
     this.emit("member:start", member);
     this.log(`member ${member.id} started (pid ${proc.pid}, account ${account.id}) on ${member.branch}`);
 

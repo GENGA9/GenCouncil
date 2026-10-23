@@ -175,6 +175,8 @@ export interface MemberRecord {
   verifyOf?: string;
   /** member that is checking this one's work */
   verifiedBy?: string;
+  /** child processes seen while it ran (browsers, dev servers, test scripts); stopped if the run is cut off */
+  descendants?: Array<{ pid: number; startedAt: string }>;
 }
 
 // ---------- model names ----------

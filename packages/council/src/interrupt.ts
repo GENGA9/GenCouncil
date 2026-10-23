@@ -65,10 +65,14 @@ const AGENT_PROGRAMS = ["claude.exe", "codex.exe", "agy.exe", "node.exe", "bash.
  */
 export async function stopProcessesUnder(dir: string): Promise<number[]> {
   if (process.platform !== "win32" || !dir) return [];
-  const needle = dir.replace(/[\/]+$/, "").replace(/'/g, "''");
+  // the same folder as Windows (D:\x), forward-slash (D:/x) and Git Bash (/d/x) paths
+  const win = dir.replace(/[\\/]+$/, "");
+  const fwd = win.replace(/\\/g, "/");
+  const bash = fwd.replace(/^([A-Za-z]):/, (_m, d: string) => "/" + d.toLowerCase());
+  const needles = [...new Set([win, fwd, bash])].map((n) => "'" + n.replace(/'/g, "''") + "'");
   const names = AGENT_PROGRAMS.map((n) => `'${n}'`).join(",");
   const script =
-    `$n=@(${names}); Get-CimInstance Win32_Process | Where-Object { $n -contains $_.Name.ToLower() -and $_.ProcessId -ne ${process.pid} -and $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.IndexOf('${needle}', [StringComparison]::OrdinalIgnoreCase) -ge 0 } | ForEach-Object { $_.ProcessId }`;
+    `$n=@(${names}); Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $n -contains $_.Name.ToLower() -and $_.ProcessId -ne ${process.pid} -and $_.ProcessId -ne $PID -and $_.CommandLine -and (@(${needles.join(",")}) | Where-Object { $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) } | ForEach-Object { $_.ProcessId }`;
   const pids = await new Promise<number[]>((resolve) => {
     execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 30000 }, (err, stdout) => {
       if (err) return resolve([]);
@@ -83,4 +87,57 @@ export async function stopProcessesUnder(dir: string): Promise<number[]> {
     });
   }
   return pids;
+}
+
+export interface TrackedProcess {
+  pid: number;
+  startedAt: string;
+}
+
+/**
+ * All live descendants of the given root pids, with their start times (one process-table read).
+ * Members start browsers, dev servers and test scripts whose command lines need not mention the
+ * worktree; remembering them while the member runs lets a later cleanup stop them even after the
+ * member itself died.
+ */
+export async function snapshotDescendants(roots: number[]): Promise<Map<number, TrackedProcess[]>> {
+  const out = new Map<number, TrackedProcess[]>();
+  if (process.platform !== "win32" || roots.length === 0) return out;
+  const script = "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, $_.CreationDate.ToUniversalTime().ToString('o') }";
+  const text = await new Promise<string>((resolve) => {
+    execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 30000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => resolve(err ? "" : String(stdout)));
+  });
+  const children = new Map<number, TrackedProcess[]>();
+  for (const line of text.split(/\r?\n/)) {
+    const [pid, ppid, started] = line.trim().split(" ");
+    const p = Number(pid);
+    const pp = Number(ppid);
+    if (!Number.isFinite(p) || !Number.isFinite(pp) || !started) continue;
+    const list = children.get(pp) ?? [];
+    list.push({ pid: p, startedAt: started });
+    children.set(pp, list);
+  }
+  for (const root of roots) {
+    const found: TrackedProcess[] = [];
+    const queue = [root];
+    const seen = new Set<number>([root]);
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const c of children.get(cur) ?? []) {
+        if (seen.has(c.pid)) continue;
+        seen.add(c.pid);
+        found.push(c);
+        queue.push(c.pid);
+      }
+    }
+    out.set(root, found);
+  }
+  return out;
+}
+
+/** stop remembered descendants that are still the same processes (start time matches) */
+export async function stopTracked(list: TrackedProcess[] | undefined): Promise<number> {
+  let n = 0;
+  for (const t of list ?? []) if (await stopLeftover(t.pid, t.startedAt)) n++;
+  return n;
 }

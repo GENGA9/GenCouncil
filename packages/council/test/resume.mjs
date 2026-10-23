@@ -130,6 +130,28 @@ const longAgo = new Date(Date.now() - 3600_000).toISOString();
 check("process that started at another time is left alone", (await stopLeftover(other.pid, longAgo)) === false || process.platform !== "win32");
 other.kill();
 
+// ---- 5. children remembered while running are stopped after their parent died ----
+if (process.platform === "win32") {
+  const { snapshotDescendants, stopTracked } = await import("@gencouncil/council");
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "gc-tree-"));
+  fs.writeFileSync(path.join(work, "grandchild.mjs"), "setTimeout(() => {}, 60000);\n");
+  // the parent starts its child from a relative path, like a member's browser harness
+  fs.writeFileSync(path.join(work, "parent.mjs"), "import { spawn } from 'node:child_process'; spawn(process.execPath, ['grandchild.mjs'], { stdio: 'ignore', detached: true }).unref(); setTimeout(() => {}, 60000);\n");
+  const parent = spawn(process.execPath, ["parent.mjs"], { cwd: work, stdio: "ignore", windowsHide: true });
+  await new Promise((r) => setTimeout(r, 1500));
+  const snap = await snapshotDescendants([parent.pid]);
+  const kids = snap.get(parent.pid) ?? [];
+  check("descendants of a running member are found", kids.length >= 1, JSON.stringify(kids));
+  parent.kill(); // the parent dies, its child keeps running (Windows does not kill children)
+  await new Promise((r) => setTimeout(r, 500));
+  const stopped = await stopTracked(kids);
+  await new Promise((r) => setTimeout(r, 500));
+  const still = await snapshotDescendants([0]);
+  void still;
+  check("remembered children are stopped after the parent died", stopped >= 1, `stopped ${stopped}`);
+  fs.rmSync(work, { recursive: true, force: true });
+}
+
 rt2.close({ closeMemory: false });
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });

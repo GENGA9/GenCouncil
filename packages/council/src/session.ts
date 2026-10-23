@@ -12,7 +12,7 @@ import { Council, type CouncilState } from "./council.js";
 import type { ClaudeEvent } from "./drivers.js";
 import { memberDisplayName, type AgendaStore, type MemberRecord } from "./model.js";
 import { firstTurnPreamble, retrospectivePrompt } from "./prompts.js";
-import { stopLeftover, stopProcessesUnder } from "./interrupt.js";
+import { stopLeftover, stopProcessesUnder, stopTracked } from "./interrupt.js";
 
 /** the last line of a reply when it is a question to the user ("…할까요?"), else undefined */
 export function trailingQuestion(text: string): string | undefined {
@@ -198,7 +198,10 @@ export class AgendaRuntime extends EventEmitter {
       try {
         // never start the continuation next to an orphan of the cut-off run
         const rec = this.council.members().find((x) => x.id === m.id);
-        if (rec) await stopProcessesUnder(rec.worktree);
+        if (rec) {
+          await stopTracked(rec.descendants);
+          await stopProcessesUnder(rec.worktree);
+        }
         const next = await this.council.handover(m.id, { resume: true, reason: "중단된 작업 이어서 하기" });
         resumed.push({ from: m.id, to: next.id });
       } catch (e) {
