@@ -21,6 +21,7 @@ export interface ModelsInfo {
 }
 
 export interface CurateStatus {
+  kind?: "proposals" | "reorganize";
   running: boolean;
   startedAt?: string;
   finishedAt?: string;
@@ -205,6 +206,7 @@ export interface MemoryHit {
   status: string;
   tags: string[];
   project?: string;
+  scope?: "common" | "project";
   score?: number;
   snippet?: string;
   updated: string;

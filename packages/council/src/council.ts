@@ -17,6 +17,7 @@ import {
   git,
   hasCommits,
   isClean,
+  trackedChanges,
   isRepo,
   logRange,
   mergeInto,
@@ -43,6 +44,7 @@ import { commitUserEdits } from "./localgit.js";
 import {
   AgendaStore,
   ProjectRegistry,
+  projectMemoryKey,
   type MemberRecord,
   type ProjectConfig,
   type Provider,
@@ -364,7 +366,7 @@ export class Council extends EventEmitter {
   }
 
   private memoryMcpConfig(agent: string): Record<string, unknown> {
-    const env: Record<string, string> = { GENCOUNCIL_ROLE: "member", GENCOUNCIL_AGENT: agent };
+    const env: Record<string, string> = { GENCOUNCIL_ROLE: "member", GENCOUNCIL_AGENT: agent, GENCOUNCIL_PROJECT: projectMemoryKey(this.project) };
     if (process.env.GENCOUNCIL_HOME) env.GENCOUNCIL_HOME = process.env.GENCOUNCIL_HOME;
     return { mcpServers: { gencouncil: { type: "stdio", command: process.execPath, args: [serverEntry()], env } } };
   }
@@ -432,7 +434,7 @@ export class Council extends EventEmitter {
       const p = path.join(councilDir, f);
       if (fs.existsSync(p)) fs.rmSync(p);
     }
-    let packet = buildPacket({ project: this.project, agenda, task, member, instructions: input.instructions, memoryIndex: this.memory.renderIndex() });
+    let packet = buildPacket({ project: this.project, agenda, task, member, instructions: input.instructions, memoryIndex: this.memory.renderIndex({ project: projectMemoryKey(this.project) }) });
     if (provider === "relay") {
       const bundle = input.files?.length ? bundleFiles(worktree, input.files) : "(포함된 파일 없음)";
       packet = `${RELAY_PROMPT_HEAD}\n\n${packet}\n\n${RELAY_FORMAT}\n\n## 포함된 파일\n\n${bundle}\n`;
@@ -630,7 +632,7 @@ export class Council extends EventEmitter {
           type: (["solution", "tool", "convention", "account", "persona"].includes(p.type) ? p.type : "solution") as EntryType,
           body: p.body,
           tags: p.tags,
-          project: this.project.name,
+          project: projectMemoryKey(this.project),
           source: `${member.provider}:${this.project.id}/${agenda.slug}/${member.id}`,
         });
       } catch (e) {
@@ -882,7 +884,13 @@ export class Council extends EventEmitter {
     const agenda = this.store.agenda();
     const cur = await currentBranch(repo);
     if (cur !== agenda.baseBranch) problems.push(`메인 폴더가 '${cur}' 브랜치에 있다(필요: '${agenda.baseBranch}'). 사용자가 브랜치를 바꿔야 한다.`);
-    else if (!this.project.localGit && !(await isClean(repo))) problems.push("메인 폴더에 커밋하지 않은 변경이 있다. 사용자가 커밋하거나 치워야 한다.");
+    else if (!this.project.localGit) {
+      const changed = await trackedChanges(repo);
+      if (changed.length)
+        problems.push(
+          `메인 폴더(${repo})에 커밋하지 않은 변경이 있다(${changed.length}개): ${changed.slice(0, 15).join(", ")}${changed.length > 15 ? " …" : ""}. 사용자가 커밋하거나 치워야 한다. (메인 폴더는 네 명령 범위 밖이니 직접 git으로 보려 하지 말고 이 목록을 사용자에게 전한다.)`,
+        );
+    }
     return problems;
   }
 
@@ -903,7 +911,8 @@ export class Council extends EventEmitter {
     if (cur !== agenda.baseBranch) throw new Error(`main checkout is on '${cur}', expected '${agenda.baseBranch}'. Switch branches first.`);
     // local-git folders: commit the user's own edits first so the merge sees them (conflicts surface as git conflicts)
     if (this.project.localGit) await commitUserEdits(this.project);
-    if (!(await isClean(repo))) throw new Error("main checkout has uncommitted changes; commit or stash them first");
+    const changed = await trackedChanges(repo);
+    if (changed.length) throw new Error(`main checkout has uncommitted changes (${changed.slice(0, 10).join(", ")}); commit or stash them first`);
     const res = await mergeInto(repo, agenda.branch, `agenda: ${agenda.title}`);
     if (!res.ok) throw new Error(`merge conflict in main checkout: ${res.conflicts.join(", ")}`);
     const output = res.output;

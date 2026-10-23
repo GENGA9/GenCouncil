@@ -4,7 +4,7 @@ import { serverEntry } from "@gencouncil/mcp/install";
 import type { Account } from "./accounts.js";
 import type { Council } from "./council.js";
 import { parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
-import { advisorFor } from "./model.js";
+import { advisorFor, projectMemoryKey } from "./model.js";
 import { chairSystemPrompt } from "./prompts.js";
 import { classifyFailure } from "./quota.js";
 import { git, isClean } from "./git.js";
@@ -84,6 +84,7 @@ export class Chair {
     const env: Record<string, string> = {
       GENCOUNCIL_ROLE: "member",
       GENCOUNCIL_AGENT: `chair:${council.project.id}/${store.slug}`,
+      GENCOUNCIL_PROJECT: projectMemoryKey(council.project),
     };
     if (process.env.GENCOUNCIL_HOME) env.GENCOUNCIL_HOME = process.env.GENCOUNCIL_HOME;
     fs.mkdirSync(store.chairDir(), { recursive: true });
@@ -176,7 +177,7 @@ export class Chair {
       agenda: store.agenda(),
       guidelines: this.council.registry.guidelines(this.council.project),
       chairState: store.chairState(),
-      memoryIndex: this.council.memory.renderIndex(),
+      memoryIndex: this.council.memory.renderIndex({ project: projectMemoryKey(this.council.project) }),
       integrationWorktree: store.integrationWorktree(),
       limits: this.council.limitsMarkdown(),
     });

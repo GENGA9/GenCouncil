@@ -11,7 +11,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { ENTRY_TYPES, MemoryStore, type EntryType } from "@gencouncil/core";
+import { ENTRY_TYPES, MemoryStore, type EntryType, entryScope } from "@gencouncil/core";
 
 type Role = "owner" | "chair" | "member";
 
@@ -61,9 +61,9 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
       description:
         "Return the compact index (id + title + tags) of all verified Space memory entries. " +
         "Call this once at the start of a task to see what is already known.",
-      inputSchema: {},
+      inputSchema: { project: z.string().optional().describe("Show only this project's own entries after the common ones (default: your project)") },
     },
-    async () => text(store.renderIndex()),
+    async ({ project }) => text(store.renderIndex({ project: project ?? (process.env.GENCOUNCIL_PROJECT || undefined) })),
   );
 
   server.registerTool(
@@ -77,6 +77,7 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
         query: z.string().min(1).describe("Keywords or a short sentence describing the problem"),
         type: typeSchema.optional().describe("Restrict to one entry type"),
         project: z.string().optional().describe("Restrict to entries tagged with this project"),
+        scope: z.enum(["common", "project"]).optional().describe("common = reusable everywhere, project = project-only facts"),
         limit: z.number().int().min(1).max(50).optional().describe("Max hits (default 10)"),
         include_proposed: z
           .boolean()
@@ -84,10 +85,11 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
           .describe("Also search entries that are proposed but not yet approved"),
       },
     },
-    async ({ query, type, project, limit, include_proposed }) => {
+    async ({ query, type, project, scope, limit, include_proposed }) => {
       const hits = store.search(query, {
         type: type as EntryType | undefined,
         project,
+        scope,
         limit,
         status: include_proposed ? "any" : "verified",
       });
@@ -119,22 +121,24 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
         type: typeSchema.optional(),
         status: z.enum(["verified", "proposed", "rejected", "any"]).optional().describe("default: any"),
         project: z.string().optional(),
+        scope: z.enum(["common", "project"]).optional(),
         limit: z.number().int().min(1).max(200).optional(),
       },
     },
-    async ({ type, status, project, limit }) =>
+    async ({ type, status, project, scope, limit }) =>
       json(
         store
-          .list({ type: type as EntryType | undefined, status, project, limit })
-          .map(({ id, title, type, status, tags, project, source, updated }) => ({
-            id,
-            title,
-            type,
-            status,
-            tags,
-            project,
-            source,
-            updated,
+          .list({ type: type as EntryType | undefined, status, project, scope, limit })
+          .map((m) => ({
+            id: m.id,
+            title: m.title,
+            type: m.type,
+            status: m.status,
+            tags: m.tags,
+            project: m.project,
+            scope: entryScope(m),
+            source: m.source,
+            updated: m.updated,
           })),
       ),
   );
@@ -149,7 +153,14 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
         "Markdown. For a solution use sections: ## 문제 / ## 해결 / ## 적용 방법 (commands, paths, gotchas).",
       ),
     tags: z.array(z.string()).optional().describe("Lowercase keywords: tool names, error names, domains"),
-    project: z.string().optional().describe("Project name if it only applies to one project"),
+    project: z.string().optional().describe("Project key (repo folder name) this came from"),
+    scope: z
+      .enum(["common", "project"])
+      .optional()
+      .describe(
+        "common: any project can reuse it (how to use a shared tool, a procedure for an outside service, environment quirks, model behaviour). " +
+          "project: only true for this project's code/data/domain. Default: project when project is set.",
+      ),
   };
 
   server.registerTool(
@@ -197,6 +208,7 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
         append: z.string().optional().describe("Append under '## 추가 (date)'"),
         tags: z.array(z.string()).optional(),
         project: z.string().optional(),
+        scope: z.enum(["common", "project"]).optional(),
       },
     },
     async ({ id, ...patch }) => {
@@ -240,6 +252,26 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
       try {
         const e = store.reject(id, reason);
         return text(`rejected ${e.meta.id}`);
+      } catch (ex) {
+        return err(String((ex as Error).message));
+      }
+    },
+  );
+
+  server.registerTool(
+    "memory_retire",
+    {
+      title: "Retire a verified entry (owner)",
+      description:
+        "Take a verified entry out of use because it was merged into another entry (merged_into) or is outdated/wrong. " +
+        "It is kept with the rejected records. owner/chair only.",
+      inputSchema: { id: z.string().min(1), reason: z.string().min(3), merged_into: z.string().optional() },
+    },
+    async ({ id, reason, merged_into }) => {
+      if (!canWrite()) return err(`role ${role()} cannot retire`);
+      try {
+        const e = store.retire(id, reason, merged_into);
+        return text(`retired ${e.meta.id}${merged_into ? ` (merged into ${merged_into})` : ""}`);
       } catch (ex) {
         return err(String((ex as Error).message));
       }

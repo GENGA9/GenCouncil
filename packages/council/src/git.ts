@@ -117,6 +117,14 @@ export async function isClean(dir: string): Promise<boolean> {
   return (await git(dir, ["status", "--porcelain"])).trim() === "";
 }
 
+/** changed tracked files ("M src/a.ts"); untracked files are left out, a merge does not touch them */
+export async function trackedChanges(dir: string): Promise<string[]> {
+  return (await git(dir, ["status", "--porcelain", "--untracked-files=no"]))
+    .split(/\r?\n/)
+    .map((l) => l.trimEnd())
+    .filter(Boolean);
+}
+
 export async function logRange(dir: string, from: string, to: string): Promise<string[]> {
   const out = await git(dir, ["log", "--oneline", `${from}..${to}`]);
   return out.split("\n").map((s) => s.trim()).filter(Boolean);

@@ -91,4 +91,4 @@ await http.close();
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall approval checks passed");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

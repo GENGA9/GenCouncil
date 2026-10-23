@@ -141,4 +141,4 @@ check("folder change works when no agenda has work", blockedMove.status === 200 
 await srv.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall web checks passed");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

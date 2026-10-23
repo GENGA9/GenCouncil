@@ -78,4 +78,4 @@ busy = true;
 check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("처리 중") && chairMessages.length === 1);
 
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall telegram checks passed");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

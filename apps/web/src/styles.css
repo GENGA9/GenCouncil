@@ -320,3 +320,13 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 
 .check-row { display: flex; align-items: center; gap: 8px; flex-direction: row; }
 .check-row input { width: auto; }
+
+/* memory scope badges */
+.badge.scope-common { background: color-mix(in srgb, var(--c-gpt) 18%, transparent); color: var(--text); }
+.badge.scope-project { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+.curate-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* archived (closed) agendas */
+.archive { margin-top: 2px; }
+.archive-toggle { background: none; border: none; padding: 2px 0 2px 14px; cursor: pointer; text-align: left; width: 100%; }
+.archive .agenda { opacity: 0.7; }

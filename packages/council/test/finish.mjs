@@ -76,7 +76,7 @@ rt2.chair.turn = async (message) => {
   calls2.push(message);
   if (calls2.length === 1) {
     await rt2.council.requestFinish("끝");
-    fs.writeFileSync(path.join(repo, "dirty.txt"), "user edit\n"); // the user starts editing main meanwhile
+    fs.writeFileSync(path.join(repo, "a.txt"), "user edit\n"); // the user starts editing a tracked file in main meanwhile
   }
   return { text: "ok", isError: false };
 };
@@ -84,7 +84,14 @@ await rt2.send("끝내");
 await new Promise((r) => setTimeout(r, 200));
 check("failed finish leaves the agenda open", store2.agenda().status === "open");
 check("chair told why the finish failed", calls2.length === 2 && /안건 종료 실패/.test(calls2[1]) && /커밋하지 않은 변경/.test(calls2[1]), String(calls2[1]).slice(0, 160));
-fs.rmSync(path.join(repo, "dirty.txt"));
+const listed = await rt2.council.finishProblems();
+check("refusal lists the changed files", listed.some((p) => p.includes("a.txt")), listed.join(" | "));
+sh(["checkout", "--", "a.txt"]);
+// untracked files (like a .claude/ settings folder) do not block a merge
+fs.mkdirSync(path.join(repo, ".claude"), { recursive: true });
+fs.writeFileSync(path.join(repo, ".claude", "settings.local.json"), "{}\n");
+const untrackedOnly = await rt2.council.finishProblems();
+check("untracked files do not block finishing", untrackedOnly.length === 0, untrackedOnly.join(" | "));
 rt2.close({ closeMemory: false });
 
 memory.close();

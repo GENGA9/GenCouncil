@@ -53,6 +53,8 @@ export const api = {
   fs: (p: string) => call<FolderListing>("GET", `/api/fs?path=${encodeURIComponent(p)}`),
   projectSettings: (id: string, b: Record<string, unknown>) => call<{ scanSummary?: string }>("PUT", `/api/projects/${encodeURIComponent(id)}/settings`, b),
   curate: () => call<CurateStatus>("POST", "/api/memory/curate"),
+  reorganize: () => call<CurateStatus>("POST", "/api/memory/reorganize"),
+  memoryStats: () => call<{ verified: number; common: number; byProject: Record<string, number> }>("GET", "/api/memory/stats"),
   curateStatus: () => call<CurateStatus>("GET", "/api/memory/curate"),
   openWeb: (key: string, id: string) => call("POST", `${a(key)}/members/${encodeURIComponent(id)}/open-web`),
   addAccount: (b: Record<string, unknown>) => call<Account>("POST", "/api/accounts", b),

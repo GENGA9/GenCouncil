@@ -24,12 +24,26 @@ export const TYPE_PREFIX: Record<EntryType, string> = {
 
 export const PROPOSALS_DIR = "proposals";
 
+/**
+ * common: knowledge any project can reuse (tool usage, procedures for outside services, environment
+ * quirks, model behaviour). project: facts about one project's code, data or domain.
+ */
+export const ENTRY_SCOPES = ["common", "project"] as const;
+export type EntryScope = (typeof ENTRY_SCOPES)[number];
+
+/** entries written before scopes existed: tagged with a project = project, otherwise common */
+export function entryScope(m: { scope?: unknown; project?: string }): EntryScope {
+  return m.scope === "common" || m.scope === "project" ? m.scope : m.project ? "project" : "common";
+}
+
 export interface EntryMeta {
   id: string;
   title: string;
   type: EntryType;
   tags: string[];
   project?: string;
+  /** common = reusable everywhere, project = only for `project` (see entryScope for the default) */
+  scope?: EntryScope;
   status: EntryStatus;
   /** who wrote/proposed it, e.g. "claude-code", "gemini-cli", "chair" */
   source?: string;
@@ -93,6 +107,7 @@ export function serializeEntry(meta: EntryMeta, body: string): string {
     type: meta.type,
     tags: meta.tags,
     project: meta.project,
+    scope: meta.scope,
     status: meta.status,
     source: meta.source,
     created: meta.created,

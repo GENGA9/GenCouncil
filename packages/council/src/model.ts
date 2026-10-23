@@ -195,6 +195,11 @@ export function memberDisplayName(m: Pick<MemberRecord, "id" | "provider" | "mod
  * The advisor to attach for a main model, or undefined when the pairing cannot work
  * (Fable mains accept only Fable advisors; Claude Code exits at launch on a bad pairing).
  */
+/** how shared memory names a project: the repo folder name, lowercased (e.g. "seisen") */
+export function projectMemoryKey(p: { repo: string }): string {
+  return path.basename(p.repo).toLowerCase();
+}
+
 export function advisorFor(mainModel: string | undefined, advisor: string | undefined): string | undefined {
   const a = advisor?.trim();
   if (!a || a === "off" || a === "none") return undefined;

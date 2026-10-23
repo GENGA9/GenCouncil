@@ -109,6 +109,27 @@ await session("owner", async (c) => {
   check("[owner] read returns body", rd.body.includes("C:\\tools\\ffmpeg"));
 });
 
+// ---- scope: common vs project knowledge ----
+const scoped = new MemoryStore({ git: false });
+await scoped.init();
+const common = scoped.write({ title: "ace-step으로 음원 만들기", type: "tool", body: "공통 도구 폴더의 ace-step을 실행한다." });
+const proj = scoped.write({ title: "seisen 84:A370 wR2 의미", type: "solution", body: "진영 슬롯 번호", project: "seisen" });
+const other = scoped.write({ title: "강화게임 스킬 칸 제한", type: "solution", body: "skillLevel에서 막는다", project: "reinforce_project" });
+check("no project -> common by default", common.meta.scope === "common");
+check("project set -> project scope by default", proj.meta.scope === "project");
+const idxSeisen = scoped.renderIndex({ project: "SEISEN" });
+check("project index: common first, own project, others left out", idxSeisen.indexOf("ace-step") < idxSeisen.indexOf("84:A370") && !idxSeisen.includes("강화게임") && /다른 프로젝트 전용 1개/.test(idxSeisen), idxSeisen);
+const promoted = scoped.update(other.meta.id, { scope: "common", title: "스킬 칸 제한은 레벨 검사 한 곳에서 막는다" });
+check("update can promote to common and keeps origin project", promoted.meta.scope === "common" && promoted.meta.project === "reinforce_project");
+check("search filters by scope", scoped.search("스킬 칸", { scope: "common" }).length === 1 && scoped.search("스킬 칸", { scope: "project" }).length === 0);
+const dup = scoped.write({ title: "ace-step 실행법 (중복)", type: "tool", body: "같은 내용" });
+const retired = scoped.retire(dup.meta.id, "중복", common.meta.id);
+check("retire merges into another entry", retired.meta.status === "rejected" && retired.meta.mergedInto === common.meta.id && !scoped.list({ status: "verified" }).some((m) => m.id === dup.meta.id));
+check("retire refuses unknown merge target", (() => { try { scoped.retire(proj.meta.id, "x", "nope"); return false; } catch { return true; } })());
+const reread = new MemoryStore({ git: false });
+await reread.init();
+check("scope survives reload", reread.get(promoted.meta.id)?.meta.scope === "common" && reread.get(proj.meta.id)?.meta.scope === "project");
+
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall checks passed");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

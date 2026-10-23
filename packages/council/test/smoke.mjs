@@ -98,4 +98,4 @@ check("agenda closed", store.agenda().status === "closed");
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall council checks passed");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

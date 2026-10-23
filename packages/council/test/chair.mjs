@@ -92,4 +92,4 @@ delete process.env.GC_FAKE_EDIT;
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall chair log checks passed");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { familyColorByName } from "../model";
 import type { AgendaOv, Overview, UsageSnapshot } from "../types";
 import { THEME_LABEL, useTheme } from "../theme";
@@ -28,9 +29,44 @@ function agendaSpinner(a: AgendaOv, size: number) {
   return null;
 }
 
+function AgendaRow({ a, on, onSelect }: { a: AgendaOv; on: boolean; onSelect: (key: string) => void }) {
+  return (
+    <button className={`agenda ${on ? "on" : ""} ${a.status === "closed" ? "closed" : ""}`} onClick={() => onSelect(a.key)}>
+      <span className="agenda-title">
+        {agendaSpinner(a, 12)}
+        {a.title}
+      </span>
+      <span className="agenda-meta">
+        {a.running > 0 && <span className="badge" style={{ color: familyColorByName(a.runningFamilies[0] ?? "relay") }}>{a.running} 실행</span>}
+        {a.status === "closed" ? <span className="badge">종료</span> : <span className="badge">{a.taskCounts.done}/{a.taskCounts.total}</span>}
+      </span>
+    </button>
+  );
+}
+
+const ARCHIVE_KEY = "gencouncil.openArchives";
+function readOpenArchives(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
 export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live, usage }: Props) {
   const ts = overview?.server.tailscale;
   const [theme, cycleTheme] = useTheme();
+  const [openArchives, setOpenArchives] = useState<string[]>(readOpenArchives);
+  const toggleArchive = (projectId: string) =>
+    setOpenArchives((cur) => {
+      const next = cur.includes(projectId) ? cur.filter((x) => x !== projectId) : [...cur, projectId];
+      try {
+        localStorage.setItem(ARCHIVE_KEY, JSON.stringify(next));
+      } catch {
+        /* per-viewer convenience only */
+      }
+      return next;
+    });
   const badAccounts = overview?.accounts.filter((a) => a.status !== "ok").length ?? 0;
   const current = overview?.projects.flatMap((p) => p.agendas.map((a) => ({ p, a }))).find((x) => x.a.key === selected);
   return (
@@ -55,19 +91,24 @@ export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onS
                 <button className="icon" title="안건 추가" onClick={() => onNewAgenda(p.id)}>＋</button>
               </span>
             </div>
-            {p.agendas.map((a) => (
-              <button key={a.key} className={`agenda ${a.key === selected ? "on" : ""} ${a.status === "closed" ? "closed" : ""}`} onClick={() => onSelect(a.key)}>
-                <span className="agenda-title">
-                  {agendaSpinner(a, 12)}
-                  {a.title}
-                </span>
-                <span className="agenda-meta">
-                  {a.running > 0 && <span className="badge" style={{ color: familyColorByName(a.runningFamilies[0] ?? "relay") }}>{a.running} 실행</span>}
-                  <span className="badge">{a.taskCounts.done}/{a.taskCounts.total}</span>
-                </span>
-              </button>
+            {p.agendas.filter((a) => a.status !== "closed").map((a) => (
+              <AgendaRow key={a.key} a={a} on={a.key === selected} onSelect={onSelect} />
             ))}
-            {p.agendas.length === 0 && <div className="muted small indent">안건 없음</div>}
+            {p.agendas.every((a) => a.status === "closed") && <div className="muted small indent">진행 중인 안건 없음</div>}
+            {(() => {
+              // finished agendas are archived: folded away, still readable
+              const closed = p.agendas.filter((a) => a.status === "closed");
+              if (closed.length === 0) return null;
+              const showing = openArchives.includes(p.id) || closed.some((a) => a.key === selected);
+              return (
+                <div className="archive">
+                  <button className="archive-toggle small muted" onClick={() => toggleArchive(p.id)}>
+                    {showing ? "▾" : "▸"} 보관된 안건 {closed.length}
+                  </button>
+                  {showing && closed.map((a) => <AgendaRow key={a.key} a={a} on={a.key === selected} onSelect={onSelect} />)}
+                </div>
+              );
+            })()}
           </div>
         ))}
         <button className="add-project" onClick={onNewProject}>＋ 제작위원회 추가</button>

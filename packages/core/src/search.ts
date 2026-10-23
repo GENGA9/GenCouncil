@@ -1,4 +1,5 @@
 import type { Entry, EntryStatus, EntryType } from "./entry.js";
+import { entryScope, type EntryScope } from "./entry.js";
 
 const CJK_RE = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
@@ -33,6 +34,7 @@ interface IndexedEntry {
 export interface SearchOptions {
   type?: EntryType;
   project?: string;
+  scope?: EntryScope;
   status?: EntryStatus | "any";
   limit?: number;
 }
@@ -44,6 +46,7 @@ export interface SearchHit {
   status: EntryStatus;
   tags: string[];
   project?: string;
+  scope: EntryScope;
   score: number;
   snippet: string;
   updated: string;
@@ -96,6 +99,7 @@ export class SearchIndex {
       const m = entry.meta;
       if (opts.type && m.type !== opts.type) continue;
       if (opts.project && (m.project ?? "").toLowerCase() !== opts.project.toLowerCase()) continue;
+      if (opts.scope && entryScope(m) !== opts.scope) continue;
       if (status !== "any" && m.status !== status) continue;
 
       let score = 0;
@@ -127,6 +131,7 @@ export class SearchIndex {
         status: m.status,
         tags: m.tags,
         project: m.project,
+        scope: entryScope(m),
         score: Math.round(score * 100) / 100,
         snippet: makeSnippet(entry.body, query),
         updated: m.updated,

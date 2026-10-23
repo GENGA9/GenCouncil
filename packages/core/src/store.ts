@@ -11,6 +11,8 @@ import {
   type EntryMeta,
   type EntryStatus,
   type EntryType,
+  entryScope,
+  type EntryScope,
 } from "./entry.js";
 import { commitAll, ensureRepo } from "./git.js";
 import { memoryDir, spaceDir } from "./paths.js";
@@ -22,6 +24,8 @@ export interface NewEntryInput {
   body: string;
   tags?: string[];
   project?: string;
+  /** default: "project" when project is set, else "common" */
+  scope?: EntryScope;
   source?: string;
 }
 
@@ -32,12 +36,14 @@ export interface UpdateEntryInput {
   append?: string;
   tags?: string[];
   project?: string;
+  scope?: EntryScope;
 }
 
 export interface ListOptions {
   type?: EntryType;
   status?: EntryStatus | "any";
   project?: string;
+  scope?: EntryScope;
   limit?: number;
 }
 
@@ -164,6 +170,7 @@ export class MemoryStore {
       if (opts.type && m.type !== opts.type) continue;
       if (status !== "any" && m.status !== status) continue;
       if (opts.project && (m.project ?? "").toLowerCase() !== opts.project.toLowerCase()) continue;
+      if (opts.scope && entryScope(m) !== opts.scope) continue;
       out.push(m);
     }
     out.sort((a, b) => b.updated.localeCompare(a.updated));
@@ -175,32 +182,53 @@ export class MemoryStore {
   }
 
   /** The compact index that gets injected into agent prompts. */
-  renderIndex(): string {
+  /**
+   * Compact index. Common knowledge always comes first. With `project`, only that project's own
+   * entries follow (other projects' details are left out); without it, project entries are grouped by project.
+   */
+  renderIndex(opts: { project?: string } = {}): string {
     const verified = this.list({ status: "verified" });
     const proposed = this.list({ status: "proposed" }).length;
+    const common = verified.filter((m) => entryScope(m) === "common");
+    const projectOnly = verified.filter((m) => entryScope(m) === "project");
+    const want = opts.project?.toLowerCase();
+    const mine = want ? projectOnly.filter((m) => (m.project ?? "").toLowerCase() === want) : projectOnly;
     const lines: string[] = [];
     lines.push("# Space Memory Index");
     lines.push("");
     lines.push(
-      `${verified.length} verified entries` +
+      `${verified.length} verified entries (공용 ${common.length}, 프로젝트 전용 ${projectOnly.length})` +
         (proposed ? `, ${proposed} pending proposals` : "") +
         `. Use memory_search / memory_read for details.`,
     );
     let budget = MAX_INDEX_LINES;
-    for (const t of ENTRY_TYPES) {
-      const items = verified.filter((m) => m.type === t);
-      if (items.length === 0) continue;
+    const section = (heading: string, items: EntryMeta[], showProject: boolean): boolean => {
+      if (items.length === 0) return true;
       lines.push("");
-      lines.push(`## ${TYPE_DIR[t]} (${items.length})`);
-      for (const m of items) {
-        if (budget-- <= 0) break;
-        const tags = m.tags.length ? ` [${m.tags.join(", ")}]` : "";
-        const proj = m.project ? ` (${m.project})` : "";
-        lines.push(`- ${m.id}: ${m.title}${tags}${proj}`);
+      lines.push(`## ${heading} (${items.length})`);
+      for (const t of ENTRY_TYPES) {
+        const byType = items.filter((m) => m.type === t);
+        if (byType.length === 0) continue;
+        lines.push(`### ${TYPE_DIR[t]}`);
+        for (const m of byType) {
+          if (budget-- <= 0) {
+            lines.push(`- … (index truncated, ${verified.length} total; search for the rest)`);
+            return false;
+          }
+          const tags = m.tags.length ? ` [${m.tags.join(", ")}]` : "";
+          const proj = showProject && m.project ? ` (${m.project})` : "";
+          lines.push(`- ${m.id}: ${m.title}${tags}${proj}`);
+        }
       }
-      if (budget <= 0) {
-        lines.push(`- … (index truncated, ${verified.length} total; search for the rest)`);
-        break;
+      return true;
+    };
+    if (section("공용 지식: 어느 프로젝트에서나 쓰는 도구·절차·환경", common, false)) {
+      if (want) {
+        section(`이 프로젝트 전용: ${opts.project}`, mine, false);
+        const others = projectOnly.length - mine.length;
+        if (others > 0) lines.push("", `(다른 프로젝트 전용 ${others}개는 생략. 필요하면 memory_search의 project로 찾는다.)`);
+      } else {
+        section("프로젝트 전용", mine, true);
       }
     }
     return lines.join("\n") + "\n";
@@ -260,6 +288,7 @@ export class MemoryStore {
       type: input.type,
       tags: (input.tags ?? []).map((t) => t.trim()).filter(Boolean),
       project: input.project?.trim() || undefined,
+      scope: input.scope ?? (input.project?.trim() ? "project" : "common"),
       status,
       source: input.source,
       created: now,
@@ -277,6 +306,7 @@ export class MemoryStore {
     if (patch.title?.trim()) meta.title = patch.title.trim();
     if (patch.tags) meta.tags = patch.tags.map((t) => t.trim()).filter(Boolean);
     if (patch.project !== undefined) meta.project = patch.project.trim() || undefined;
+    if (patch.scope) meta.scope = patch.scope;
     let body = cur.body;
     if (patch.body !== undefined) body = patch.body.trim();
     if (patch.append?.trim()) {
@@ -316,6 +346,26 @@ export class MemoryStore {
     return this.persist({ meta, body: cur.body, file }, `reject: ${id}`);
   }
 
+  /**
+   * Take a verified entry out of use (merged into another one, outdated or wrong). It is kept with
+   * the rejected records so nothing is lost.
+   */
+  retire(id: string, reason: string, mergedInto?: string): Entry {
+    const cur = this.entries.get(id);
+    if (!cur) throw new Error(`not found: ${id}`);
+    if (mergedInto && !this.entries.has(mergedInto)) throw new Error(`merge target not found: ${mergedInto}`);
+    const meta: EntryMeta = {
+      ...cur.meta,
+      status: "rejected",
+      updated: new Date().toISOString(),
+      rejectReason: reason,
+      ...(mergedInto ? { mergedInto } : {}),
+    };
+    const file = path.join(this.dir, PROPOSALS_DIR, `${meta.id}.md`);
+    if (file !== cur.file && fs.existsSync(cur.file)) fs.rmSync(cur.file);
+    return this.persist({ meta, body: cur.body, file }, `retire: ${id}${mergedInto ? ` -> ${mergedInto}` : ""}`);
+  }
+
   remove(id: string): boolean {
     const cur = this.entries.get(id);
     if (!cur) return false;
@@ -341,6 +391,7 @@ const README = `# Space Memory
 - proposals/     위원이 제안했지만 아직 승인되지 않은 항목 (승인되면 위 폴더로 이동)
 - INDEX.md       자동 생성 색인. 직접 편집하지 말 것.
 
-파일 하나 = 기억 하나. YAML frontmatter(id, title, type, tags, project, status, source) + 본문.
+파일 하나 = 기억 하나. YAML frontmatter(id, title, type, tags, project, scope, status, source) + 본문.
+scope: common = 어느 프로젝트에서나 쓰는 지식(도구 사용법, 외부 서비스 절차, 환경), project = 그 프로젝트 전용.
 직접 편집해도 된다. 서버가 변경을 감지해 다시 읽는다. 이 폴더는 git으로 버전 관리된다.
 `;

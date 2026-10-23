@@ -2,7 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MemoryStore, type EntryType } from "@gencouncil/core";
+import { MemoryStore, entryScope, type EntryType } from "@gencouncil/core";
 import {
   AccountRegistry,
   collectUsage,
@@ -23,6 +23,8 @@ import {
   handleCouncilMcpRequest,
   handleMemberMcpRequest,
   runCurator,
+  runReorganize,
+  projectMemoryKey,
   isCliProvider,
   isRepo,
   isWebSite,
@@ -146,7 +148,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     for (const c of clients) if (c.readyState === c.OPEN) c.send(data);
   };
   let telegram: TelegramBridge | undefined;
-  let curate: { running: boolean; startedAt?: string; finishedAt?: string; pending?: number; steps?: number; text?: string; isError?: boolean; costUsd?: number } = { running: false };
+  let curate: { kind?: "proposals" | "reorganize"; running: boolean; startedAt?: string; finishedAt?: string; pending?: number; steps?: number; text?: string; isError?: boolean; costUsd?: number } = { running: false };
   let telegramUser: string | undefined;
 
   const findAgenda = (id: string, slug: string) => {
@@ -578,19 +580,42 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   on("POST", "/api/memory/curate", () => {
     if (curate.running) throw new HttpError(409, "already running");
     const pending = memory.list({ status: "proposed" }).length;
-    curate = { running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
+    curate = { kind: "proposals", running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
     broadcast({ type: "curate", running: true });
     void runCurator({ onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
       memory.load();
       memory.writeIndex();
-      curate = { running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
+      curate = { kind: "proposals", running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
       broadcast({ type: "curate", running: false, isError: r.isError });
       broadcast({ type: "overview" });
       log(`curator finished (${r.isError ? "error" : "ok"})`);
     });
     return curate;
   });
-  on("GET", "/api/memory/recent", () => memory.list({ status: "verified", limit: 30 }));
+  on("POST", "/api/memory/reorganize", () => {
+    if (curate.running) throw new HttpError(409, "already running");
+    const pending = memory.list({ status: "verified" }).length;
+    const projects = registry.list().map((p) => ({ key: projectMemoryKey(p), name: p.name }));
+    curate = { kind: "reorganize", running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
+    broadcast({ type: "curate", running: true });
+    void runReorganize(projects, { onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
+      memory.load();
+      memory.writeIndex();
+      curate = { kind: "reorganize", running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
+      broadcast({ type: "curate", running: false, isError: r.isError });
+      broadcast({ type: "overview" });
+      log(`memory reorganize finished (${r.isError ? "error" : "ok"})`);
+    });
+    return curate;
+  });
+  on("GET", "/api/memory/recent", () => memory.list({ status: "verified", limit: 30 }).map((m) => ({ ...m, scope: entryScope(m) })));
+  on("GET", "/api/memory/stats", () => {
+    const verified = memory.list({ status: "verified" });
+    const common = verified.filter((m) => entryScope(m) === "common").length;
+    const byProject: Record<string, number> = {};
+    for (const m of verified) if (entryScope(m) === "project") byProject[m.project ?? "?"] = (byProject[m.project ?? "?"] ?? 0) + 1;
+    return { verified: verified.length, common, byProject };
+  });
   on("GET", "/api/memory/entry/:id", ({ params }) => {
     const e = memory.get(params.id);
     if (!e) throw new HttpError(404, "not found");
