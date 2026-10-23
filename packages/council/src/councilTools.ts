@@ -114,6 +114,7 @@ export function createCouncilMcp(council: Council): McpServer {
         site: z.enum(["gemini-web", "aistudio", "chatgpt"]).optional().describe("relay only: which web AI; opens the user's pre-logged-in profile and counts toward that site's limit"),
         label: z.string().optional().describe("relay only: display label, e.g. 제미나이(agy)"),
         files: z.array(z.string()).optional().describe("relay only: repo-relative files/dirs to bundle into the packet"),
+        verify: z.boolean().optional().describe("gemini flash only: false skips the automatic Claude check (use for doc-only or trivial work)"),
         instructions: z.string().min(20),
       },
     },
@@ -219,6 +220,24 @@ export function createCouncilMcp(council: Council): McpServer {
       inputSchema: { member_id: z.string() },
     },
     async ({ member_id }) => guard(() => council.merge(member_id)),
+  );
+
+  server.registerTool(
+    "council_verify",
+    {
+      title: "Have a Claude member check finished work",
+      description:
+        "Start a Claude member that checks another member's finished work in the same worktree/branch: claims backed by code/docs, " +
+        "no invented functions or addresses, tests re-run, out-of-scope edits. It fixes what is wrong and rewrites RESULT.md. " +
+        "Runs automatically after Gemini Flash code work; use it yourself for any other result you do not trust. Merge after it finishes.",
+      inputSchema: {
+        member_id: z.string(),
+        model: z.string().optional().describe("claude model within the limits (default sonnet)"),
+        effort: z.string().optional().describe("default high, clamped to the limit"),
+        reason: z.string().optional(),
+      },
+    },
+    async ({ member_id, model, effort, reason }) => guard(() => council.verify(member_id, { model, effort, reason })),
   );
 
   server.registerTool(

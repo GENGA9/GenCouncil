@@ -23,6 +23,7 @@ import {
   handleCouncilMcpRequest,
   handleMemberMcpRequest,
   runCurator,
+  deleteAgenda,
   runReorganize,
   projectMemoryKey,
   isCliProvider,
@@ -306,12 +307,13 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       }
     }
     const chair = (b.chair ?? {}) as { model?: string; effort?: string; directEdit?: boolean };
-    const members = (b.members ?? {}) as { autonomy?: Autonomy; limits?: Record<string, never> };
+    const members = (b.members ?? {}) as { autonomy?: Autonomy; limits?: Record<string, never>; verifyGeminiFlash?: boolean };
     if (chair.model !== undefined) p.chair.model = chair.model || undefined;
     if (chair.effort !== undefined) p.chair.effort = chair.effort || undefined;
     if (chair.directEdit !== undefined) p.chair.directEdit = Boolean(chair.directEdit) || undefined;
     if (members.autonomy) p.members.autonomy = members.autonomy;
     if (members.limits) p.members.limits = normalizeLimits(members.limits);
+    if (members.verifyGeminiFlash !== undefined) p.members.verifyGeminiFlash = Boolean(members.verifyGeminiFlash);
     registry.save(p);
     // open agendas keep their own copy of the project object: update it in place
     for (const a of AgendaStore.list(p)) {
@@ -554,6 +556,26 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     chatId: config.telegram?.chatId,
     agenda: config.telegram?.agenda,
   }));
+  on("DELETE", "/api/a/:id/:slug", async ({ params, url }) => {
+    const { project, store } = findAgenda(params.id, params.slug);
+    const key = `${project.id}/${store.slug}`;
+    const p = runtimes.get(key);
+    if (p) {
+      const rt = await p;
+      if (rt.chair.isBusy() || rt.council.runningCount()) throw new HttpError(409, "의장이나 위원이 작업 중입니다. 멈춘 뒤 삭제하세요.");
+      rt.close({ closeMemory: false });
+      runtimes.delete(key);
+    }
+    let res;
+    try {
+      res = await deleteAgenda(project, store, { force: url.searchParams.get("force") === "1" });
+    } catch (e) {
+      throw new HttpError(500, `삭제 실패: ${(e as Error).message}`);
+    }
+    broadcast({ type: "overview" });
+    if (res.deleted) log(`deleted agenda ${key} -> ${res.movedTo}`);
+    return res;
+  });
   on("POST", "/api/a/:id/:slug/close", async ({ params }) => {
     const { project, store } = findAgenda(params.id, params.slug);
     const key = `${project.id}/${store.slug}`;

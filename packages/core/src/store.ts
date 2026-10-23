@@ -58,6 +58,9 @@ export interface StoreOptions {
 
 const INDEX_FILE = "INDEX.md";
 const MAX_INDEX_LINES = 150;
+/** the index goes into every chair turn and member packet; keep it to a few thousand tokens */
+const MAX_INDEX_CHARS = 14000;
+const MAX_TITLE_CHARS = 90;
 
 export class MemoryStore {
   readonly dir: string;
@@ -114,7 +117,14 @@ export class MemoryStore {
       for (const f of fs.readdirSync(full)) {
         if (!f.endsWith(".md")) continue;
         const file = path.join(full, f);
-        const e = parseEntry(fs.readFileSync(file, "utf8"), file);
+        let text: string;
+        try {
+          text = fs.readFileSync(file, "utf8");
+        } catch {
+          // moved or deleted between readdir and read (e.g. a proposal being approved): skip it
+          continue;
+        }
+        const e = parseEntry(text, file);
         if (!e) continue;
         if (this.entries.has(e.meta.id)) continue; // first wins; duplicates are a user error
         this.entries.set(e.meta.id, e);
@@ -129,7 +139,14 @@ export class MemoryStore {
     try {
       this.watcher = fs.watch(this.dir, { recursive: true }, () => {
         if (this.reloadTimer) clearTimeout(this.reloadTimer);
-        this.reloadTimer = setTimeout(() => this.load(), 300);
+        this.reloadTimer = setTimeout(() => {
+          // a failed background reload must never take the host process down; the next change reloads again
+          try {
+            this.load();
+          } catch (e) {
+            console.error(`[gencouncil] memory reload failed: ${(e as Error).message}`);
+          }
+        }, 300);
       });
       this.watcher.unref?.();
     } catch {
@@ -202,6 +219,7 @@ export class MemoryStore {
         `. Use memory_search / memory_read for details.`,
     );
     let budget = MAX_INDEX_LINES;
+    let used = 0;
     const section = (heading: string, items: EntryMeta[], showProject: boolean): boolean => {
       if (items.length === 0) return true;
       lines.push("");
@@ -217,7 +235,14 @@ export class MemoryStore {
           }
           const tags = m.tags.length ? ` [${m.tags.join(", ")}]` : "";
           const proj = showProject && m.project ? ` (${m.project})` : "";
-          lines.push(`- ${m.id}: ${m.title}${tags}${proj}`);
+          const title = m.title.length > MAX_TITLE_CHARS ? m.title.slice(0, MAX_TITLE_CHARS - 1) + "…" : m.title;
+          const line = `- ${m.id}: ${title}${tags}${proj}`;
+          used += line.length + 1;
+          if (used > MAX_INDEX_CHARS) {
+            lines.push(`- … (index truncated, ${verified.length} total; search for the rest)`);
+            return false;
+          }
+          lines.push(line);
         }
       }
       return true;

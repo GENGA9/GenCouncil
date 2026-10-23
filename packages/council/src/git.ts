@@ -80,12 +80,78 @@ export async function ensureWorktree(repo: string, dir: string, branch: string, 
   }
 }
 
+/**
+ * Unlink every symlink / directory junction under dir without following it. Members link
+ * node_modules, data or reference folders from the main checkout into their worktree; removing
+ * those links first means no delete can ever reach the real folders behind them.
+ */
+export function unlinkLinks(dir: string): number {
+  let n = 0;
+  const walk = (d: string) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(p);
+      } catch {
+        continue;
+      }
+      if (st.isSymbolicLink()) {
+        try {
+          fs.unlinkSync(p);
+          n++;
+        } catch {
+          try {
+            fs.rmdirSync(p); // directory junctions on Windows
+            n++;
+          } catch {
+            /* leave it; the folder delete below will report it */
+          }
+        }
+      } else if (st.isDirectory() && e.name !== ".git") {
+        walk(p);
+      }
+    }
+  };
+  if (fs.existsSync(dir)) walk(dir);
+  return n;
+}
+
+/**
+ * Delete a folder, retrying while Windows still holds it (a process that just exited, antivirus,
+ * indexer). Returns undefined on success, otherwise a readable reason.
+ */
+export async function removeDir(dir: string, attempts = 4): Promise<string | undefined> {
+  let last = "";
+  for (let i = 0; i < attempts; i++) {
+    if (!fs.existsSync(dir)) return undefined;
+    unlinkLinks(dir);
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      return undefined;
+    } catch (e) {
+      // the raw message shows Korean paths garbled on Windows; keep the code and our own path
+      last = (e as NodeJS.ErrnoException).code ?? (e as Error).message;
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+  return fs.existsSync(dir) ? `${dir} (${last}: 다른 프로그램이 폴더나 그 안의 파일을 쓰고 있음)` : undefined;
+}
+
 export async function removeWorktree(repo: string, dir: string): Promise<void> {
+  unlinkLinks(dir);
   try {
     await git(repo, ["worktree", "remove", "--force", dir]);
   } catch {
-    // may already be gone
+    // may already be gone, or locked: removeDir below retries
   }
+  await removeDir(dir, 2);
   try {
     await git(repo, ["worktree", "prune"]);
   } catch {

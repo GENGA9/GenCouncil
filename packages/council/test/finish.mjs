@@ -94,6 +94,63 @@ const untrackedOnly = await rt2.council.finishProblems();
 check("untracked files do not block finishing", untrackedOnly.length === 0, untrackedOnly.join(" | "));
 rt2.close({ closeMemory: false });
 
+// ---- 4b. cleanup never deletes through links, and a locked folder does not undo a finish ----
+{
+  const { spawn } = await import("node:child_process");
+  const shared = path.join(tmp, "shared-node-modules");
+  fs.mkdirSync(path.join(shared, "pkg"), { recursive: true });
+  fs.writeFileSync(path.join(shared, "pkg", "index.js"), "keep me\n");
+  const s3 = AgendaStore.create(project, "링크와 잠금", ["x"]);
+  const r3 = await AgendaRuntime.open(s3, memory, chairOpts);
+  const integ3 = s3.integrationWorktree();
+  fs.symlinkSync(shared, path.join(integ3, "node_modules"), "junction");
+  fs.writeFileSync(path.join(integ3, "c.txt"), "c\n");
+  sh(["add", "c.txt"], integ3);
+  sh(["commit", "-q", "-m", "add c"], integ3);
+  // a process sitting in a folder inside the worktree root keeps it locked on Windows
+  const lockDir = path.join(s3.worktreeRoot(), "locked");
+  fs.mkdirSync(lockDir, { recursive: true });
+  const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { cwd: lockDir, stdio: "ignore", windowsHide: true });
+  await new Promise((r) => setTimeout(r, 400));
+  const out = await r3.council.finish();
+  check("finish closes after the merge even with a locked folder", s3.agenda().status === "closed" && sh(["show", "main:c.txt"]).includes("c"));
+  check("files behind a junction survive the cleanup", fs.readFileSync(path.join(shared, "pkg", "index.js"), "utf8") === "keep me\n");
+  if (process.platform === "win32") {
+    check("locked folder is reported and remembered", /지우지 못한 폴더/.test(out) && (s3.agenda().cleanupPending ?? []).length === 1, out.slice(-160));
+    holder.kill();
+    await new Promise((r) => setTimeout(r, 500));
+    const still = await r3.council.retryPendingCleanup();
+    check("pending cleanup succeeds once the lock is gone", still.length === 0 && !fs.existsSync(s3.worktreeRoot()) && !s3.agenda().cleanupPending);
+  } else holder.kill();
+  r3.close({ closeMemory: false });
+}
+
+// ---- 5. deleting agendas ----
+const { deleteAgenda } = await import("@gencouncil/council");
+// a mistaken blank agenda: nothing to lose
+const blank = AgendaStore.create(project, "실수로 만든 안건", []);
+const rtb = await AgendaRuntime.open(blank, memory, chairOpts);
+rtb.close({ closeMemory: false });
+const blankDir = blank.dir;
+const blankBranch = blank.agenda().branch;
+const d1 = await deleteAgenda(project, blank);
+check("blank agenda deleted at once", d1.deleted && d1.lost.length === 0 && !fs.existsSync(blankDir) && fs.existsSync(d1.movedTo));
+check("its branch and worktree are gone", !sh(["branch", "--list", blankBranch]).trim() && !fs.existsSync(blank.integrationWorktree()));
+// an agenda with unmerged work is refused until forced
+const work = AgendaStore.create(project, "작업 있는 안건", ["x"]);
+const rtw = await AgendaRuntime.open(work, memory, chairOpts);
+fs.writeFileSync(path.join(work.integrationWorktree(), "w.txt"), "w\n");
+sh(["add", "-A"], work.integrationWorktree());
+sh(["commit", "-q", "-m", "work"], work.integrationWorktree());
+rtw.close({ closeMemory: false });
+const d2 = await deleteAgenda(project, work);
+check("unmerged work blocks delete", !d2.deleted && d2.lost.some((l) => l.includes("커밋 1개")) && fs.existsSync(work.dir), JSON.stringify(d2.lost));
+const d3 = await deleteAgenda(project, work, { force: true });
+check("forced delete removes it", d3.deleted && !fs.existsSync(work.dir) && !sh(["branch", "--list", work.agenda?.branch ?? "agenda/작업-있는-안건"]).trim());
+// a finished (closed) agenda deletes without asking
+const d4 = await deleteAgenda(project, store);
+check("closed agenda deletes cleanly and main keeps its merge", d4.deleted && d4.lost.length === 0 && sh(["show", "main:b.txt"]).includes("two"));
+
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall finish checks passed");

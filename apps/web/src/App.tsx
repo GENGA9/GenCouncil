@@ -76,8 +76,13 @@ export function App() {
         return;
       }
       setLoadingAgenda(true);
+      // drop the previous agenda's goals/chat right away instead of showing them while loading
+      setState(null);
+      setChat([]);
       try {
         const r = await api.agenda(key);
+        // the user may have switched again while this was loading
+        if (key !== selectedRef.current) return;
         setState(r.state);
         setFirstTurn(r.firstTurn);
         setChat(
@@ -89,7 +94,7 @@ export function App() {
       } catch (e) {
         notify((e as Error).message);
       } finally {
-        setLoadingAgenda(false);
+        if (key === selectedRef.current) setLoadingAgenda(false);
       }
     },
     [notify],
@@ -98,6 +103,8 @@ export function App() {
   const refreshState = useCallback(async (key: string) => {
     try {
       const r = await api.agenda(key);
+      // a late answer for an agenda that is no longer open must not overwrite the current one
+      if (key !== selectedRef.current) return;
       setState(r.state);
       setFirstTurn(r.firstTurn);
     } catch {
@@ -236,6 +243,9 @@ export function App() {
     );
   }
 
+  // only ever show the state of the agenda that is selected now
+  const shownState = state && state.key === selected ? state : null;
+
   const left = (
     <LeftPane
       overview={overview}
@@ -279,7 +289,7 @@ export function App() {
       <AccountsView notify={notify} />
     ) : (
       <CenterPane
-        state={state}
+        state={shownState}
         chat={chat}
         firstTurn={firstTurn}
         loading={loadingAgenda}
@@ -332,6 +342,22 @@ export function App() {
           await api.dismissResume(selected).catch((e) => notify((e as Error).message));
           void refreshState(selected);
         }}
+        onDelete={async () => {
+          if (!selected || !state) return;
+          if (!confirm(`안건 "${state.agenda.title}"을 삭제할까요?\n작업 폴더와 브랜치를 지우고, 대화 기록은 프로젝트의 deleted 폴더로 옮깁니다.`)) return;
+          try {
+            let r = await api.deleteAgenda(selected);
+            if (!r.deleted) {
+              if (!confirm(`이 안건에는 아직 합치지 않은 작업이 있습니다:\n- ${r.lost.join("\n- ")}\n\n삭제하면 이 작업은 사라집니다. 그래도 삭제할까요?`)) return;
+              r = await api.deleteAgenda(selected, true);
+            }
+            notify("안건을 삭제했습니다.");
+            setSelected("");
+            void refreshOverview();
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
         onFinish={async () => {
           if (!selected || !confirm("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?")) return;
           const retro = confirm("종료 전에 의장이 회고(교훈·성향을 공유 기억에 기록, 제안 승인)를 먼저 할까요?\n확인 = 회고 후 종료 / 취소 = 바로 종료");
@@ -349,7 +375,7 @@ export function App() {
     );
   const right = (
     <RightPane
-      state={state}
+      state={shownState}
       onOpen={(id) => setModal({ kind: "member", id })}
       onMerge={async (id) => {
         if (!selected) return;

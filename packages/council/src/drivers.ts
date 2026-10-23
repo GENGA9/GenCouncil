@@ -199,6 +199,35 @@ export const codexDriver: Driver = {
   },
 };
 
+/** TOML string for a codex -c value: literal (single-quoted) so Windows paths need no escaping */
+function tomlStr(v: string): string {
+  return v.includes("'") ? JSON.stringify(v) : "'" + v + "'";
+}
+
+/**
+ * Codex has no --mcp-config flag; MCP servers are config values. Turn an mcp.json-style object into
+ * `-c mcp_servers.<name>.<key>=...` overrides (stdio command/args/env, or url + bearer token env var).
+ */
+export function codexMcpArgs(cfg: { mcpServers: Record<string, { command?: string; args?: string[]; env?: Record<string, string>; url?: string; bearerTokenEnvVar?: string }> }): string[] {
+  const out: string[] = [];
+  for (const [name, s] of Object.entries(cfg.mcpServers)) {
+    const key = `mcp_servers.${name}`;
+    if (s.url) {
+      out.push("-c", `${key}.url=${tomlStr(s.url)}`);
+      if (s.bearerTokenEnvVar) out.push("-c", `${key}.bearer_token_env_var=${tomlStr(s.bearerTokenEnvVar)}`);
+      out.push("-c", `${key}.default_tools_approval_mode='approve'`);
+      continue;
+    }
+    if (!s.command) continue;
+    out.push("-c", `${key}.command=${tomlStr(s.command)}`);
+    out.push("-c", `${key}.args=[${(s.args ?? []).map(tomlStr).join(",")}]`);
+    for (const [k, v] of Object.entries(s.env ?? {})) out.push("-c", `${key}.env.${k}=${tomlStr(v)}`);
+    // headless members cannot answer approval prompts; our own servers are pre-approved (memory: search/propose only)
+    out.push("-c", `${key}.default_tools_approval_mode='approve'`);
+  }
+  return out;
+}
+
 export const drivers: Record<CliProvider, Driver> = { claude: claudeDriver, gemini: geminiDriver, gpt: codexDriver };
 
 // ---------- stream-json parsing (Claude Code) ----------

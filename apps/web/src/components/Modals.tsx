@@ -123,6 +123,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
   const [chairEffort, setChairEffort] = useState(project.chair.effort ?? "");
   const [autonomy, setAutonomy] = useState(project.members.autonomy);
   const [directEdit, setDirectEdit] = useState(Boolean(project.chair.directEdit));
+  const [verifyFlash, setVerifyFlash] = useState(project.members.verifyGeminiFlash !== false);
   const [limits, setLimits] = useState<Limits | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -138,7 +139,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
         name,
         ...(folderChanged ? { path: folder.trim() } : {}),
         chair: { model: chairModel, effort: chairEffort, directEdit },
-        members: { autonomy, limits },
+        members: { autonomy, limits, verifyGeminiFlash: verifyFlash },
       });
       onSaved(r.scanSummary ? `설정을 저장했습니다. ${r.scanSummary}` : "설정을 저장했습니다. 의장의 다음 턴부터 적용됩니다.");
       onClose();
@@ -177,6 +178,13 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
           <option value="edits">edits (편집만 자동)</option>
         </select>
       </label>
+      <label className="check-row">
+        <input type="checkbox" checked={verifyFlash} onChange={(e) => setVerifyFlash(e.target.checked)} />
+        Gemini Flash 코드 작업 뒤 Claude 검증
+      </label>
+      <div className="small muted">
+        켜면 Gemini Flash 위원이 코드를 고친 작업을 끝낼 때마다, 머지 전에 Claude 위원(기본 Sonnet, 추론 높음, 한도 안)이 같은 브랜치에서 근거·테스트·범위를 확인하고 틀린 곳을 고칩니다. 문서 정리 같은 좁은 일은 의장이 건너뛸 수 있습니다.
+      </div>
       <h4>위원 한도</h4>
       {limits && <LimitsEditor value={limits} onChange={setLimits} />}
       {err && <div className="err">{err}</div>}

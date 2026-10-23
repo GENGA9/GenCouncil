@@ -63,6 +63,8 @@ export interface ProjectConfig {
     maxHandovers?: number;
     /** provider to fall back to when no account of the same provider is available */
     fallbackProvider?: CliProvider;
+    /** after a Gemini Flash member finishes code work, a Claude member checks it before merge (default true) */
+    verifyGeminiFlash?: boolean;
   };
   created: string;
 }
@@ -81,6 +83,8 @@ export interface AgendaConfig {
   closed?: string;
   /** the chair was in the middle of a turn when the app stopped */
   chairInterrupted?: { at: string; message: string };
+  /** worktree folders a finish could not delete yet (locked); retried when the agenda is opened */
+  cleanupPending?: string[];
 }
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "blocked";
@@ -163,6 +167,12 @@ export interface MemberRecord {
   error?: string;
   /** cut off by an app shutdown / agenda close; can be resumed */
   interrupted?: boolean;
+  /** false: the chair said this work needs no Claude verification pass */
+  verify?: boolean;
+  /** this member checks another member's finished work (same worktree/branch) */
+  verifyOf?: string;
+  /** member that is checking this one's work */
+  verifiedBy?: string;
 }
 
 // ---------- model names ----------

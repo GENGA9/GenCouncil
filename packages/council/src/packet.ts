@@ -13,6 +13,53 @@ export const MEMBER_PROMPT =
   "당신은 제작위원회의 위원(자율 실행 에이전트)입니다. 작업 패킷이 입력(stdin)으로 전달되었고 .council/TASK.md 에도 같은 내용이 있습니다. " +
   "패킷의 지시를 이 폴더(현재 작업 디렉토리) 안에서 끝까지 수행하고, 변경을 전부 git 커밋한 뒤, 패킷의 양식대로 .council/RESULT.md 를 작성하고 종료하세요.";
 
+export interface VerifyPacketInput {
+  original: string;
+  fromMember: string;
+  fromModel?: string;
+  toMember: string;
+  agendaBranch: string;
+  commits: string[];
+  diffstat: string;
+  previousResult?: string;
+  reason: string;
+}
+
+/** Packet for a Claude member that checks another member's finished work on the same branch. */
+export function buildVerifyPacket(i: VerifyPacketInput): string {
+  return `# 검증 패킷: ${i.fromMember}${i.fromModel ? ` (${i.fromModel})` : ""}의 결과를 ${i.toMember}가 확인한다
+
+이유: ${i.reason}
+너는 새 기능을 만들지 않는다. 다른 위원이 이 worktree/브랜치에서 끝낸 작업이 맞는지 확인하고, 틀린 것만 고친다.
+
+## 할 일
+1. 아래 원래 작업 패킷과 이전 결과(RESULT)를 읽는다.
+2. 이 브랜치의 변경을 전부 본다: \`git log ${i.agendaBranch}..HEAD\`, \`git diff ${i.agendaBranch}...HEAD\`.
+3. 확인할 것:
+   - 결과와 문서에 적힌 주장마다 코드·문서·원본 데이터에 근거가 있는가. 특히 "관측", "확정"이라고 적은 것.
+   - 새로 쓴 함수·주소·상수·파일 경로가 실제로 존재하고 맞는가. 근거 없이 만들어 낸 것은 없는가.
+   - 지나친 일반화(한 경우를 보고 전체 규칙처럼 적은 것)는 없는가.
+   - 완료 조건(테스트, 빌드, 명령)을 직접 다시 실행해 통과하는가.
+   - 지시한 범위(소유 파일) 밖을 고치지 않았는가.
+4. 틀린 것은 고치고 커밋한다. 근거를 찾을 수 없는 주장은 지우거나 "미확인"으로 고친다. 새 내용을 지어내지 않는다.
+5. \`.council/RESULT.md\`를 새로 쓴다. "## 결과" 첫 줄에 "검증: 통과" / "검증: 수정함" / "검증: 문제 남음" 중 하나를 적고, 고친 것과 확인하지 못한 주장을 목록으로 적는다.
+
+## 이 브랜치의 커밋 (${i.agendaBranch} 이후)
+${i.commits.length ? i.commits.map((c) => `- ${c}`).join("\n") : "(없음)"}
+
+## 변경 요약
+\`\`\`
+${i.diffstat || "(없음)"}
+\`\`\`
+
+## 이전 결과 (${i.fromMember})
+${i.previousResult?.trim() || "(RESULT.md 없음)"}
+
+## 원래 작업 패킷
+${i.original.trim()}
+`;
+}
+
 export function buildPacket(i: PacketInput): string {
   const goal = i.task.goal && i.agenda.goals[i.task.goal - 1] ? `${i.task.goal}. ${i.agenda.goals[i.task.goal - 1]}` : "(없음)";
   return `# 작업 패킷: ${i.task.title}

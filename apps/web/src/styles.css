@@ -330,3 +330,22 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .archive { margin-top: 2px; }
 .archive-toggle { background: none; border: none; padding: 2px 0 2px 14px; cursor: pointer; text-align: left; width: 100%; }
 .archive .agenda { opacity: 0.7; }
+
+/* iPhone Safari zooms in when a field with text under 16px gets focus and does not zoom back.
+   On phone widths every field gets 16px text so tapping the chair dropdowns or the chat box never zooms. */
+@media (max-width: 900px) {
+  input,
+  select,
+  textarea,
+  .chair-title select,
+  .autonomy-select,
+  .composer textarea,
+  .limits-row select,
+  .limits-row input {
+    font-size: 16px;
+  }
+  /* chair buttons wrap to a new line instead of breaking their labels letter by letter */
+  .chair-actions { flex-wrap: wrap; row-gap: 6px; }
+  .chair-actions button { white-space: nowrap; }
+  .chair-actions .autonomy-select { flex-basis: 100%; }
+}

@@ -269,13 +269,17 @@ export class Chair {
     onEvent: (e: ClaudeEvent) => void,
   ): Promise<ChairTurnResult & { resumeFailed?: boolean; stderr: string; exitCode: number | null }> {
     const store = this.council.store;
-    const args = ["-p", message, "--output-format", "stream-json", "--verbose"];
+    // the message goes on stdin and the system prompt in a file: Windows caps a command line at 32,767 chars
+    const args = ["-p", "--output-format", "stream-json", "--verbose"];
     if (resume) args.push("--resume", resume);
     args.push("--mcp-config", this.mcpFile, "--strict-mcp-config");
     const tools = chairToolArgs(Boolean(this.council.project.chair.directEdit));
     args.push("--allowedTools", ...tools.allowed);
     args.push("--disallowedTools", ...tools.disallowed);
-    args.push("--append-system-prompt", this.systemPrompt());
+    const spFile = path.join(store.chairDir(), "system-prompt.md");
+    fs.mkdirSync(store.chairDir(), { recursive: true });
+    fs.writeFileSync(spFile, this.systemPrompt(), "utf8");
+    args.push("--append-system-prompt-file", spFile);
     args.push("--add-dir", store.worktreeRoot());
     // files the user attached in the chat
     const attachDir = path.join(store.dir, "attachments");
@@ -314,7 +318,7 @@ export class Chair {
     } catch {
       /* best effort */
     }
-    const proc = wireProcess(child, { cwd: store.integrationWorktree(), prompt: message, autonomy: "edits" }, (stream, line) => {
+    const proc = wireProcess(child, { cwd: store.integrationWorktree(), prompt: message, stdinText: message, autonomy: "edits" }, (stream, line) => {
       log.write(`[${stream}] ${line}\n`);
       if (stream === "stderr") {
         stderr += line + "\n";

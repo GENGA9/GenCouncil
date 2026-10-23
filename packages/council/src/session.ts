@@ -78,6 +78,15 @@ const ACTIVITY_MINUTES = 20;
 
 export function memberEventText(m: MemberRecord): string {
   const r = m.result;
+  if (m.verifiedBy) {
+    return [
+      `[council event] 위원 ${m.id} (${memberDisplayName(m)}) ${m.status} (task ${m.taskId}, ${m.commits?.length ?? 0} commits) → 검증 중 ${m.verifiedBy}`,
+      r?.summary ? `결과: ${r.summary.slice(0, 500)}` : "",
+      `Claude 위원 ${m.verifiedBy}가 같은 브랜치에서 이 결과를 확인하고 있다. 머지하지 말고 ${m.verifiedBy}의 완료 이벤트를 기다려라.`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
   if (m.handoverTo) {
     return [
       `[council event] 위원 ${m.id} ${m.status} (task ${m.taskId}) → 핸드오버됨 ${m.handoverTo}`,
@@ -88,7 +97,7 @@ export function memberEventText(m: MemberRecord): string {
       .join("\n");
   }
   return [
-    `[council event] 위원 ${m.id} (${memberDisplayName(m)}) ${m.status} (task ${m.taskId}, ${m.commits?.length ?? 0} commits, ${m.toolCalls} tool calls${m.handoverFrom ? `, ${m.handoverFrom}에서 인계받음` : ""}${m.provider === "relay" ? ", 릴레이" : ""})`,
+    `[council event] 위원 ${m.id} (${memberDisplayName(m)}) ${m.status} (task ${m.taskId}, ${m.commits?.length ?? 0} commits, ${m.toolCalls} tool calls${m.handoverFrom ? `, ${m.handoverFrom}에서 인계받음` : ""}${m.verifyOf ? `, ${m.verifyOf}의 결과를 검증함` : ""}${m.provider === "relay" ? ", 릴레이" : ""})`,
     r?.summary ? `결과: ${r.summary.slice(0, 800)}` : "",
     r?.unfinished && r.unfinished !== "없음" ? `미완료/막힌 점: ${r.unfinished.slice(0, 400)}` : "",
     m.failure ? `실패 원인(${m.failure.kind}): ${m.failure.message}` : m.error ? `오류: ${m.error}` : "",

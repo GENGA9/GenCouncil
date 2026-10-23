@@ -5,9 +5,10 @@ import { type EntryType, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
 import { AccountRegistry, type Account } from "./accounts.js";
 import { ChairApprover, chairReview, type PermissionDecision, type Reviewer } from "./approval.js";
-import { drivers, makeAgyParser, parseClaudeLine, parseCodexLine, type RunningProc } from "./drivers.js";
+import { codexMcpArgs, drivers, makeAgyParser, parseClaudeLine, parseCodexLine, type RunningProc } from "./drivers.js";
 import {
   currentBranch,
+  branchExists,
   deleteBranch,
   diffFull,
   diffStat,
@@ -22,6 +23,7 @@ import {
   logRange,
   mergeInto,
   removeWorktree,
+  removeDir,
   type MergeResult,
 } from "./git.js";
 import { explorerAgents } from "./explorers.js";
@@ -35,6 +37,9 @@ import {
   resolveAdvisor,
   resolveEffort,
   resolveModel,
+  allowedEfforts,
+  allowedModels,
+  tierOf,
   type CliProvider,
   type LimitKey,
   type Limits,
@@ -51,7 +56,7 @@ import {
   type Task,
   type TaskStatus,
 } from "./model.js";
-import { buildHandoverPacket, buildPacket, MEMBER_PROMPT, parseResult } from "./packet.js";
+import { buildHandoverPacket, buildPacket, buildVerifyPacket, MEMBER_PROMPT, parseResult } from "./packet.js";
 import { classifyFailure } from "./quota.js";
 import { stopLeftover } from "./interrupt.js";
 import { applyRelayFiles, bundleFiles, parseRelayResponse, RELAY_FORMAT } from "./relay.js";
@@ -74,6 +79,14 @@ export interface AssignInput {
   label?: string;
   /** relay only: files (relative to the repo) to bundle into the packet */
   files?: string[];
+  /** false: skip the automatic Claude check after a Gemini Flash member (doc-only or trivial work) */
+  verify?: boolean;
+}
+
+export interface VerifyOptions {
+  model?: string;
+  effort?: string;
+  reason?: string;
 }
 
 export interface HandoverOptions {
@@ -168,7 +181,11 @@ export class Council extends EventEmitter {
     if (!(await hasCommits(repo))) throw new Error(`repository has no commits yet: ${repo}`);
     await ensureExclude(repo, [".worktrees/", ".council/", ".gemini/"]);
     // a closed agenda is history: show it, but never commit, recreate its branch or worktrees
-    if (this.store.agenda().status === "closed") return;
+    if (this.store.agenda().status === "closed") {
+      const still = await this.retryPendingCleanup();
+      if (still.length) this.log(`still locked: ${still.join(", ")}`);
+      return;
+    }
     if (this.project.localGit) {
       // the user edits this folder directly; record their changes so agendas start from them
       const c = await commitUserEdits(this.project);
@@ -422,6 +439,7 @@ export class Council extends EventEmitter {
       startedAt: new Date().toISOString(),
       toolCalls: 0,
       relayFiles: provider === "relay" ? input.files : undefined,
+      verify: input.verify === false ? false : undefined,
     };
     const members = this.members();
     members.push(member);
@@ -475,6 +493,10 @@ export class Council extends EventEmitter {
       fs.writeFileSync(path.join(gdir, "settings.json"), JSON.stringify(mcpCfg, null, 2), "utf8");
     }
     const extraArgs: string[] = [];
+    if (provider === "gpt") {
+      // shared memory (memory_search / memory_propose) for Codex members, same server the others get
+      extraArgs.push(...codexMcpArgs(mcpCfg as Parameters<typeof codexMcpArgs>[0]));
+    }
     if (provider === "claude") {
       extraArgs.push("--mcp-config", mcpFile, "--strict-mcp-config");
       if (chairApproves) extraArgs.push("--permission-prompt-tool", "mcp__council_member__permission");
@@ -612,7 +634,17 @@ export class Council extends EventEmitter {
         }
       }
     }
-    if (!handedOver) {
+    // Gemini Flash code work gets a Claude check before the chair merges it
+    let verifier: MemberRecord | undefined;
+    if (!handedOver && this.shouldAutoVerify(member)) {
+      try {
+        verifier = await this.verify(member.id, { reason: "Gemini Flash가 끝낸 코드 작업 자동 검증" });
+      } catch (e) {
+        this.log(`auto-verify of ${member.id} not possible: ${(e as Error).message}`);
+        member.error = `${member.error ? member.error + " · " : ""}자동 검증 못 붙임: ${(e as Error).message}`;
+      }
+    }
+    if (!handedOver && !verifier) {
       const t = this.store.tasks().find((x) => x.id === member.taskId);
       if (t && t.status === "doing") this.updateTask(t.id, { status: member.status === "done" ? "review" : "blocked" });
     }
@@ -741,6 +773,86 @@ export class Council extends EventEmitter {
     const rf = path.join(councilDir, "RESULT.md");
     if (fs.existsSync(rf)) fs.renameSync(rf, path.join(councilDir, `RESULT.${prev.id}.md`));
     this.log(`handover ${prev.id} → ${id} (${provider}/${pick.account.id}): ${opts.reason ?? "manual"}`);
+    this.spawnMember(next, packet, pick.account);
+    return next;
+  }
+
+  // ---------- verification ----------
+
+  /** Gemini Flash finished code work (commits) and nobody said to skip the check. */
+  private shouldAutoVerify(m: MemberRecord): boolean {
+    if (m.provider !== "gemini" || m.status !== "done" || m.verifiedBy || m.verify === false) return false;
+    if (this.project.members.verifyGeminiFlash === false) return false;
+    if (tierOf("gemini", m.model) !== 0) return false;
+    return (m.commits?.length ?? 0) > 0;
+  }
+
+  /**
+   * Start a Claude member that checks another member's finished work in the same worktree and
+   * branch (default Sonnet, high effort, both clamped to the user's limits).
+   */
+  async verify(memberId: string, opts: VerifyOptions = {}): Promise<MemberRecord> {
+    const prev = this.member(memberId);
+    if (this.running.has(memberId)) throw new Error(`member ${memberId} is still running`);
+    if (prev.verifiedBy) throw new Error(`member ${memberId} is already being checked by ${prev.verifiedBy}`);
+    if (prev.status !== "done") throw new Error(`member ${memberId} is ${prev.status}; only finished work can be checked`);
+    if (!fs.existsSync(path.join(prev.worktree, ".council"))) throw new Error(`member ${memberId}: 작업 폴더가 없습니다 (${prev.worktree})`);
+    const limits = this.limits();
+    const pick = this.chooseAccount("claude", undefined, []);
+    if (pick.provider !== "claude") throw new Error("no usable claude account for the check");
+    this.checkSlot("claude");
+    const allowed = allowedModels("claude", limits.claude).map((m) => m.id);
+    const wantModel = opts.model ?? (allowed.includes("sonnet") ? "sonnet" : allowed[allowed.length - 1]);
+    const model = resolveModel("claude", wantModel, limits.claude);
+    const efforts = allowedEfforts("claude", limits.claude);
+    const effort = resolveEffort("claude", opts.effort ?? (efforts.includes("high") ? "high" : efforts[efforts.length - 1]), limits.claude);
+    const id = this.nextMemberId("claude");
+    const next: MemberRecord = {
+      id,
+      provider: "claude",
+      model,
+      effort,
+      account: pick.account.id,
+      taskId: prev.taskId,
+      branch: prev.branch,
+      worktree: prev.worktree,
+      status: "starting",
+      startedAt: new Date().toISOString(),
+      toolCalls: 0,
+      verifyOf: prev.id,
+    };
+    const members = this.members();
+    prev.verifiedBy = id;
+    members.push(next);
+    this.saveMembers(members);
+    this.updateTask(prev.taskId, { status: "doing", memberId: id, note: `${prev.id} 결과를 ${id}가 검증 중` });
+
+    const councilDir = path.join(prev.worktree, ".council");
+    const read = (f: string) => (fs.existsSync(path.join(councilDir, f)) ? fs.readFileSync(path.join(councilDir, f), "utf8") : "");
+    const agenda = this.store.agenda();
+    let commits: string[] = [];
+    let stat = "";
+    try {
+      commits = await logRange(this.project.repo, agenda.branch, prev.branch);
+      stat = await diffStat(this.project.repo, agenda.branch, prev.branch);
+    } catch {
+      /* best effort */
+    }
+    const packet = buildVerifyPacket({
+      original: read("TASK.md"),
+      fromMember: prev.id,
+      fromModel: prev.model,
+      toMember: id,
+      agendaBranch: agenda.branch,
+      commits,
+      diffstat: stat,
+      previousResult: read("RESULT.md") || undefined,
+      reason: opts.reason ?? "의장 요청",
+    });
+    fs.writeFileSync(path.join(councilDir, "VERIFY.md"), packet, "utf8");
+    const rf = path.join(councilDir, "RESULT.md");
+    if (fs.existsSync(rf)) fs.renameSync(rf, path.join(councilDir, `RESULT.${prev.id}.md`));
+    this.log(`verify ${prev.id} → ${id} (claude ${model}/${effort ?? "-"}): ${opts.reason ?? "manual"}`);
     this.spawnMember(next, packet, pick.account);
     return next;
   }
@@ -915,12 +1027,34 @@ export class Council extends EventEmitter {
     if (changed.length) throw new Error(`main checkout has uncommitted changes (${changed.slice(0, 10).join(", ")}); commit or stash them first`);
     const res = await mergeInto(repo, agenda.branch, `agenda: ${agenda.title}`);
     if (!res.ok) throw new Error(`merge conflict in main checkout: ${res.conflicts.join(", ")}`);
-    const output = res.output;
-    await this.clean();
+    // the merge is the finish; from here on the agenda is closed even if a folder stays locked
     agenda.status = "closed";
     agenda.closed = new Date().toISOString();
     this.store.saveAgenda(agenda);
-    return output;
+    const leftovers = await this.clean();
+    if (leftovers.length) {
+      const a = this.store.agenda();
+      a.cleanupPending = leftovers;
+      this.store.saveAgenda(a);
+      this.log(`finish: could not delete ${leftovers.join(", ")}; will retry when the agenda is opened`);
+      return `${res.output}\n(머지는 끝났지만 지우지 못한 폴더가 있어 나중에 다시 지웁니다: ${leftovers.join(", ")})`;
+    }
+    return res.output;
+  }
+
+  /** retry deleting folders a finish could not remove */
+  async retryPendingCleanup(): Promise<string[]> {
+    const a = this.store.agenda();
+    if (!a.cleanupPending?.length) return [];
+    const still: string[] = [];
+    for (const dir of a.cleanupPending) {
+      const p = dir.replace(/ \(.*\)$/, "");
+      if (await removeDir(p)) still.push(dir);
+    }
+    await git(this.project.repo, ["worktree", "prune"]).catch(() => "");
+    a.cleanupPending = still.length ? still : undefined;
+    this.store.saveAgenda(a);
+    return still;
   }
 
   /** <agenda>/archive/<worktree name>/ keeps a worktree's .council/*.md after the worktree is removed */
@@ -943,7 +1077,8 @@ export class Council extends EventEmitter {
     return copied;
   }
 
-  async clean(opts: { deleteBranches?: boolean } = {}): Promise<void> {
+  /** Remove the agenda's worktrees (notes archived first). Returns folders that stayed locked. */
+  async clean(opts: { deleteBranches?: boolean } = {}): Promise<string[]> {
     if (this.running.size) throw new Error("members still running");
     const repo = this.project.repo;
     const archived = new Set<string>();
@@ -958,7 +1093,60 @@ export class Council extends EventEmitter {
       if (opts.deleteBranches) await deleteBranch(repo, m.branch);
     }
     await removeWorktree(repo, this.store.integrationWorktree());
-    const root = this.store.worktreeRoot();
-    if (fs.existsSync(root)) fs.rmSync(root, { recursive: true, force: true });
+    const leftover = await removeDir(this.store.worktreeRoot());
+    return leftover ? [leftover] : [];
   }
+}
+
+export interface DeleteAgendaResult {
+  deleted: boolean;
+  /** work that would be lost (only when not deleted) */
+  lost: string[];
+  /** where the agenda's records (transcript, notes) were moved */
+  movedTo?: string;
+}
+
+/**
+ * Delete an agenda: remove its worktrees and branches and move its records to
+ * <project>/deleted/. Refuses (deleted: false, lost: [...]) when an open agenda has
+ * commits that were never merged into the base branch, unless force is set.
+ * The agenda's runtime must be closed first.
+ */
+export async function deleteAgenda(project: ProjectConfig, store: AgendaStore, opts: { force?: boolean } = {}): Promise<DeleteAgendaResult> {
+  const repo = project.repo;
+  const agenda = store.agenda();
+  const members = store.members();
+  const lost: string[] = [];
+  if (agenda.status !== "closed") {
+    if (await branchExists(repo, agenda.branch)) {
+      const ahead = await logRange(repo, agenda.baseBranch, agenda.branch).catch(() => []);
+      if (ahead.length) lost.push(`안건 브랜치 ${agenda.branch}: 베이스에 없는 커밋 ${ahead.length}개`);
+    }
+    for (const m of members) {
+      if (!(await branchExists(repo, m.branch))) continue;
+      const base = (await branchExists(repo, agenda.branch)) ? agenda.branch : agenda.baseBranch;
+      const ahead = await logRange(repo, base, m.branch).catch(() => []);
+      if (ahead.length && !lost.some((l) => l.includes(m.branch))) lost.push(`위원 ${m.id} (${m.branch}): 합치지 않은 커밋 ${ahead.length}개`);
+    }
+  }
+  if (lost.length && !opts.force) return { deleted: false, lost };
+
+  const seen = new Set<string>();
+  for (const m of members) {
+    if (!seen.has(m.worktree)) {
+      seen.add(m.worktree);
+      await removeWorktree(repo, m.worktree);
+    }
+  }
+  await removeWorktree(repo, store.integrationWorktree());
+  const leftover = await removeDir(store.worktreeRoot());
+  if (leftover) throw new Error(`작업 폴더를 지우지 못했습니다: ${leftover}. 그 폴더를 쓰는 창이나 프로그램을 닫고 다시 시도하세요.`);
+  for (const b of new Set(members.map((m) => m.branch))) await deleteBranch(repo, b);
+  await deleteBranch(repo, agenda.branch);
+
+  const trash = path.join(path.dirname(path.dirname(store.dir)), "deleted");
+  fs.mkdirSync(trash, { recursive: true });
+  const dest = path.join(trash, `${store.slug}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+  fs.renameSync(store.dir, dest);
+  return { deleted: true, lost, movedTo: dest };
 }
