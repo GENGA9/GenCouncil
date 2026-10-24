@@ -109,6 +109,22 @@ await session("owner", async (c) => {
   check("[owner] read returns body", rd.body.includes("C:\\tools\\ffmpeg"));
 });
 
+// ---- a curator run can only merge/delete so many entries; splits are free ----
+process.env.GENCOUNCIL_RETIRE_BUDGET = "1";
+await session("owner", async (c) => {
+  const w = async (title) => JSON.parse(JSON.stringify((await call(c, "memory_write", { title, type: "tool", body: "본문 열 글자 이상입니다" })).content[0].text)).match(/written (\S+)/)[1];
+  const e1 = await w("예산 시험 하나");
+  const e2 = await w("예산 시험 둘");
+  const e3 = await w("예산 시험 셋");
+  check("[budget] first merge allowed", !(await call(c, "memory_retire", { id: e1, reason: "중복: 둘", merged_into: e2 })).isError);
+  const second = await call(c, "memory_retire", { id: e3, reason: "중복: 둘", merged_into: e2 });
+  check("[budget] merge beyond the cap refused", second.isError && /까지만/.test(second.content[0].text), second.content[0].text);
+  await w("예산 시험 셋 A");
+  await w("예산 시험 셋 B");
+  check("[budget] split after writing its parts still allowed", !(await call(c, "memory_retire", { id: e3, reason: "분할: 셋 A, 셋 B" })).isError);
+});
+delete process.env.GENCOUNCIL_RETIRE_BUDGET;
+
 // ---- scope: common vs project knowledge ----
 const scoped = new MemoryStore({ git: false });
 await scoped.init();

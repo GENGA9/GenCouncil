@@ -40,7 +40,7 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
   };
   const [stats, setStats] = useState<{ verified: number; common: number; byProject: Record<string, number> } | null>(null);
   const startReorganize = async () => {
-    if (!confirm("Fable(추론 높음)이 승인된 기억 전체를 압축 정리합니다: 같은 주제는 하나로 합치고, 제목은 짧은 검색어로, 본문은 핵심 명령·경로·값만 남기고, 공용/프로젝트로 다시 나눕니다. 합쳐진 항목은 기록으로 보존됩니다. 몇 분 걸리고 Fable 사용량이 듭니다. 진행할까요?")) return;
+    if (!confirm("Fable(추론 높음)이 승인된 기억을 찾기 쉽게 정리합니다: 진짜 중복만 합치고, 여러 주제를 묶은 항목은 주제별로 나누고, 제목과 본문의 반복·경위를 줄입니다. 사실은 지우지 않고, 한 번에 합치거나 지울 수 있는 항목 수에 상한이 있습니다. 몇 분 걸리고 Fable 사용량이 듭니다. 진행할까요?")) return;
     try {
       setCurate(await api.reorganize());
     } catch (e) {

@@ -15,6 +15,9 @@ import { ENTRY_TYPES, MemoryStore, type EntryType, entryScope } from "@gencounci
 
 type Role = "owner" | "chair" | "member";
 
+/** per-process counters for one curator run (one MCP server process per run) */
+const session = { writes: 0, retires: 0 };
+
 function role(): Role {
   const r = (process.env.GENCOUNCIL_ROLE ?? "member").toLowerCase();
   return r === "owner" || r === "chair" ? r : "member";
@@ -190,6 +193,7 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
     async (input) => {
       if (!canWrite()) return err(`role ${role()} cannot write directly; use memory_propose`);
       const e = store.write({ ...input, source: agent() });
+      session.writes++;
       return text(`written ${e.meta.id} -> ${e.file}`);
     },
   );
@@ -269,8 +273,15 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
     },
     async ({ id, reason, merged_into }) => {
       if (!canWrite()) return err(`role ${role()} cannot retire`);
+      // a split retires the bundle only after writing its parts: no knowledge leaves, so it is not budgeted
+      const isSplit = /^분할/.test(reason.trim()) && !merged_into && session.writes >= 2;
+      const budget = Number(process.env.GENCOUNCIL_RETIRE_BUDGET ?? "");
+      if (!isSplit && Number.isFinite(budget) && budget > 0 && session.retires >= budget)
+        return err(`이번 정리에서 합치기·삭제는 ${budget}개까지만 된다(이미 ${session.retires}개). 더 합치지 말고 나누기·줄이기만 한다.`);
       try {
         const e = store.retire(id, reason, merged_into);
+        if (isSplit) session.writes -= 2;
+        else session.retires++;
         return text(`retired ${e.meta.id}${merged_into ? ` (merged into ${merged_into})` : ""}`);
       } catch (ex) {
         return err(String((ex as Error).message));
