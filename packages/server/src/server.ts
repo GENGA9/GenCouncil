@@ -15,6 +15,7 @@ import {
   LADDERS,
   ProjectRegistry,
   SITE_INFO,
+  SHOW_TYPES,
   SUPPORTS_EFFORT,
   EFFORT_CAP,
   WEB_SITES,
@@ -169,6 +170,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         councilUrl: `http://127.0.0.1:${config.port}/mcp/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}`,
         councilHeaders: { Authorization: `Bearer ${config.token}` },
       }).then((rt) => {
+        rt.council.setUsageProvider(() => usageCache?.items);
         rt.council.setMemberMcp((mid) => ({
           url: `http://127.0.0.1:${config.port}/mcp-member/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}/${encodeURIComponent(mid)}`,
           headers: { Authorization: `Bearer ${config.token}` },
@@ -176,6 +178,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         rt.on("event", (e: RuntimeEvent) => {
           broadcast({ key, ts: new Date().toISOString(), ...e });
           telegram?.notify(key, e);
+          if (e.type === "chair:show") void telegram?.sendShown(key, e.text, e.attachments.map((a) => ({ ...a, path: rt.attachmentPath(a.id) })));
           if (e.type === "agenda:finished") {
             // the chair ended the agenda (council_finish); it is merged and closed now
             runtimes.delete(key);
@@ -456,8 +459,11 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const p = rt.attachmentPath(params.file);
     if (!p) throw new HttpError(404, "not found");
     const ext = path.extname(p).toLowerCase();
-    const types: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf", ".txt": "text/plain; charset=utf-8", ".md": "text/plain; charset=utf-8" };
-    res.writeHead(200, { "content-type": types[ext] ?? "application/octet-stream", "cache-control": "private, max-age=86400" });
+    const types: Record<string, string> = { ...SHOW_TYPES, ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".md": "text/plain; charset=utf-8" };
+    const headers: Record<string, string> = { "content-type": types[ext] ?? "application/octet-stream", "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff" };
+    // member-made HTML/SVG runs in an isolated sandbox: no access to this app's cookies or API
+    if ([".html", ".htm", ".svg"].includes(ext)) headers["content-security-policy"] = "sandbox allow-scripts allow-popups";
+    res.writeHead(200, headers);
     fs.createReadStream(p).pipe(res);
   });
   on("GET", "/api/a/:id/:slug/members/:mid", async ({ params, url }) => {
@@ -532,6 +538,11 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     if (rt.chair.isBusy()) throw new HttpError(409, "chair is busy");
     const res = await rt.retrospect();
     return { ran: Boolean(res), isError: res?.isError ?? false, text: res?.text ?? "" };
+  });
+  on("POST", "/api/a/:id/:slug/finish/dismiss", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    rt.council.clearWaiting();
+    return { ok: true };
   });
   on("POST", "/api/a/:id/:slug/finish", async ({ params, body }) => {
     const rt = await getRuntime(params.id, params.slug);

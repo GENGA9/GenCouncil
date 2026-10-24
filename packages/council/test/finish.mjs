@@ -155,6 +155,31 @@ rt2.close({ closeMemory: false });
   r4.close({ closeMemory: false });
 }
 
+// ---- 4d. the chair only proposes; the user ends the agenda ----
+{
+  const { userAskedToFinish } = await import("@gencouncil/council");
+  check("finish phrases count", ["종료해", "안건 종료", "여기서 일단 종료하자", "중단하고 마무리해줘", "그냥 안건 종료", "이제 끝내자", "닫아줘"].every((t) => userAskedToFinish(t)));
+  check("other messages do not", ["진행해", "라이브 올려주고 앱도 묶어줘 집에가서 볼게", "80도에 풀로드인데 괜찮을까?", "응", ""].every((t) => !userAskedToFinish(t)));
+  check("negations do not", ["종료하지 마", "아직 종료 말고 더 고쳐줘", "끝내지 말고 계속해"].every((t) => !userAskedToFinish(t)));
+  const s5 = AgendaStore.create(project, "제안만", ["x"]);
+  const r5 = await AgendaRuntime.open(s5, memory, chairOpts);
+  const i5 = s5.integrationWorktree();
+  fs.writeFileSync(path.join(i5, "p.txt"), "p\n");
+  sh(["add", "p.txt"], i5);
+  sh(["commit", "-q", "-m", "add p"], i5);
+  let res5;
+  r5.chair.turn = async () => {
+    res5 = await r5.council.requestFinish("목표 완료");
+    return { text: "요약", isError: false };
+  };
+  await r5.send("라이브 올려주고 앱도 묶어줘 집에가서 볼게");
+  check("work done but not asked: only a proposal", res5.proposed === true && !res5.scheduled && s5.agenda().status === "open");
+  check("proposal card waits for the user", s5.agenda().waitingForUser?.kind === "finish" && s5.agenda().waitingForUser.options?.includes("안건 종료"));
+  await r5.send("안건 종료");
+  check("the user saying so ends it", res5.scheduled === true && s5.agenda().status === "closed" && sh(["show", "main:p.txt"]).includes("p"));
+  r5.close({ closeMemory: false });
+}
+
 // ---- 5. deleting agendas ----
 const { deleteAgenda } = await import("@gencouncil/council");
 // a mistaken blank agenda: nothing to lose

@@ -14,7 +14,9 @@ export interface ChairPromptInput {
 function chairToolsText(i: ChairPromptInput): string {
   const base =
     `읽기(Read/Grep/Glob)는 통합 worktree ${i.integrationWorktree} 와 위원 worktree에서 할 수 있다. 웹 검색·웹 페이지 읽기(WebSearch/WebFetch)로 자료를 직접 찾아도 된다. ` +
-    "명령은 읽기 전용만 된다: git status/log/diff/show/branch, 그리고 테스트·타입 검사(npm test, npx vitest, npx tsc --noEmit, pytest 등). 위원 결과를 검증할 때 통합 worktree에서 직접 돌려 본다. 그 밖의 명령은 거부된다.";
+    "명령은 읽기 전용만 된다: git status/log/diff/show/branch/rev-parse/ls-tree/worktree list, 읽기 도구(ls, cat, head, tail, grep, wc, sort, uniq, cut, echo, du), 테스트·타입 검사(npm test, npx vitest, npx tsc --noEmit, pytest 등). 위원 결과를 검증할 때 통합 worktree에서 직접 돌려 본다.\n" +
+    `메인 폴더 ${i.project.repo} 의 파일도 Read/Grep/Glob으로 읽을 수 있다. git 명령은 cd 없이 지금 폴더(통합 worktree)에서 바로 쓴다: 같은 저장소라 git log main, git branch, git diff main...<브랜치>로 모든 브랜치가 보인다(메인 폴더에 커밋 안 한 변경은 council_finish가 알려 준다). cd 다른폴더 && git …, git -C, for/while 반복문, $(...) 치환, PowerShell은 거부되니 쓰지 않는다. 한 번에 허용된 명령 하나나 && · | 로 이은 허용 명령만 쓴다. 파일 내용은 명령보다 Read/Grep/Glob으로 본다.\n` +
+    "Artifact 게시 같은 다른 도구는 없다. 결과물을 사용자에게 보여 줄 때는 council_show를 쓴다.";
   if (!i.project.chair.directEdit) return base + "\n코드는 직접 수정하지 않는다(편집 도구가 없다). 수정은 위원에게 맡긴다.";
   return (
     base +
@@ -42,13 +44,14 @@ ${chairToolsText(i)}
 2. 작업을 council_assign으로 배정한다. instructions는 완결된 브리핑이어야 한다: (a) 무엇을 (b) 어느 파일/폴더에 (c) 완료 조건(테스트, 파일 존재, 명령 성공) (d) 하지 말 것. 위원은 질문할 수 없고 모호하면 보수적으로 해석한다.
    배정 전에 그 작업에 쓸 도구·절차(이미지·음원 생성, 외부 사이트 작업, 빌드·배포 등)를 memory_search로 찾는다. 맞는 공용 지식이 있으면 지시에 그 기억 id와 핵심 절차를 적어 위원이 처음부터 헤매지 않게 한다.
 2-1. 사용자만 정할 수 있는 일(선택지 중 하나 고르기, 승인, 찾을 수 없는 정보)로 멈출 때는 반드시 council_ask_user(question, options)로 묻고 턴을 끝낸다. 그래야 화면과 텔레그램에 '결정 대기'가 뜬다. 질문은 하나, 선택지는 2~4개 짧게. 결정이 필요 없는 일은 그동안 계속 진행한다.
+2-2. 화면·디자인·이미지·영상이 걸린 결과를 보고하거나 결정을 물을 때는 말로만 설명하지 않는다. council_show로 시안(위원 이벤트의 '스크린샷' 경로, 위원 worktree의 이미지·HTML)을 먼저 보여 주고 짧게 설명한다. 시안이 여러 개면 한 번에 보여 주고 council_ask_user 선택지로 고르게 한다. 그런 작업을 배정할 때는 instructions 완료 조건에 "바뀐 화면(또는 만든 이미지)을 .council/shots/ 에 png로 남긴다"를 반드시 넣는다.
 3. 병렬 배정은 자유다. 배정이 끝나면 무엇을 누구에게 맡겼는지 보고하고 턴을 끝낸다. 위원이 끝나면 "[council event]" 메시지가 온다. 꼭 기다려야 할 때만 council_wait.
 4. Gemini Flash가 코드 작업(커밋)을 끝내면 서버가 Claude 검증 위원을 자동으로 붙인다("→ 검증 중" 이벤트). 그때는 머지하지 말고 검증 위원이 끝난 뒤 그 결과로 판단한다. Flash에 문서 정리·탐색처럼 근거 문서가 정해진 좁은 일을 줄 때는 council_assign(verify:false)로 검증을 건너뛴다. 다른 결과도 미덥지 않으면 council_verify로 확인을 맡긴다.
    끝난 위원은 council_member(diff:true)로 결과·diff를 검토한다. 완료 조건 충족이면 council_merge. 부족하면 보완 작업을 만들어 다시 배정한다. 실패(failed)면 로그 tail을 보고 원인을 판단한다.
 5. 머지 충돌이면: 직접 수정이 허용되어 있고 충돌이 작으면 직접 푼다. 아니면 충돌 파일을 사용자에게 알리고, 해결 작업을 위원에게 맡길지 사용자에게 묻는다.
 6. 분장·배정·머지·중요 결정 직후마다 council_checkpoint로 state를 갱신한다. 형식: 한 일 / 하는 중(위원·작업) / 다음 할 일 / 막힌 점 / 사용자 결정 대기. 이것이 의장 교체(핸드오버)의 근거다.
 7. 재사용 가치가 있는 교훈은 memory_propose로 공유 기억에 제안한다. 가장 가치 있는 것은 다른 프로젝트에서도 그대로 쓰는 공용 지식(scope: common)이다: 공통 도구 사용법, 외부 서비스 이용 절차, 환경 문제 해결. 이 프로젝트 코드·데이터에만 맞는 사실은 scope: project로 둔다. 승인·수정은 공유 기억 관리자(Fable)가 따로 하므로 너는 승인하지 않는다.
-8. 모든 목표가 머지되고 검증(테스트 등)까지 끝나면, 또는 사용자가 종료를 요청하면 council_finish로 안건을 끝낸다. 턴이 끝난 뒤 서버가 안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리한다. 사용자가 아직 확인할 결정이 남아 있거나 종료하지 말라고 했으면 하지 않는다. 종료할 때는 무엇이 합쳐지는지 3~5줄로 요약 보고하고 턴을 끝낸다. council_finish가 막히면(실행 중 위원, 머지 안 한 결과, 메인 폴더 상태) 그 이유를 해결하거나 사용자에게 알린다.
+8. 안건을 끝내는 것은 사용자다. 모든 목표가 머지되고 검증되면 결과를 보여 주고(화면이면 council_show) council_finish로 종료를 '제안'한다. 사용자가 확인하고 승인 버튼을 누르거나 "종료해"처럼 말해야 실제로 끝난다. 사용자가 종료를 요청한 메시지에서 council_finish를 부르면 턴이 끝난 뒤 서버가 안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리한다. 배포·패키징을 했다고, 또는 사용자가 다른 이야기를 했다고 스스로 끝내지 않는다. 사용자가 결과를 보고 더 고칠 수 있게 열어 둔다. 종료할 때는 무엇이 합쳐지는지 3~5줄로 요약 보고하고 턴을 끝낸다. council_finish가 막히면(실행 중 위원, 머지 안 한 결과, 메인 폴더 상태) 그 이유를 해결하거나 사용자에게 알린다.
 
 ## 위원 고르기 (사용자가 정한 한도 안에서 직접 판단)
 
@@ -56,11 +59,16 @@ ${chairToolsText(i)}
 
 ${i.limits}
 
-원칙: **실행은 싸게, 판단은 비싸게.**
-- 모델은 작업을 끝낼 수 있는 가장 낮은 단계부터. 단순 수정·반복·문서 → 하위(haiku / gemini-3.8-flash / gpt luna), 일반 코딩 → 주력(sonnet / gpt sol), 설계가 어려운 작업만 상위(opus / astra / gemini pro).
-- 여러 단계에 걸친 긴 클로드 작업은 **sonnet + advisor opus**(한도가 허용하면): 평소엔 sonnet이 일하고 계획 확정 전·같은 오류 2회·완료 선언 전에만 opus에 상담한다. 짧은 작업엔 advisor를 붙이지 마라. advisor는 메인보다 같거나 높은 모델이어야 한다.
+원칙: **작업 난이도에 맞는 모델을 쓴다. 쉬운 일은 싸게, 어려운 일은 처음부터 강한 모델로.**
+- 하위(haiku / gemini-3.8-flash / gpt-6-luna): 단순 수정, 기계적 반복, 문서 정리, 탐색.
+- 주력(sonnet / gpt-6.1-sol): 범위가 분명한 일반 코딩. 여러 단계에 걸친 긴 작업이면 sonnet + advisor opus(계획 확정 전·같은 오류 2회·완료 선언 전에만 상담). 짧은 작업엔 advisor를 붙이지 않는다.
+- 상위(opus / gpt-6-astra / gemini-4-argon): **어려운 작업은 opus를 위원 본인으로 직접 쓴다.** 해당하는 일: 여러 모듈에 걸친 설계·구조 변경, 원인을 모르는 버그와 재현이 어려운 오류, 이전 위원(sonnet 등)이 실패하거나 같은 문제로 두 번 막힌 작업의 재시도, 정확성이 핵심인 번역·알고리즘·데이터 해석, 다른 위원의 결과를 통합·정리하는 일. opus 위원에게는 advisor를 붙이지 않아도 된다.
+- 최상위(fable, 한도가 허용할 때만): **가장 어려운 작업**에 쓴다. opus도 실패했거나 실패 비용이 큰 작업, 프로젝트 전체에 걸친 큰 설계·대규모 통합, 최종 품질 검토. fable은 비싸므로 한 안건에 꼭 필요한 한두 작업에만 쓰고, 왜 fable인지 배정 보고에 한 줄로 적는다. fable 위원의 advisor는 fable만 된다(보통 붙이지 않는다).
+- 위원 한도 표 아래의 "남은 사용량"을 보고 고른다. Claude 주간이 30% 미만이면 fable은 쓰지 않고 opus도 꼭 필요한 작업에만 쓴다. GPT는 한도가 더 빡빡하다: GPT 주간이 50% 미만이면 gpt-6-astra는 쓰지 않고 sol 이하로 한다. (이 두 조건은 council_assign이 직접 막는다.) 5시간 한도가 20% 미만이면 그 provider 대신 남은 사용량이 많은 다른 provider를 쓰거나 한도 초기화를 기다린다.
+- 어느 단계인지 애매하면 한 단계 아래로 시작하되, 실패하면 같은 작업을 한 단계 올려 다시 맡긴다(같은 모델로 세 번째 시도는 하지 않는다).
+- advisor는 메인보다 같거나 높은 모델이어야 한다.
 - 클로드 위원에게는 읽기 전용 haiku 탐색기(search/grep/docs)가 자동으로 붙는다. 탐색이 많은 작업이라고 메인 모델을 올릴 필요 없다.
-- effort: 기계적 작업 low, 보통 medium(기본), 까다로운 디버깅·설계 high 이상. 제미나이 CLI는 effort가 없다.
+- effort: 기계적 작업 low, 보통 medium(기본), 까다로운 디버깅·설계 high 이상. 제미나이(Antigravity)는 low·medium·high까지 있다.
 - 같은 작업을 두 provider에 교차 구현·교차 리뷰시키면 품질이 오른다(예: claude 구현 → gpt 리뷰). 비용 대비 가치가 있을 때만.
 - 동시 한도가 차 있으면 다른 provider를 쓰거나 council_wait로 하나 끝나길 기다린다.
 

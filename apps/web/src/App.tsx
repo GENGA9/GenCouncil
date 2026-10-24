@@ -192,6 +192,9 @@ export function App() {
           setChat((c) => [...c, item("event", `의장 계정 전환: ${String(msg.from)} → ${String(msg.to)} (${String(msg.reason)})`)]);
           void refreshOverview();
           break;
+        case "chair:show":
+          setChat((c) => [...c, { ...item("assistant", String(msg.text ?? "")), attachments: (msg.attachments as Attachment[]) ?? [] }]);
+          break;
         case "chair:ask":
           void refreshOverview();
           void refreshState(key);
@@ -361,6 +364,23 @@ export function App() {
           } catch (e) {
             notify((e as Error).message);
           }
+        }}
+        onApproveFinish={async () => {
+          if (!selected) return;
+          try {
+            await api.finish(selected, false);
+            notify("안건을 종료했습니다.");
+            void refreshOverview();
+            void refreshState(selected);
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+        onDismissFinish={async () => {
+          if (!selected) return;
+          await api.dismissFinish(selected).catch((e) => notify((e as Error).message));
+          void refreshState(selected);
+          void refreshOverview();
         }}
         onFinish={async () => {
           if (!selected || !confirm("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?")) return;

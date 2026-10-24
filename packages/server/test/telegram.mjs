@@ -10,6 +10,11 @@ const check = (name, cond, extra = "") => {
 const sent = [];
 const fakeFetch = async (url, init) => {
   const method = url.split("/").pop();
+  if (init.body instanceof FormData) {
+    // photo uploads are multipart, not JSON
+    sent.push({ method, caption: init.body.get("caption"), photo: init.body.get("photo")?.name });
+    return { json: async () => ({ ok: true, result: {} }) };
+  }
   const body = JSON.parse(init.body);
   if (method === "getMe") return { json: async () => ({ ok: true, result: { username: "gencouncil_bot" } }) };
   if (method === "sendMessage") {
@@ -76,6 +81,19 @@ const r = await bridge.handleUpdate(upd("목표 2를 배정해줘"));
 check("plain text relayed to chair", r === "의장에게 전달했습니다." && chairMessages[0] === "목표 2를 배정해줘");
 busy = true;
 check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("처리 중") && chairMessages.length === 1);
+
+// ---- drafts the chair shows ----
+{
+  const fsm = await import("node:fs"); const osm = await import("node:os"); const pathm = await import("node:path");
+  const png = pathm.join(osm.tmpdir(), "gc-shot-test.png");
+  fsm.writeFileSync(png, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const before = sent.length;
+  await bridge.sendShown("proj/agenda", "A안: 타이틀", [{ name: "a.png", type: "image/png", path: png }, { name: "mock.html", type: "text/html", path: png }]);
+  const newOnes = sent.slice(before);
+  check("shown image goes as a photo with caption", newOnes.some((m) => m.method === "sendPhoto" && /의장 시안: A안/.test(m.caption ?? "") && m.photo === "a.png"), JSON.stringify(newOnes));
+  check("non-image drafts are named in a text note", newOnes.some((m) => (m.text ?? "").includes("mock.html")));
+  fsm.rmSync(png, { force: true });
+}
 
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall telegram checks passed");
 process.exitCode = failed ? 1 : 0;

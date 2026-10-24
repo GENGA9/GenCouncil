@@ -86,7 +86,7 @@ export interface AgendaConfig {
   /** worktree folders a finish could not delete yet (locked); retried when the agenda is opened */
   cleanupPending?: string[];
   /** the chair asked the user something and is waiting (council_ask_user); cleared by the user's next message */
-  waitingForUser?: { question: string; options?: string[]; at: string };
+  waitingForUser?: { question: string; options?: string[]; at: string; kind?: "finish" };
 }
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "blocked";
@@ -177,7 +177,26 @@ export interface MemberRecord {
   verifiedBy?: string;
   /** child processes seen while it ran (browsers, dev servers, test scripts); stopped if the run is cut off */
   descendants?: Array<{ pid: number; startedAt: string }>;
+  /** screenshots / drafts the member left in .council/shots/ (absolute paths), for the chair to show */
+  shots?: string[];
 }
+
+/** file kinds the chair may show in the chat (council_show), by extension */
+export const SHOW_TYPES: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".pdf": "application/pdf",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".txt": "text/plain",
+  ".md": "text/plain",
+};
 
 // ---------- model names ----------
 

@@ -84,6 +84,7 @@ export type RuntimeEvent =
   | { type: "log"; line: string }
   | { type: "agenda:finished"; reason: string; output: string }
   | { type: "chair:ask"; question: string; options?: string[] }
+  | { type: "chair:show"; text: string; attachments: Attachment[] }
   | { type: "state" };
 
 const ACTIVITY_MINUTES = 20;
@@ -111,6 +112,7 @@ export function memberEventText(m: MemberRecord): string {
   return [
     `[council event] 위원 ${m.id} (${memberDisplayName(m)}) ${m.status} (task ${m.taskId}, ${m.commits?.length ?? 0} commits, ${m.toolCalls} tool calls${m.handoverFrom ? `, ${m.handoverFrom}에서 인계받음` : ""}${m.verifyOf ? `, ${m.verifyOf}의 결과를 검증함` : ""}${m.provider === "relay" ? ", 릴레이" : ""})`,
     r?.summary ? `결과: ${r.summary.slice(0, 800)}` : "",
+    m.shots?.length ? `스크린샷 ${m.shots.length}장 (council_show로 사용자에게 보여줄 수 있다): ${m.shots.slice(0, 8).join(", ")}` : "",
     r?.unfinished && r.unfinished !== "없음" ? `미완료/막힌 점: ${r.unfinished.slice(0, 400)}` : "",
     m.failure ? `실패 원인(${m.failure.kind}): ${m.failure.message}` : m.error ? `오류: ${m.error}` : "",
     m.status === "failed" && m.failure && m.failure.kind !== "other"
@@ -136,6 +138,7 @@ export class AgendaRuntime extends EventEmitter {
     council.on("log", (line: string) => this.emitEvent({ type: "log", line }));
     council.on("agenda", () => this.emitEvent({ type: "state" }));
     council.on("ask", (w: { question: string; options?: string[] }) => this.emitEvent({ type: "chair:ask", question: w.question, options: w.options }));
+    council.on("show", (s: { caption: string; attachments: Attachment[] }) => this.emitEvent({ type: "chair:show", text: s.caption, attachments: s.attachments }));
     council.on("member:start", (m: MemberRecord) => {
       this.emitEvent({ type: "member:start", member: m });
       this.emitEvent({ type: "state" });
@@ -342,7 +345,11 @@ export class AgendaRuntime extends EventEmitter {
   async send(message: string, role: "user" | "event" = "user", attachments: Attachment[] = []): Promise<ChairTurnResult> {
     if (this.chair.isBusy()) throw new Error("chair is busy");
     // the user answered: the agenda is no longer waiting on them
-    if (role === "user") this.council.clearWaiting();
+    if (role === "user") {
+      this.council.clearWaiting();
+      // the retrospective prompt talks about ending the agenda but is not the user asking to end it
+      if (!message.startsWith("[회고]")) this.council.latestUserMessage = message;
+    }
     if (this.council.store.agenda().status === "closed") throw new Error("이 안건은 종료되었습니다. 새 안건을 열어 주세요.");
     let text = message || (attachments.length ? "첨부한 파일을 확인해 주세요." : this.isFirstTurn() ? firstTurnPreamble() : "");
     if (!text) throw new Error("empty message");

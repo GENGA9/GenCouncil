@@ -1,3 +1,4 @@
+import fs from "node:fs";
 /**
  * Telegram bridge: pushes council events to one chat and relays messages from that chat
  * to the chair of the bound agenda. Plain fetch against api.telegram.org, long polling.
@@ -59,6 +60,25 @@ export class TelegramBridge {
   }
 
   /** Send text to the bound chat, chunked. Never throws (notifications must not break the server). */
+  /** the chair showed drafts: images go as photos, other files as a short note */
+  async sendShown(key: string, caption: string, files: Array<{ name: string; type: string; path?: string }>): Promise<void> {
+    const tag = `[${key.split("/")[1] ?? key}]`;
+    const images = files.filter((f) => f.path && /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+    for (const [i, f] of images.entries()) {
+      try {
+        const form = new FormData();
+        form.append("chat_id", String(this.cfg.chatId));
+        if (i === 0) form.append("caption", `${tag} 의장 시안: ${caption}`.slice(0, 1000));
+        form.append("photo", new Blob([fs.readFileSync(f.path!)], { type: f.type }), f.name);
+        await this.fetchImpl(`https://api.telegram.org/bot${this.cfg.botToken}/sendPhoto`, { method: "POST", body: form });
+      } catch {
+        /* a failed photo must not stop the chair */
+      }
+    }
+    const others = files.filter((f) => !images.includes(f));
+    if (others.length || images.length === 0) await this.send(`${tag} 의장 시안: ${caption}${others.length ? "\n파일: " + others.map((f) => f.name).join(", ") + " (웹 화면에서 보기)" : ""}`);
+  }
+
   async send(text: string): Promise<void> {
     const chunks: string[] = [];
     let rest = text;

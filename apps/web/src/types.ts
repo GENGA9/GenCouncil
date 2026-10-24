@@ -58,6 +58,8 @@ export interface WaitingForUser {
   question: string;
   options?: string[];
   at: string;
+  /** "finish": the chair proposes ending the agenda */
+  kind?: "finish";
 }
 
 export interface AgendaOv {

@@ -129,6 +129,13 @@ const getRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeUR
 check("attachment served", getRes.status === 200 && getRes.headers.get("content-type") === "image/png" && (await getRes.arrayBuffer()).byteLength === 7);
 const missRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments/${encodeURIComponent("../state.md")}`, { headers: { authorization: "Bearer test-token" } });
 check("attachment path traversal blocked", missRes.status === 404);
+const htmlUp = await (await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments?name=${encodeURIComponent("mock.html")}`, {
+  method: "POST",
+  headers: { authorization: "Bearer test-token", "content-type": "text/html" },
+  body: "<h1>시안</h1><script>fetch('/api/overview')</script>",
+})).json();
+const htmlRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments/${encodeURIComponent(htmlUp.id)}`, { headers: { authorization: "Bearer test-token" } });
+check("shown HTML is served sandboxed", htmlRes.status === 200 && /text\/html/.test(htmlRes.headers.get("content-type")) && /sandbox/.test(htmlRes.headers.get("content-security-policy") ?? "") && !/allow-same-origin/.test(htmlRes.headers.get("content-security-policy") ?? ""), htmlRes.headers.get("content-security-policy"));
 
 // settings: rename and move to another folder
 const ren = await api("PUT", `/api/projects/${encodeURIComponent(proj.json.id)}/settings`, { name: "웹 테스트 개정" });

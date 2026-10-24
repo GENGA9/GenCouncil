@@ -23,9 +23,11 @@ interface Props {
   onDismissResume: () => Promise<void>;
   onFinish: () => Promise<void>;
   onDelete: () => Promise<void>;
+  onApproveFinish: () => Promise<void>;
+  onDismissFinish: () => Promise<void>;
 }
 
-export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onResume, onDismissResume, onFinish, onDelete }: Props) {
+export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onResume, onDismissResume, onFinish, onDelete, onApproveFinish, onDismissFinish }: Props) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -166,16 +168,27 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
               {c.role === "event" && <span className="who">이벤트</span>}
               {c.text && <div className="msg-text">{c.text}</div>}
               {c.attachments && c.attachments.length > 0 && state && (
-                <div className="msg-attachments">
-                  {c.attachments.map((a) =>
-                    a.type.startsWith("image/") ? (
-                      <a key={a.id} href={api.attachmentUrl(state.key, a.id)} target="_blank" rel="noreferrer">
-                        <img src={api.attachmentUrl(state.key, a.id)} alt={a.name} />
-                      </a>
-                    ) : (
-                      <a key={a.id} className="file-chip" href={api.attachmentUrl(state.key, a.id)} target="_blank" rel="noreferrer">📎 {a.name}</a>
-                    ),
-                  )}
+                <div className={`msg-attachments ${c.role === "assistant" ? "shown" : ""}`}>
+                  {c.attachments.map((a) => {
+                    const url = api.attachmentUrl(state.key, a.id);
+                    if (a.type.startsWith("image/"))
+                      return (
+                        <a key={a.id} href={url} target="_blank" rel="noreferrer" title={a.name}>
+                          <img src={url} alt={a.name} />
+                        </a>
+                      );
+                    if (a.type === "text/html")
+                      return (
+                        <div key={a.id} className="shown-html">
+                          <iframe src={url} sandbox="allow-scripts" title={a.name} />
+                          <a className="small" href={url} target="_blank" rel="noreferrer">↗ {a.name} 새 창에서 열기</a>
+                        </div>
+                      );
+                    if (a.type.startsWith("video/")) return <video key={a.id} src={url} controls preload="metadata" />;
+                    return (
+                      <a key={a.id} className="file-chip" href={url} target="_blank" rel="noreferrer">📎 {a.name}</a>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -206,7 +219,18 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
         </div>
       )}
 
-      {state.agenda.waitingForUser && !busy && state.agenda.status !== "closed" && (
+      {state.agenda.waitingForUser?.kind === "finish" && !busy && state.agenda.status !== "closed" && (
+        <div className="ask-card finish">
+          <div className="ask-head">의장이 안건 종료를 제안합니다</div>
+          <div className="ask-question">{state.agenda.waitingForUser.question}</div>
+          <div className="ask-options">
+            <button className="primary small" disabled={sending} onClick={() => void onApproveFinish()}>안건 종료 승인</button>
+            <button className="ghost small" disabled={sending} onClick={() => void onDismissFinish()}>계속 진행</button>
+          </div>
+          <div className="small muted">승인하면 안건 브랜치를 베이스 브랜치에 합치고 안건을 닫습니다. 더 고칠 것이 있으면 아래에 바로 적어도 됩니다.</div>
+        </div>
+      )}
+      {state.agenda.waitingForUser && state.agenda.waitingForUser.kind !== "finish" && !busy && state.agenda.status !== "closed" && (
         <div className="ask-card">
           <div className="ask-head">의장이 결정을 기다립니다</div>
           <div className="ask-question">{state.agenda.waitingForUser.question}</div>

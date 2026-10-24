@@ -97,6 +97,7 @@ export const api = {
   resume: (key: string) => call<{ resumed: Array<{ from: string; to: string }>; failed: Array<{ id: string; error: string }> }>("POST", `${a(key)}/resume`),
   dismissResume: (key: string) => call<{ ok: boolean }>("POST", `${a(key)}/resume/dismiss`),
   deleteAgenda: (key: string, force = false) => call<{ deleted: boolean; lost: string[]; movedTo?: string }>("DELETE", `${a(key)}${force ? "?force=1" : ""}`),
+  dismissFinish: (key: string) => call<{ ok: boolean }>("POST", `${a(key)}/finish/dismiss`),
   retrospect: (key: string) => call<{ ran: boolean; isError: boolean; text: string }>("POST", `${a(key)}/retrospect`),
   memorySearch: (q: string, all: boolean) => call<MemoryHit[]>("GET", `/api/memory/search?q=${encodeURIComponent(q)}&all=${all ? 1 : 0}`),
   memoryProposals: () => call<MemoryHit[]>("GET", "/api/memory/proposals"),

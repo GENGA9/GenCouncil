@@ -37,6 +37,7 @@ import {
   resolveAdvisor,
   resolveEffort,
   resolveModel,
+  checkTopModelUsage,
   allowedEfforts,
   allowedModels,
   tierOf,
@@ -50,6 +51,7 @@ import {
   AgendaStore,
   ProjectRegistry,
   projectMemoryKey,
+  SHOW_TYPES,
   type MemberRecord,
   type ProjectConfig,
   type Provider,
@@ -101,7 +103,7 @@ export interface HandoverOptions {
 
 export interface CouncilState {
   project: { id: string; name: string; repo: string; baseBranch: string };
-  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: { question: string; options?: string[]; at: string } };
+  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: { question: string; options?: string[]; at: string; kind?: "finish" } };
   tasks: Task[];
   members: Array<Omit<MemberRecord, "result"> & { result?: { summary: string; unfinished: string } }>;
   integrationWorktree: string;
@@ -344,8 +346,35 @@ export class Council extends EventEmitter {
     return out;
   }
 
+  /** latest subscription usage (set by the web server, which polls it every few minutes) */
+  private usageProvider?: () => Array<{ provider: string; account: string; fiveHour?: { usedPct: number; resetsAt?: string }; weekly?: { usedPct: number; resetsAt?: string }; error?: string }> | undefined;
+
+  setUsageProvider(fn: Council["usageProvider"]): void {
+    this.usageProvider = fn;
+  }
+
+  /** highest weekly remaining % among this provider's measured accounts (undefined when unknown) */
+  weeklyLeft(provider: string): number | undefined {
+    const rows = (this.usageProvider?.() ?? []).filter((u) => u.provider === provider && !u.error && u.weekly);
+    if (!rows.length) return undefined;
+    return Math.max(...rows.map((u) => 100 - u.weekly!.usedPct));
+  }
+
   limitsMarkdown(): string {
-    return limitsMarkdown(this.limits(), this.activeCounts());
+    const table = limitsMarkdown(this.limits(), this.activeCounts());
+    const usage = this.usageProvider?.();
+    if (!usage?.length) return table;
+    const left = (w?: { usedPct: number }) => (w ? `${100 - w.usedPct}% 남음` : "-");
+    const rows = usage
+      .filter((u) => !u.error)
+      .map((u) => `| ${u.provider}${u.account !== u.provider ? " (" + u.account + ")" : ""} | ${left(u.fiveHour)} | ${left(u.weekly)} |`);
+    if (!rows.length) return table;
+    return `${table}
+
+남은 사용량 (몇 분 전 측정):
+| 계정 | 5시간 | 주간 |
+|---|---|---|
+${rows.join("\n")}`;
   }
 
   private checkSlot(key: LimitKey): void {
@@ -452,6 +481,7 @@ export class Council extends EventEmitter {
       this.checkSlot(p);
       // a fallback provider cannot use the other provider's model name
       model = resolveModel(p, p === requested ? input.model : undefined, limits[p]);
+      checkTopModelUsage(p, model, this.weeklyLeft(p));
       effort = resolveEffort(p, input.effort, limits[p]);
       if (p === "claude") advisor = resolveAdvisor(model, input.advisor, limits.claude);
     } else {
@@ -655,6 +685,19 @@ export class Council extends EventEmitter {
     } catch (e) {
       member.error = `git: ${(e as Error).message}`;
     }
+    // screenshots / drafts the member left for the chair to show
+    try {
+      const shotsDir = path.join(member.worktree, ".council", "shots");
+      if (fs.existsSync(shotsDir)) {
+        member.shots = fs
+          .readdirSync(shotsDir)
+          .filter((f) => SHOW_TYPES[path.extname(f).toLowerCase()])
+          .map((f) => path.join(shotsDir, f))
+          .slice(0, 20);
+      }
+    } catch {
+      /* best effort */
+    }
     const resultFile = path.join(member.worktree, ".council", "RESULT.md");
     if (fs.existsSync(resultFile)) {
       member.result = parseResult(fs.readFileSync(resultFile, "utf8"));
@@ -849,6 +892,7 @@ export class Council extends EventEmitter {
     const allowed = allowedModels("claude", limits.claude).map((m) => m.id);
     const wantModel = opts.model ?? (allowed.includes("sonnet") ? "sonnet" : allowed[allowed.length - 1]);
     const model = resolveModel("claude", wantModel, limits.claude);
+    checkTopModelUsage("claude", model, this.weeklyLeft("claude"));
     const efforts = allowedEfforts("claude", limits.claude);
     const effort = resolveEffort("claude", opts.effort ?? (efforts.includes("high") ? "high" : efforts[efforts.length - 1]), limits.claude);
     const id = this.nextMemberId("claude");
@@ -1022,10 +1066,43 @@ export class Council extends EventEmitter {
 
   // ---------- agenda end ----------
 
+  /**
+   * Put files from this agenda's worktrees or the project folder into the chat (copied into the
+   * agenda's attachments so they outlive worktree cleanup). Used for drafts, screenshots, mockups.
+   */
+  showFiles(paths: string[], caption: string): Array<{ id: string; name: string; type: string; size: number }> {
+    if (!paths.length) throw new Error("no files to show");
+    if (paths.length > 8) throw new Error("show at most 8 files at once");
+    const roots = [this.store.worktreeRoot(), this.project.repo].map((r) => path.resolve(r));
+    const base = this.store.integrationWorktree();
+    const dir = path.join(this.store.dir, "attachments");
+    fs.mkdirSync(dir, { recursive: true });
+    const out: Array<{ id: string; name: string; type: string; size: number }> = [];
+    for (const p of paths) {
+      const abs = path.resolve(path.isAbsolute(p) ? p : path.join(base, p));
+      if (!roots.some((r) => !path.relative(r, abs).startsWith("..") && !path.isAbsolute(path.relative(r, abs)))) throw new Error(`${p}: 이 안건의 작업 폴더나 프로젝트 폴더 밖의 파일은 보여줄 수 없습니다`);
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) throw new Error(`${p}: 파일이 없습니다`);
+      const ext = path.extname(abs).toLowerCase();
+      const type = SHOW_TYPES[ext];
+      if (!type) throw new Error(`${p}: 보여줄 수 없는 형식입니다 (${Object.keys(SHOW_TYPES).join(" ")})`);
+      const size = fs.statSync(abs).size;
+      if (size > 25 * 1024 * 1024) throw new Error(`${p}: 25MB보다 큽니다`);
+      const name = path.basename(abs).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(-80);
+      const id = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}-${name}`;
+      fs.copyFileSync(abs, path.join(dir, id));
+      out.push({ id, name, type, size });
+    }
+    const text = caption.trim();
+    this.store.appendTranscript({ role: "assistant", text, attachments: out, shown: true });
+    this.emit("show", { caption: text, attachments: out });
+    this.log(`chair showed ${out.length} file(s): ${out.map((a) => a.name).join(", ")}`);
+    return out;
+  }
+
   /** The chair needs a decision from the user: mark the agenda as waiting until the user answers. */
-  askUser(question: string, options?: string[]): { waiting: true } {
+  askUser(question: string, options?: string[], kind?: "finish"): { waiting: true } {
     const a = this.store.agenda();
-    a.waitingForUser = { question: question.trim(), options: options?.map((o) => o.trim()).filter(Boolean).slice(0, 6), at: new Date().toISOString() };
+    a.waitingForUser = { question: question.trim(), options: options?.map((o) => o.trim()).filter(Boolean).slice(0, 6), at: new Date().toISOString(), ...(kind ? { kind } : {}) };
     this.store.saveAgenda(a);
     this.log(`chair is waiting for the user: ${a.waitingForUser.question.slice(0, 120)}`);
     this.emit("ask", a.waitingForUser);
@@ -1072,9 +1149,41 @@ export class Council extends EventEmitter {
   }
 
   /** chair asks to end the agenda; it runs after the current chair turn */
-  async requestFinish(reason: string, opts: { includeUnmerged?: boolean } = {}): Promise<{ scheduled: boolean; problems: string[] }> {
+  /** set by the runtime when the user sends a message (more reliable than reading the transcript) */
+  latestUserMessage?: string;
+
+  /** what the user (not a council event) last said to the chair */
+  lastUserMessage(): string | undefined {
+    if (this.latestUserMessage !== undefined) return this.latestUserMessage;
+    const f = path.join(this.store.dir, "transcript.jsonl");
+    if (!fs.existsSync(f)) return undefined;
+    const lines = fs.readFileSync(f, "utf8").split("\n").filter(Boolean).reverse();
+    for (const l of lines) {
+      try {
+        const e = JSON.parse(l) as { role?: string; text?: string };
+        if (e.role === "user" && e.text && !e.text.startsWith("[council event]") && !e.text.startsWith("[회고]")) return e.text;
+      } catch {
+        /* skip */
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * The chair wants to end the agenda. It ends only when the user's latest message asks for it
+   * (checked here, not trusted from the chair); otherwise it becomes a proposal the user approves.
+   */
+  async requestFinish(
+    reason: string,
+    opts: { includeUnmerged?: boolean } = {},
+  ): Promise<{ scheduled: boolean; proposed?: boolean; problems: string[] }> {
     const problems = await this.finishProblems(opts);
     if (problems.length) return { scheduled: false, problems };
+    if (!userAskedToFinish(this.lastUserMessage())) {
+      this.askUser(`안건을 종료할까요? ${reason}`, ["안건 종료", "계속 진행"], "finish");
+      this.log(`chair proposed finishing the agenda: ${reason}`);
+      return { scheduled: false, proposed: true, problems: [] };
+    }
     this.finishRequest = { reason, at: new Date().toISOString() };
     this.log(`chair requested agenda finish: ${reason}`);
     return { scheduled: true, problems: [] };
@@ -1161,6 +1270,18 @@ export class Council extends EventEmitter {
     const leftover = await removeDir(this.store.worktreeRoot());
     return leftover ? [leftover] : [];
   }
+}
+
+/**
+ * Did the user ask to end the agenda? ("종료해", "마무리하자", "그만 끝내", "안건 닫아", "finish")
+ * Negations ("종료하지 마", "끝내지 말고", "아직 종료 말고") do not count.
+ */
+export function userAskedToFinish(text: string | undefined): boolean {
+  if (!text) return false;
+  const t = text.replace(/\s+/g, " ").trim();
+  if (/(종료|마무리|끝내|끝내|닫|close|finish)[^.?!\n]{0,8}(하지\s*마|하지\s*말|말고|마세요|안\s*돼|않|금지)/i.test(t)) return false;
+  if (/(아직|나중에)[^.?!\n]{0,6}(종료|마무리|끝내|닫)/.test(t)) return false;
+  return /(안건\s*)?(종료|마무리|끝내|끝내자|끝내줘|끝내 줘|닫아|닫자|그만\s*하자|close|finish)/i.test(t);
 }
 
 export interface DeleteAgendaResult {

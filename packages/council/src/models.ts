@@ -69,7 +69,7 @@ export interface ProviderLimit {
 export type Limits = Record<LimitKey, ProviderLimit>;
 
 export const DEFAULT_LIMITS: Limits = {
-  claude: { maxMembers: 3, maxModel: "opus", maxEffort: "high" },
+  claude: { maxMembers: 3, maxModel: "fable", maxEffort: "high" },
   gemini: { maxMembers: 2, maxModel: "gemini-4-argon", maxEffort: "high" },
   gpt: { maxMembers: 2, maxModel: "gpt-6.1-sol", maxEffort: "high" },
   "gemini-web": { maxMembers: 1 },
@@ -128,6 +128,23 @@ export function allowedEfforts(provider: CliProvider, limit: ProviderLimit): Eff
 }
 
 export class LimitError extends Error {}
+
+/**
+ * The most expensive models are held back when that provider's weekly allowance runs low:
+ * fable below 30% weekly remaining, gpt-6-astra below 50% (GPT allowances are tighter).
+ */
+export const TOP_MODEL_WEEKLY_FLOOR: Array<{ provider: CliProvider; match: RegExp; label: string; minWeeklyLeft: number }> = [
+  { provider: "claude", match: /fable|mythos/i, label: "fable", minWeeklyLeft: 30 },
+  { provider: "gpt", match: /astra/i, label: "gpt-6-astra", minWeeklyLeft: 50 },
+];
+
+/** throws when model is a top model and the provider's best account has too little weekly allowance left */
+export function checkTopModelUsage(provider: CliProvider, model: string | undefined, weeklyLeft: number | undefined): void {
+  if (!model || weeklyLeft === undefined) return;
+  const rule = TOP_MODEL_WEEKLY_FLOOR.find((r) => r.provider === provider && r.match.test(model));
+  if (rule && weeklyLeft < rule.minWeeklyLeft)
+    throw new LimitError(`${rule.label}은(는) ${provider} 주간 사용량이 ${rule.minWeeklyLeft}% 이상 남았을 때만 쓴다 (지금 ${weeklyLeft}% 남음). 한 단계 낮은 모델을 고른다.`);
+}
 
 /** default = the "workhorse" (2nd rung) clamped to the limit */
 export function resolveModel(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): string {

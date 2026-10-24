@@ -247,6 +247,23 @@ export function createCouncilMcp(council: Council): McpServer {
   );
 
   server.registerTool(
+    "council_show",
+    {
+      title: "Show drafts / screenshots in the chat",
+      description:
+        "Put images, screenshots, HTML mockups, PDFs or videos into the user's chat (and Telegram) with a short caption. " +
+        "Files must be inside this agenda's worktrees or the project folder; relative paths are relative to the integration worktree. " +
+        "Members leave screenshots in <their worktree>/.council/shots/ (listed in their completion event). " +
+        "Use it whenever a report or a decision is about how something looks: show first, then explain briefly and ask with council_ask_user.",
+      inputSchema: {
+        paths: z.array(z.string()).min(1).max(8).describe("absolute paths or paths relative to the integration worktree"),
+        caption: z.string().min(2).describe("what the user is looking at, e.g. 'A안: 타이틀 화면 (claude-3)'"),
+      },
+    },
+    async ({ paths, caption }) => guard(() => ({ shown: council.showFiles(paths, caption).map((a) => a.name) })),
+  );
+
+  server.registerTool(
     "council_ask_user",
     {
       title: "Ask the user for a decision",
@@ -268,8 +285,10 @@ export function createCouncilMcp(council: Council): McpServer {
     {
       title: "Finish the agenda",
       description:
-        "End this agenda: after your current turn the server merges the agenda branch into the base branch, removes the worktrees " +
-        "(notes are archived) and closes the agenda. Use when every goal is merged and verified, or when the user asks to finish. " +
+        "End this agenda, or propose ending it. The agenda only ends when the user's latest message asks for it (\"종료해\", \"마무리하자\") " +
+        "or the user approves your proposal; the server checks this, not you. When the work looks done but the user has not asked, call this " +
+        "to PROPOSE: the user gets a card with an end button, and you end your turn with a short summary (show results first with council_show). " +
+        "When it does end, after your turn the server merges the agenda branch into the base branch, removes the worktrees and closes the agenda. " +
         "Refused while members run, when finished work is unmerged (pass include_unmerged:true to drop it on purpose), or when the main checkout is not ready. " +
         "After a successful call, end your turn with a short summary of what is being merged.",
       inputSchema: {
@@ -280,9 +299,10 @@ export function createCouncilMcp(council: Council): McpServer {
     async ({ reason, include_unmerged }) =>
       guard(async () => {
         const r = await council.requestFinish(reason, { includeUnmerged: include_unmerged });
-        return r.scheduled
-          ? { scheduled: true, note: "이번 턴이 끝나면 베이스 브랜치에 머지하고 안건을 닫는다. 새 작업을 배정하지 말고 요약 보고로 턴을 끝내라." }
-          : { scheduled: false, problems: r.problems };
+        if (r.scheduled) return { scheduled: true, note: "사용자가 종료를 요청했다. 이번 턴이 끝나면 베이스 브랜치에 머지하고 안건을 닫는다. 새 작업을 배정하지 말고 요약 보고로 턴을 끝내라." };
+        if (r.proposed)
+          return { scheduled: false, proposed: true, note: "사용자가 아직 종료를 요청하지 않아 종료를 제안만 했다(종료 버튼이 있는 카드). 무엇을 합쳤는지 짧게 요약하고 턴을 끝내라. 사용자가 승인하면 서버가 종료한다." };
+        return { scheduled: false, problems: r.problems };
       }),
   );
 

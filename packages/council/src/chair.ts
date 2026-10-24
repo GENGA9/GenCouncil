@@ -40,8 +40,26 @@ export const CHAIR_READONLY_BASH = [
   "Bash(git branch:*)",
   "Bash(git blame:*)",
   "Bash(git ls-files:*)",
+  "Bash(git rev-parse:*)",
+  "Bash(git ls-tree:*)",
+  "Bash(git cat-file:*)",
+  "Bash(git merge-base:*)",
+  "Bash(git worktree list:*)",
+  "Bash(git branch --list:*)",
   "Bash(cd:*)",
   "Bash(ls:*)",
+  // read-only text tools so ordinary pipelines (git log | head, grep | wc) are not refused as a whole
+  "Bash(head:*)",
+  "Bash(tail:*)",
+  "Bash(grep:*)",
+  "Bash(wc:*)",
+  "Bash(sort:*)",
+  "Bash(uniq:*)",
+  "Bash(cut:*)",
+  "Bash(cat:*)",
+  "Bash(echo:*)",
+  "Bash(pwd:*)",
+  "Bash(du:*)",
   "Bash(npm test:*)",
   "Bash(npm run test:*)",
   "Bash(npm run typecheck:*)",
@@ -65,7 +83,7 @@ const CHAIR_ALWAYS_DENIED = ["NotebookEdit", "Task"];
 
 export function chairToolArgs(directEdit: boolean): { allowed: string[]; disallowed: string[] } {
   const allowed = [...CHAIR_READ_TOOLS, ...CHAIR_READONLY_BASH, ...(directEdit ? CHAIR_EDIT_TOOLS : [])];
-  const disallowed = [...CHAIR_ALWAYS_DENIED, ...(directEdit ? [] : ["Edit", "Write", "MultiEdit"])];
+  const disallowed = [...CHAIR_ALWAYS_DENIED, ...(directEdit ? [] : ["Edit", "Write"])];
   return { allowed, disallowed };
 }
 const MAX_ACCOUNT_SWITCHES = 3;
@@ -284,6 +302,8 @@ export class Chair {
     // files the user attached in the chat
     const attachDir = path.join(store.dir, "attachments");
     if (fs.existsSync(attachDir)) args.push("--add-dir", attachDir);
+    // the main checkout is readable (what members merge into, what a finish checks); edits stay limited to ./**
+    args.push("--add-dir", this.council.project.repo);
     const model = this.model();
     const effort = this.effort();
     if (model) args.push("--model", model);

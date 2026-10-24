@@ -110,6 +110,58 @@ await doneOf(mv.id);
 check("same work cannot be checked twice", await council.verify(c5.id).then(() => false, (e) => /already being checked/.test(e.message)));
 check("a verifier result can itself be checked", (await council.verify(mv.id, { reason: "재확인" })).verifyOf === mv.id);
 
+// ---- 3b. screenshots members leave, and the chair showing them ----
+const t6 = council.addTask({ title: "타이틀 화면", goal: 1 });
+const shotsDrv = drivers.claude;
+drivers.claude = {
+  provider: "claude",
+  spawn: (spec, onLine) => {
+    fs.mkdirSync(path.join(spec.cwd, ".council", "shots"), { recursive: true });
+    fs.writeFileSync(path.join(spec.cwd, ".council", "shots", "title-after.png"), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    fs.writeFileSync(path.join(spec.cwd, ".council", "shots", "notes.zip"), "x");
+    return shotsDrv.spawn(spec, onLine);
+  },
+};
+await new Promise((r) => setTimeout(r, 300)); // let the verifier from section 3 finish
+const s6 = await council.assign({ taskId: t6.id, provider: "claude", instructions: "타이틀 화면을 바꾸고 스크린샷을 남긴다." });
+const s6m = await doneOf(s6.id);
+drivers.claude = shotsDrv;
+check("member screenshots are collected (images only)", s6m.shots?.length === 1 && s6m.shots[0].endsWith("title-after.png"), JSON.stringify(s6m.shots));
+check("chair event lists the screenshots", /스크린샷 1장/.test(memberEventText(s6m)));
+const shownEvents = [];
+council.on("show", (e) => shownEvents.push(e));
+const shown = council.showFiles([s6m.shots[0]], "A안: 타이틀 화면");
+check("chair shows a member screenshot", shown.length === 1 && shown[0].type === "image/png" && fs.existsSync(path.join(store.dir, "attachments", shown[0].id)));
+check("shown drafts are kept in the chat history", store.transcript?.() ? true : fs.readFileSync(path.join(store.dir, "transcript.jsonl"), "utf8").includes("A안: 타이틀 화면"));
+check("show event goes out", shownEvents.length === 1 && shownEvents[0].attachments[0].id === shown[0].id);
+check("files outside the agenda are refused", (() => { try { council.showFiles([path.join(os.tmpdir(), "x.png")], "x"); return false; } catch (e) { return /밖의 파일/.test(e.message); } })());
+check("unsupported formats are refused", (() => { try { council.showFiles([path.join(s6m.worktree, ".council", "shots", "notes.zip")], "x"); return false; } catch (e) { return /형식/.test(e.message); } })());
+
+// ---- 3c. the chair sees remaining usage next to the limits ----
+council.setUsageProvider(() => [
+  { provider: "claude", account: "claude", fiveHour: { usedPct: 85 }, weekly: { usedPct: 72 } },
+  { provider: "gpt", account: "gpt", weekly: { usedPct: 10 } },
+  { provider: "gemini", account: "gemini", error: "down" },
+]);
+const lm = council.limitsMarkdown();
+check("limits table shows remaining usage", lm.includes("남은 사용량") && lm.includes("| claude | 15% 남음 | 28% 남음 |") && lm.includes("| gpt | - | 90% 남음 |") && !lm.includes("down"), lm.split("\n").slice(-5).join(" / "));
+council.setUsageProvider(() => undefined);
+check("no usage data: plain table", !council.limitsMarkdown().includes("남은 사용량"));
+
+// ---- 3d. top models are held back when the weekly allowance runs low ----
+const { checkTopModelUsage } = await import("@gencouncil/council");
+const throws = (fn) => { try { fn(); return false; } catch (e) { return /주간 사용량/.test(e.message); } };
+check("astra refused under 50% GPT weekly", throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 40)));
+check("astra allowed at 60%", !throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 60)));
+check("sol never held back", !throws(() => checkTopModelUsage("gpt", "gpt-6.1-sol", 5)));
+check("fable refused under 30% Claude weekly", throws(() => checkTopModelUsage("claude", "fable", 25)) && !throws(() => checkTopModelUsage("claude", "opus", 5)));
+check("unknown usage never blocks", !throws(() => checkTopModelUsage("claude", "fable", undefined)));
+council.setUsageProvider(() => [{ provider: "claude", account: "claude", weekly: { usedPct: 80 } }, { provider: "claude", account: "claude-b", weekly: { usedPct: 90 } }]);
+check("best account decides", council.weeklyLeft("claude") === 20);
+const t7 = council.addTask({ title: "어려운 설계", goal: 1 });
+check("assign refuses fable when Claude weekly is low", await council.assign({ taskId: t7.id, provider: "claude", model: "fable", instructions: "가장 어려운 설계 작업을 한다." }).then(() => false, (e) => /fable/.test(e.message) && /주간/.test(e.message)));
+council.setUsageProvider(() => undefined);
+
 // ---- 4. GPT members get the memory MCP through codex -c overrides ----
 const { codexMcpArgs } = await import("@gencouncil/council");
 const ca = codexMcpArgs({ mcpServers: { gencouncil: { command: "C:\\Program Files\\nodejs\\node.exe", args: ["D:\\x\\server.js"], env: { GENCOUNCIL_ROLE: "member" } }, remote: { url: "http://127.0.0.1:7700/mcp-member/a/b/c", bearerTokenEnvVar: "GC_TOKEN" } } });
