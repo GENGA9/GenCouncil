@@ -107,7 +107,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
             <select
               className="autonomy-select"
               value={project.members.autonomy}
-              title="위원 자율성: 위원이 명령 실행 등 권한이 필요한 일을 할 때 누가 허락하는지"
+              title="위원 자율성: 위원이 명령 실행 등 권한이 필요한 일을 할 때 누가 허락하는지 (제미나이 위원은 의장에게 승인을 넘길 수 없어 '의장이 승인'에서도 권한 확인 없이 실행)"
               onChange={(e) => onSetAutonomy(e.target.value)}
             >
               <option value="full">위원: 권한 확인 없음</option>

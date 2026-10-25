@@ -173,7 +173,9 @@ export const geminiDriver: Driver = {
     const args = ["-p", prompt, "--output-format", "stream-json"];
     const model = agyModelId(spec.model, spec.effort);
     if (model) args.push("--model", model);
-    if (spec.autonomy === "full") args.push("--dangerously-skip-permissions");
+    // headless agy auto-denies every command and cannot hand approval to the chair,
+    // so "chair" runs unrestricted inside the member's worktree like "full"
+    if (spec.autonomy === "full" || spec.autonomy === "chair") args.push("--dangerously-skip-permissions");
     else args.push("--mode", "accept-edits");
     if (spec.extraArgs) args.push(...spec.extraArgs);
     const env: NodeJS.ProcessEnv = { ...process.env, ...spec.env };
