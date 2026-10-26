@@ -21,11 +21,13 @@ export interface ModelsInfo {
 }
 
 export interface CurateStatus {
-  kind?: "proposals" | "reorganize";
+  kind?: "proposals" | "reorganize" | "tidy";
   running: boolean;
   startedAt?: string;
   finishedAt?: string;
   pending?: number;
+  /** tidy: entries still due after this batch */
+  remaining?: number;
   steps?: number;
   text?: string;
   isError?: boolean;

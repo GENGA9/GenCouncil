@@ -26,6 +26,10 @@ import {
   runCurator,
   deleteAgenda,
   runReorganize,
+  runTidy,
+  selectTidyCandidates,
+  markReviewed,
+  verifiedHashes,
   projectMemoryKey,
   isCliProvider,
   isRepo,
@@ -150,7 +154,19 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     for (const c of clients) if (c.readyState === c.OPEN) c.send(data);
   };
   let telegram: TelegramBridge | undefined;
-  let curate: { kind?: "proposals" | "reorganize"; running: boolean; startedAt?: string; finishedAt?: string; pending?: number; steps?: number; text?: string; isError?: boolean; costUsd?: number } = { running: false };
+  let curate: {
+    kind?: "proposals" | "reorganize" | "tidy";
+    running: boolean;
+    startedAt?: string;
+    finishedAt?: string;
+    pending?: number;
+    /** tidy: entries still due after this batch */
+    remaining?: number;
+    steps?: number;
+    text?: string;
+    isError?: boolean;
+    costUsd?: number;
+  } = { running: false };
   let telegramUser: string | undefined;
 
   const findAgenda = (id: string, slug: string) => {
@@ -625,11 +641,37 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     });
     return curate;
   });
+  // routine tidy: code picks new/edited entries, Opus looks only at those
+  on("POST", "/api/memory/tidy", () => {
+    if (curate.running) throw new HttpError(409, "already running");
+    const projects = registry.list().map((p) => ({ key: projectMemoryKey(p), name: p.name }));
+    const { candidates, remaining } = selectTidyCandidates(memory);
+    const startedAt = new Date().toISOString();
+    if (!candidates.length) {
+      curate = { kind: "tidy", running: false, startedAt, finishedAt: startedAt, pending: 0, remaining: 0, steps: 0, text: "점검할 새 항목이나 바뀐 항목이 없습니다." };
+      return curate;
+    }
+    curate = { kind: "tidy", running: true, startedAt, pending: candidates.length, remaining, steps: 0 };
+    broadcast({ type: "curate", running: true });
+    const before = verifiedHashes(memory);
+    void runTidy(projects, candidates, { onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
+      memory.load();
+      memory.writeIndex();
+      if (!r.isError) markReviewed(memory, { before, candidates: candidates.map((c) => c.id) });
+      curate = { kind: "tidy", running: false, startedAt, finishedAt: new Date().toISOString(), pending: candidates.length, remaining, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
+      broadcast({ type: "curate", running: false, isError: r.isError });
+      broadcast({ type: "overview" });
+      log(`memory tidy finished (${r.isError ? "error" : "ok"}, ${candidates.length} entries, ${remaining} left)`);
+    });
+    return curate;
+  });
+  // full check: Fable reads every verified entry
   on("POST", "/api/memory/reorganize", () => {
     if (curate.running) throw new HttpError(409, "already running");
     const pending = memory.list({ status: "verified" }).length;
     const projects = registry.list().map((p) => ({ key: projectMemoryKey(p), name: p.name }));
     curate = { kind: "reorganize", running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
+    const before = verifiedHashes(memory);
     broadcast({ type: "curate", running: true });
     const verifiedList = memory.list({ status: "verified" });
     const lens = verifiedList.map((m) => ({ title: m.title.length, body: memory.get(m.id)?.body.length ?? 0 }));
@@ -647,6 +689,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     void runReorganize(projects, { stats, onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
       memory.load();
       memory.writeIndex();
+      if (!r.isError) markReviewed(memory, { before, all: true });
       curate = { kind: "reorganize", running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
       broadcast({ type: "curate", running: false, isError: r.isError });
       broadcast({ type: "overview" });

@@ -57,9 +57,9 @@ export interface StoreOptions {
 }
 
 const INDEX_FILE = "INDEX.md";
-const MAX_INDEX_LINES = 150;
-/** the index goes into every chair turn and member packet; keep it to a few thousand tokens */
-const MAX_INDEX_CHARS = 14000;
+const MAX_INDEX_LINES = 400;
+/** the index goes into every chair turn and member packet (via files, not the command line) */
+const MAX_INDEX_CHARS = 30000;
 const MAX_TITLE_CHARS = 90;
 
 export class MemoryStore {
@@ -198,10 +198,10 @@ export class MemoryStore {
     return this.index.search(query, opts);
   }
 
-  /** The compact index that gets injected into agent prompts. */
   /**
-   * Compact index. Common knowledge always comes first. With `project`, only that project's own
-   * entries follow (other projects' details are left out); without it, project entries are grouped by project.
+   * Compact index injected into agent prompts: one "id: title" line per entry (tags are left out
+   * to fit more entries). With `project`, that project's own entries come first, then common
+   * knowledge, and other projects are left out; without it, common comes first, then all projects.
    */
   renderIndex(opts: { project?: string } = {}): string {
     const verified = this.list({ status: "verified" });
@@ -233,10 +233,9 @@ export class MemoryStore {
             lines.push(`- … (index truncated, ${verified.length} total; search for the rest)`);
             return false;
           }
-          const tags = m.tags.length ? ` [${m.tags.join(", ")}]` : "";
           const proj = showProject && m.project ? ` (${m.project})` : "";
           const title = m.title.length > MAX_TITLE_CHARS ? m.title.slice(0, MAX_TITLE_CHARS - 1) + "…" : m.title;
-          const line = `- ${m.id}: ${title}${tags}${proj}`;
+          const line = `- ${m.id}: ${title}${proj}`;
           used += line.length + 1;
           if (used > MAX_INDEX_CHARS) {
             lines.push(`- … (index truncated, ${verified.length} total; search for the rest)`);
@@ -247,14 +246,13 @@ export class MemoryStore {
       }
       return true;
     };
-    if (section("공용 지식: 어느 프로젝트에서나 쓰는 도구·절차·환경", common, false)) {
-      if (want) {
-        section(`이 프로젝트 전용: ${opts.project}`, mine, false);
-        const others = projectOnly.length - mine.length;
-        if (others > 0) lines.push("", `(다른 프로젝트 전용 ${others}개는 생략. 필요하면 memory_search의 project로 찾는다.)`);
-      } else {
-        section("프로젝트 전용", mine, true);
-      }
+    const commonHeading = "공용 지식: 어느 프로젝트에서나 쓰는 도구·절차·환경";
+    if (want) {
+      if (section(`이 프로젝트 전용: ${opts.project}`, mine, false)) section(commonHeading, common, false);
+      const others = projectOnly.length - mine.length;
+      if (others > 0) lines.push("", `(다른 프로젝트 전용 ${others}개는 생략. 필요하면 memory_search의 project로 찾는다.)`);
+    } else if (section(commonHeading, common, false)) {
+      section("프로젝트 전용", mine, true);
     }
     return lines.join("\n") + "\n";
   }

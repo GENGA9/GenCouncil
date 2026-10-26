@@ -1,17 +1,25 @@
 /**
- * Memory curator: a one-shot Fable (high effort) session with owner rights on the shared
- * memory. It reviews pending proposals — improves, merges, approves or rejects them.
- * Members and the chair only propose; this is the single place that approves.
+ * Memory curator: a one-shot session with owner rights on the shared memory. It reviews
+ * pending proposals — improves, merges, approves or rejects them — and tidies verified
+ * entries. Members and the chair only propose; this is the single place that approves.
+ * Routine runs use Opus and only see entries picked by code; Fable runs the full check.
  */
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { memoryDir, spaceDir } from "@gencouncil/core";
+import { entryScope, memoryDir, spaceDir, type Entry, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
 import { AccountRegistry } from "./accounts.js";
 import { parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent } from "./drivers.js";
 
-export const CURATOR_MODEL = "fable";
-export const CURATOR_EFFORT = "high";
+/** routine runs: proposals and the incremental tidy */
+export const CURATOR_MODEL = "opus";
+export const CURATOR_EFFORT = "medium";
+/** the full check reads every verified entry */
+export const FULL_CHECK_MODEL = "fable";
+export const FULL_CHECK_EFFORT = "high";
+/** entries per incremental tidy; the rest wait for the next run */
+export const TIDY_BATCH = 30;
 
 export function curatorPrompt(): string {
   return `너는 공유 기억(Space Memory)의 관리자다. 위원과 의장이 올린 제안(proposed)을 처리한다.
@@ -71,7 +79,7 @@ ${now}
 ${list}
 
 순서
-1. memory_list(status: verified, limit: 200)로 전부 본다. 기준을 넘는 항목(여러 주제를 묶은 것, 너무 긴 것, 제목이 긴 것)과 진짜 중복만 고른다.
+1. 한 번에 200개까지만 나오므로 나눠서 전부 본다: memory_list(status: verified, scope: common, limit: 200), 그리고 위 프로젝트 키마다 memory_list(status: verified, project: <키>, limit: 200). 기준을 넘는 항목(여러 주제를 묶은 것, 너무 긴 것, 제목이 긴 것)과 진짜 중복만 고른다.
 2. 여러 주제를 묶은 항목을 나눌 때:
    - memory_read로 본문을 읽는다. 예전에 이 항목으로 합쳐진 원본들도 찾아 읽는다: memory_list(status: rejected, limit: 200)에서 mergedInto가 이 항목 id인 것. 합치면서 빠졌던 세부 사실(명령·주소·값)을 거기서 되살린다.
    - 주제마다 memory_write로 새 항목을 만든다(type, scope, project, tags를 원래대로 맞추고, 제목·본문은 위 기준).
@@ -85,6 +93,154 @@ ${list}
 9. 끝나면 한국어로 보고한다: 전과 후의 항목 수, 나눈 항목(원래 → 새 항목들), 합친 항목, 줄이기만 한 항목, 되살린 세부 사실이 있으면 그 내용.`;
 }
 
+// ---------- incremental tidy: code picks the entries, the model only sees those ----------
+
+/** what the tidy looks at: an edit to any of these makes the entry due again */
+export function entryHash(e: Entry): string {
+  const m = e.meta;
+  return crypto.createHash("sha1").update([m.title, entryScope(m), m.project ?? "", m.type, e.body].join("\n")).digest("hex").slice(0, 16);
+}
+
+function reviewedFile(): string {
+  return path.join(spaceDir(), "curator", "reviewed.json");
+}
+
+/** id -> entryHash at the time a tidy last looked at it; null before the first incremental run */
+export function loadReviewed(): Record<string, string> | null {
+  try {
+    return JSON.parse(fs.readFileSync(reviewedFile(), "utf8")) as Record<string, string>;
+  } catch {
+    return null;
+  }
+}
+
+function saveReviewed(map: Record<string, string>): void {
+  fs.mkdirSync(path.dirname(reviewedFile()), { recursive: true });
+  fs.writeFileSync(reviewedFile(), JSON.stringify(map, null, 1), "utf8");
+}
+
+/** hashes of every verified entry, used to see what a run changed */
+export function verifiedHashes(store: MemoryStore): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const m of store.list({ status: "verified" })) {
+    const e = store.get(m.id);
+    if (e) out[m.id] = entryHash(e);
+  }
+  return out;
+}
+
+/** why an entry needs work regardless of whether it was seen before */
+export function sizeProblems(e: Entry): string[] {
+  const t = COMPRESS_TARGETS;
+  const limit = e.meta.type === "persona" ? t.personaBody : entryScope(e.meta) === "common" ? t.commonBody : t.projectBody;
+  const out: string[] = [];
+  if (e.meta.title.length > t.title + 10) out.push(`제목 ${e.meta.title.length}자`);
+  if (e.body.length > Math.round(limit * 1.3)) out.push(`본문 ${e.body.length}자`);
+  if ((e.meta.title.match(/·/g) ?? []).length >= 3) out.push("제목에 여러 주제");
+  return out;
+}
+
+export interface TidyCandidate {
+  id: string;
+  title: string;
+  scope: string;
+  project?: string;
+  titleLen: number;
+  bodyLen: number;
+  reasons: string[];
+  similar: { id: string; title: string }[];
+}
+
+/**
+ * Entries that are new or edited since a tidy last saw them, oldest first. The first
+ * incremental run counts every existing entry as seen (they came out of a full check);
+ * entries Fable kept long on purpose are not picked again until someone edits them.
+ */
+export function selectTidyCandidates(store: MemoryStore, limit = TIDY_BATCH): { candidates: TidyCandidate[]; remaining: number } {
+  let reviewed = loadReviewed();
+  const verified = store.list({ status: "verified" });
+  if (!reviewed) {
+    reviewed = {};
+    for (const m of verified) {
+      const e = store.get(m.id);
+      if (e) reviewed[m.id] = entryHash(e);
+    }
+    saveReviewed(reviewed);
+  }
+  const due: { e: Entry; reasons: string[] }[] = [];
+  for (const m of verified) {
+    const e = store.get(m.id);
+    if (!e) continue;
+    const seen = reviewed[m.id];
+    if (seen === entryHash(e)) continue;
+    due.push({ e, reasons: [seen ? "바뀐 항목" : "새 항목", ...sizeProblems(e)] });
+  }
+  due.sort((a, b) => String(a.e.meta.updated).localeCompare(String(b.e.meta.updated)));
+  const picked = due.slice(0, limit);
+  const candidates = picked.map(({ e, reasons }) => ({
+    id: e.meta.id,
+    title: e.meta.title,
+    scope: entryScope(e.meta),
+    project: e.meta.project,
+    titleLen: e.meta.title.length,
+    bodyLen: e.body.length,
+    reasons,
+    similar: store
+      .search(e.meta.title, { status: "verified", limit: 4 })
+      .filter((h) => h.id !== e.meta.id)
+      .slice(0, 3)
+      .map((h) => ({ id: h.id, title: h.title })),
+  }));
+  return { candidates, remaining: due.length - picked.length };
+}
+
+/**
+ * After a successful run: the candidates, every entry the run wrote or edited, and (for the
+ * full check) everything else count as seen.
+ */
+export function markReviewed(store: MemoryStore, opts: { before: Record<string, string>; candidates?: string[]; all?: boolean }): void {
+  const reviewed = loadReviewed() ?? {};
+  const now = verifiedHashes(store);
+  for (const id of Object.keys(reviewed)) if (!now[id]) delete reviewed[id];
+  for (const [id, hash] of Object.entries(now)) {
+    if (opts.all || opts.candidates?.includes(id) || opts.before[id] !== hash) reviewed[id] = hash;
+  }
+  saveReviewed(reviewed);
+}
+
+export function tidyPrompt(projects: MemoryProjectInfo[], candidates: TidyCandidate[], retireBudget: number): string {
+  const list = projects.length ? projects.map((p) => `- ${p.key} (${p.name})`).join("\n") : "- (등록된 프로젝트 없음)";
+  const t = COMPRESS_TARGETS;
+  const lines = candidates
+    .map((c) => {
+      const where = c.scope === "project" ? `project:${c.project ?? "?"}` : "common";
+      const sim = c.similar.length ? `\n  비슷한 항목: ${c.similar.map((s) => `${s.id} "${s.title}"`).join(", ")}` : "";
+      return `- ${c.id} [${where}] "${c.title}" (제목 ${c.titleLen}자, 본문 ${c.bodyLen}자) 이유: ${c.reasons.join(", ")}${sim}`;
+    })
+    .join("\n");
+  return `너는 공유 기억(Space Memory)의 관리자다. 이번 일은 아래 목록의 승인된 기억 ${candidates.length}개만 점검하는 것이다. 목록은 코드가 골랐다: 새로 들어왔거나 바뀐 항목, 길이 기준을 넘는 항목이다. 목록 밖의 항목은 중복을 확인할 때만 읽고, 고치지 않는다. memory_list로 전체를 훑지 않는다.
+
+기준
+- 한 항목 = 한 주제. 여러 주제를 묶은 항목은 주제별로 나눈다. 같은 절차·같은 사실이 실제로 겹칠 때만 합친다.
+- 제목 ${t.title}자 이내 검색어 문장. 본문 공용 ${t.commonBody}자, 프로젝트 ${t.projectBody}자, 모델 성향 ${t.personaBody}자 안팎, "## 문제 / ## 해결 / ## 적용" 각 1~3줄. 명령·경로·옵션·주소·값·오류 문구·하지 말 것은 남기고, 경위·날짜별 기록·반복만 지운다. 사실이 많으면 빼지 말고 나눈다.
+- 이미 기준을 만족하면 건드리지 않는다. 대부분의 항목은 그대로 둬도 된다.
+- scope: common(다른 프로젝트에서도 그대로 쓰는 것) / project(한 프로젝트의 코드·데이터·도메인 사실). project 값은 아래 키 중 하나.
+
+프로젝트 키:
+${list}
+
+점검할 항목:
+${lines}
+
+순서
+1. 항목마다 memory_read로 읽는다. "비슷한 항목"은 제목만 봐서 같은 내용일 것 같을 때만 memory_read 한다.
+2. 진짜 중복: 남길 항목에 memory_update(body)로 두 쪽의 고유한 사실을 모두 담고, 나머지는 memory_retire(id, reason: "중복: <남긴 id>", merged_into: 남긴 id).
+3. 여러 주제를 묶은 항목: 주제마다 memory_write로 새 항목을 만든 뒤(type, scope, project, tags는 원래대로), 원래 항목을 memory_retire(id, reason: "분할: <새 id들>").
+4. 너무 긴 항목·긴 제목: memory_update로 경위·반복만 줄인다. scope가 틀렸으면 고친다.
+5. 합치기·삭제는 이번에 최대 ${retireBudget}개까지만 된다. 틀린 것이 확실할 때만 지운다. 새 사실을 지어내지 않는다.
+6. 끝나면 한국어로 짧게 보고한다: 고친 항목(무엇을), 합친 항목, 나눈 항목, 그대로 둔 항목 수.`;
+}
+
 export interface CuratorResult {
   text: string;
   isError: boolean;
@@ -95,14 +251,31 @@ export function curatorLogFile(): string {
   return path.join(spaceDir(), "curator", "curator.log");
 }
 
-/** Fable relabels every verified entry as common/project knowledge and merges duplicates. */
+/** Full check: Fable reads every verified entry, relabels scopes, splits bundles and merges duplicates. */
 export function runReorganize(
   projects: MemoryProjectInfo[],
   opts: { account?: string; model?: string; effort?: string; stats?: MemoryStats; onEvent?: (e: ClaudeEvent) => void } = {},
 ): Promise<CuratorResult> {
   // merges and deletions per run are capped so repeated runs cannot shrink the memory; splits do not count
   const retireBudget = Math.max(5, Math.ceil((opts.stats?.entries ?? 25) * 0.2));
-  return runCurator({ ...opts, prompt: reorganizePrompt(projects, opts.stats, retireBudget), label: "reorganize", retireBudget });
+  return runCurator({
+    model: FULL_CHECK_MODEL,
+    effort: FULL_CHECK_EFFORT,
+    ...opts,
+    prompt: reorganizePrompt(projects, opts.stats, retireBudget),
+    label: "reorganize",
+    retireBudget,
+  });
+}
+
+/** Incremental tidy: the routine model looks only at the candidates code picked. */
+export function runTidy(
+  projects: MemoryProjectInfo[],
+  candidates: TidyCandidate[],
+  opts: { account?: string; model?: string; effort?: string; onEvent?: (e: ClaudeEvent) => void } = {},
+): Promise<CuratorResult> {
+  const retireBudget = Math.max(3, Math.ceil(candidates.length * 0.3));
+  return runCurator({ ...opts, prompt: tidyPrompt(projects, candidates, retireBudget), label: "tidy", retireBudget });
 }
 
 export function runCurator(
@@ -112,7 +285,7 @@ export function runCurator(
   const account = opts.account ? accounts.get(opts.account) : accounts.pick("claude");
   const dir = path.join(spaceDir(), "curator");
   fs.mkdirSync(dir, { recursive: true });
-  const mcpEnv: Record<string, string> = { GENCOUNCIL_ROLE: "owner", GENCOUNCIL_AGENT: `curator:fable${opts.label ? ":" + opts.label : ""}` };
+  const mcpEnv: Record<string, string> = { GENCOUNCIL_ROLE: "owner", GENCOUNCIL_AGENT: `curator:${opts.model ?? CURATOR_MODEL}${opts.label ? ":" + opts.label : ""}` };
   if (process.env.GENCOUNCIL_HOME) mcpEnv.GENCOUNCIL_HOME = process.env.GENCOUNCIL_HOME;
   if (opts.retireBudget) mcpEnv.GENCOUNCIL_RETIRE_BUDGET = String(opts.retireBudget);
   const mcpFile = path.join(dir, "mcp.json");

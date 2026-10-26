@@ -134,7 +134,10 @@ const other = scoped.write({ title: "강화게임 스킬 칸 제한", type: "sol
 check("no project -> common by default", common.meta.scope === "common");
 check("project set -> project scope by default", proj.meta.scope === "project");
 const idxSeisen = scoped.renderIndex({ project: "SEISEN" });
-check("project index: common first, own project, others left out", idxSeisen.indexOf("ace-step") < idxSeisen.indexOf("84:A370") && !idxSeisen.includes("강화게임") && /다른 프로젝트 전용 1개/.test(idxSeisen), idxSeisen);
+check("project index: own project first, then common, others left out", idxSeisen.indexOf("84:A370") < idxSeisen.indexOf("ace-step") && !idxSeisen.includes("강화게임") && /다른 프로젝트 전용 1개/.test(idxSeisen), idxSeisen);
+const idxAll = scoped.renderIndex();
+check("index without project: common first", idxAll.indexOf("ace-step") < idxAll.indexOf("84:A370"));
+check("index lines carry no tags", !/\]\s*$/m.test(scoped.renderIndex({ project: "seisen" }).split("\n").filter((l) => l.startsWith("- ")).join("\n")));
 const promoted = scoped.update(other.meta.id, { scope: "common", title: "스킬 칸 제한은 레벨 검사 한 곳에서 막는다" });
 check("update can promote to common and keeps origin project", promoted.meta.scope === "common" && promoted.meta.project === "reinforce_project");
 check("search filters by scope", scoped.search("스킬 칸", { scope: "common" }).length === 1 && scoped.search("스킬 칸", { scope: "project" }).length === 0);
