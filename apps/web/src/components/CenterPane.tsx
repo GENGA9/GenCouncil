@@ -4,8 +4,19 @@ import { familyColor, memberName } from "../model";
 import type { ChatItem, Member, ProjectOv, RuntimeState, Task } from "../types";
 import { GridSpinner } from "./GridSpinner";
 
-const MODELS = ["", "opus", "sonnet", "fable", "haiku"];
-const EFFORTS = ["", "low", "medium", "high", "xhigh", "max"];
+/** chair models per CLI; the chair runs on whatever CLI its account belongs to */
+const CHAIR_MODELS: Record<string, string[]> = {
+  claude: ["", "opus", "sonnet", "fable", "haiku"],
+  gpt: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6.1-terra", "gpt-6-luna"],
+  gemini: ["gemini-4-argon", "gemini-3.8-flash"],
+};
+const CHAIR_EFFORTS: Record<string, string[]> = {
+  claude: ["", "low", "medium", "high", "xhigh", "max"],
+  gpt: ["", "low", "medium", "high", "xhigh", "max"],
+  gemini: ["", "low", "medium", "high"],
+};
+const PROVIDER_LABEL: Record<string, string> = { claude: "클로드", gpt: "GPT", gemini: "제미나이" };
+const CLI_PROVIDERS = ["claude", "gpt", "gemini"];
 const STATUS_KO: Record<Task["status"], string> = { todo: "대기", doing: "진행", review: "검토", done: "완료", blocked: "막힘" };
 
 interface Props {
@@ -98,6 +109,9 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
 
   const model = state.chair.model ?? "";
   const effort = state.chair.effort ?? "";
+  const chairProvider = state.chair.provider ?? "claude";
+  const MODELS = CHAIR_MODELS[chairProvider] ?? CHAIR_MODELS.claude;
+  const EFFORTS = CHAIR_EFFORTS[chairProvider] ?? CHAIR_EFFORTS.claude;
   const memberById = new Map(state.members.map((m) => [m.id, m]));
   const goalTasks = (i: number) => state.tasks.filter((t) => t.goal === i + 1);
   const orphanTasks = state.tasks.filter((t) => !t.goal);
@@ -107,7 +121,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
     <div className="center-inner">
       <div className="chair-head">
         <div className="chair-title">
-          의장 · 클로드
+          의장 · {PROVIDER_LABEL[chairProvider] ?? chairProvider}
           <select value={MODELS.includes(model) ? model : "custom"} onChange={(e) => e.target.value !== "custom" && onSetChair(e.target.value, effort)} title="의장 모델">
             {MODELS.map((m) => (
               <option key={m} value={m}>{m || "기본 모델"}</option>
@@ -122,16 +136,25 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
 
           <select
             value={state.chair.account ?? "claude"}
-            title="의장 계정 (바꾸면 state.md 기반으로 새 세션 시작)"
+            title="의장 계정. GPT·제미나이 계정을 고르면 그 AI가 의장을 맡습니다 (바꾸면 state.md 기반으로 새 세션 시작)"
             onChange={(e) => {
-              if (confirm("의장 계정을 바꾸면 대화 세션이 새로 시작됩니다 (state.md는 유지). 계속할까요?")) void onSetChair(model, effort, e.target.value);
+              const next = state.accounts.find((a) => a.id === e.target.value);
+              const other = next && next.provider !== chairProvider ? `${PROVIDER_LABEL[next.provider] ?? next.provider}가 의장을 맡고 ` : "";
+              if (confirm(`의장 계정을 바꾸면 ${other}대화 세션이 새로 시작됩니다 (state.md는 유지). 계속할까요?`)) void onSetChair(model, effort, e.target.value);
             }}
           >
-            {state.accounts.filter((a) => a.provider === "claude").map((a) => (
-              <option key={a.id} value={a.id}>{a.id}{a.status !== "ok" ? ` (${a.status})` : ""}</option>
-            ))}
+            {CLI_PROVIDERS.map((p) => {
+              const list = state.accounts.filter((a) => a.provider === p);
+              return list.length ? (
+                <optgroup key={p} label={PROVIDER_LABEL[p]}>
+                  {list.map((a) => (
+                    <option key={a.id} value={a.id}>{a.id}{a.status !== "ok" ? ` (${a.status})` : ""}</option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
           </select>
-          {busy && <GridSpinner color="var(--c-claude)" size={16} title="의장이 생각 중" />}
+          {busy && <GridSpinner color={`var(--c-${chairProvider})`} size={16} title="의장이 생각 중" />}
         </div>
         <div className="chair-actions">
           {project && (
@@ -254,7 +277,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           )}
           {busy && (
             <div className="msg thinking muted">
-              <GridSpinner color="var(--c-claude)" size={12} /> 의장이 작업 중…
+              <GridSpinner color={`var(--c-${chairProvider})`} size={12} /> 의장이 작업 중…
             </div>
           )}
         </div>

@@ -64,6 +64,7 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
   - 사용자가 폴더를 직접 고친 내용은 안건을 열 때와 종료할 때 "gencouncil: 사용자 변경 반영"으로 자동 커밋된다. 안건 결과는 종료 때 이 폴더에 바로 합쳐진다.
   - 만들 때 무엇이 git에 들어가고 무엇이 빠졌는지 요약을 보여 준다.
 - **의장**: 기본 Opus. 판단이 많고 토큰은 적게 쓰는 역할이라서다. 모델과 추론 수준은 프로젝트 설정(⚙)이나 의장 헤더에서 바꾼다.
+- **GPT·제미나이 의장**: 의장 헤더의 계정 드롭다운에서 GPT(Codex)나 제미나이(Antigravity) 계정을 고르면 그 AI가 의장을 맡는다. 모델 목록도 그 AI 것으로 바뀌고(기본 gpt-6.1-sol / gemini-4-argon), 세션은 새로 시작한다(state.md 유지). 두 CLI에는 시스템 프롬프트 옵션이 없어 새 세션의 첫 메시지에 의장 지침 전체를, 이후 턴에는 목표·한도·state.md만 붙인다. Codex 의장은 읽기 전용 샌드박스(직접 수정 허용 시 작업 폴더 쓰기)에서 돈다. Antigravity는 MCP를 전역 설정에서만 읽으므로 처음 쓸 때 `~/.gemini/config/mcp_config.json`에 `gencouncil_council`(안건 연결 다리)·`gencouncil`(공유 기억)을 등록하고 `~/.gemini/antigravity-cli/settings.json`에서 두 서버의 도구를 허용한다. 다리는 agy 프로세스 환경변수로 어느 안건인지 알아내므로, 위원이나 직접 띄운 agy에서는 도구가 비어 있다. 위원 권한을 대신 승인하는 검토는 의장이 GPT·제미나이여도 클로드(Opus)가 한다.
 
 ## 위원 자율성
 
@@ -134,7 +135,7 @@ gencouncil account list                # 상태: ok / exhausted(리셋 시각) /
 gencouncil council handover <project> <agenda> claude-1 [--provider gemini] [--account claude-b]
 ```
 
-- **의장**: 의장 턴이 한도/로그인 오류로 실패하면 다른 claude 계정으로 바꾸고 `state.md`를 바탕으로 새 세션을 시작한다(최대 3회). 쓸 수 있는 계정이 없으면 그 사실을 채팅에 알린다. 의장 헤더의 계정 드롭다운으로 수동 전환도 된다(세션은 새로 시작, state.md 유지).
+- **의장**: 의장 턴이 한도/로그인 오류로 실패하면 같은 종류(claude·gpt·gemini)의 다른 계정으로 바꾸고 `state.md`를 바탕으로 새 세션을 시작한다(최대 3회). 쓸 수 있는 계정이 없으면 그 사실을 채팅에 알린다. 의장 헤더의 계정 드롭다운으로 수동 전환도 된다(세션은 새로 시작, state.md 유지).
 
 ### 릴레이 위원
 

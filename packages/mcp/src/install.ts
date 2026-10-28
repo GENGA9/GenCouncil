@@ -162,3 +162,65 @@ export function install(target: Target | "all", opts: InstallOptions = {}): stri
   if (target === "antigravity") out.push("[antigravity]", ...installAntigravity(opts));
   return out;
 }
+
+/** dist/install.js -> dist/bridge.js */
+export function bridgeEntry(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "bridge.js");
+}
+
+/** MCP server names a Gemini (agy) chair sees; tools are allowed without prompts */
+export const AGY_COUNCIL_SERVER = "gencouncil_council";
+export const AGY_MEMORY_SERVER = "gencouncil";
+
+function readJsonFile<T>(file: string, fallback: T): T | undefined {
+  if (!fs.existsSync(file)) return fallback;
+  const text = fs.readFileSync(file, "utf8");
+  if (!text.trim()) return fallback;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Antigravity CLI reads MCP servers only from <home>/.gemini/config/mcp_config.json and refuses
+ * headless MCP calls unless <home>/.gemini/antigravity-cli/settings.json allows them. Register the
+ * council bridge and the memory server there (both take their settings from the agy process env)
+ * and allow their tools. Idempotent; leaves other entries alone. Returns what changed.
+ */
+export function ensureAgyCouncil(home: string = os.homedir()): string[] {
+  const out: string[] = [];
+  const mcpFile = path.join(home, ".gemini", "config", "mcp_config.json");
+  const cfg = readJsonFile<McpJson>(mcpFile, {});
+  if (!cfg) throw new Error(`${mcpFile}: could not parse JSON`);
+  cfg.mcpServers = cfg.mcpServers ?? {};
+  const want = {
+    [AGY_COUNCIL_SERVER]: { command: nodeExe(), args: [bridgeEntry()] },
+    [AGY_MEMORY_SERVER]: { command: nodeExe(), args: [serverEntry()] },
+  };
+  let changed = false;
+  for (const [name, s] of Object.entries(want)) {
+    const cur = cfg.mcpServers[name] as { command?: string; args?: string[]; env?: unknown } | undefined;
+    if (cur?.command === s.command && JSON.stringify(cur.args) === JSON.stringify(s.args) && !cur.env) continue;
+    cfg.mcpServers[name] = s;
+    changed = true;
+  }
+  if (changed) {
+    fs.mkdirSync(path.dirname(mcpFile), { recursive: true });
+    fs.writeFileSync(mcpFile, JSON.stringify(cfg, null, 2) + "\n", "utf8");
+    out.push(`${mcpFile}: ${Object.keys(want).join(", ")}`);
+  }
+  const setFile = path.join(home, ".gemini", "antigravity-cli", "settings.json");
+  const settings = readJsonFile<{ permissions?: { allow?: string[] } } & Record<string, unknown>>(setFile, {});
+  if (!settings) throw new Error(`${setFile}: could not parse JSON`);
+  const allow = settings.permissions?.allow ?? [];
+  const grants = [`mcp(${AGY_COUNCIL_SERVER}/*)`, `mcp(${AGY_MEMORY_SERVER}/*)`].filter((g) => !allow.includes(g));
+  if (grants.length) {
+    settings.permissions = { ...(settings.permissions ?? {}), allow: [...allow, ...grants] };
+    fs.mkdirSync(path.dirname(setFile), { recursive: true });
+    fs.writeFileSync(setFile, JSON.stringify(settings, null, 2) + "\n", "utf8");
+    out.push(`${setFile}: allow ${grants.join(", ")}`);
+  }
+  return out;
+}

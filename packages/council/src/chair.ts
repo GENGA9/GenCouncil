@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { serverEntry } from "@gencouncil/mcp/install";
+import os from "node:os";
+import { ensureAgyCouncil, serverEntry } from "@gencouncil/mcp/install";
 import type { Account } from "./accounts.js";
 import type { Council } from "./council.js";
-import { parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
+import { agyModelId, codexMcpArgs, makeAgyParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
+import { tierOf, type CliProvider } from "./models.js";
 import { advisorFor, projectMemoryKey } from "./model.js";
 import { chairSystemPrompt } from "./prompts.js";
 import { classifyFailure } from "./quota.js";
@@ -88,8 +90,32 @@ export function chairToolArgs(directEdit: boolean): { allowed: string[]; disallo
 }
 const MAX_ACCOUNT_SWITCHES = 3;
 
+/** "the session to resume is gone" across CLIs (claude / codex / agy) */
+const RESUME_FAILED = /no conversation found|no (session|rollout|thread) found|(conversation|session|thread)\b[^\n]{0,40}not found/i;
+
+interface ChairLaunch {
+  cmd: string;
+  args: string[];
+  env: NodeJS.ProcessEnv;
+  /** what goes on stdin; defaults to the user message */
+  stdinText?: string;
+  parse: (line: string) => ClaudeEvent[];
+}
+
+/** chair model when the project names none (or one from another provider) */
+export const CHAIR_DEFAULT_MODEL: Record<CliProvider, string> = { claude: "opus", gpt: "gpt-6.1-sol", gemini: "gemini-4-argon" };
+
+/** the chair's model for a provider: the configured one when it belongs to that provider, else the default */
+export function chairModelFor(provider: CliProvider, model: string | undefined): string {
+  if (model && tierOf(provider, model) >= 0) return model;
+  return CHAIR_DEFAULT_MODEL[provider];
+}
+
 export class Chair {
   private readonly mcpFile: string;
+  private readonly mcpCfg: { mcpServers: Record<string, { type?: string; url?: string; command?: string; args?: string[]; env?: Record<string, string>; headers?: Record<string, string> }> };
+  /** env the memory MCP server needs (agy chairs pass it through the process env) */
+  private readonly memoryEnv: Record<string, string>;
   private busy = false;
   private current?: RunningProc;
 
@@ -105,21 +131,15 @@ export class Chair {
       GENCOUNCIL_PROJECT: projectMemoryKey(council.project),
     };
     if (process.env.GENCOUNCIL_HOME) env.GENCOUNCIL_HOME = process.env.GENCOUNCIL_HOME;
+    this.memoryEnv = env;
+    this.mcpCfg = {
+      mcpServers: {
+        council: { type: "http", url: opts.councilUrl, ...(opts.councilHeaders ? { headers: opts.councilHeaders } : {}) },
+        gencouncil: { type: "stdio", command: process.execPath, args: [serverEntry()], env },
+      },
+    };
     fs.mkdirSync(store.chairDir(), { recursive: true });
-    fs.writeFileSync(
-      this.mcpFile,
-      JSON.stringify(
-        {
-          mcpServers: {
-            council: { type: "http", url: opts.councilUrl, ...(opts.councilHeaders ? { headers: opts.councilHeaders } : {}) },
-            gencouncil: { type: "stdio", command: process.execPath, args: [serverEntry()], env },
-          },
-        },
-        null,
-        2,
-      ),
-      "utf8",
-    );
+    fs.writeFileSync(this.mcpFile, JSON.stringify(this.mcpCfg, null, 2), "utf8");
   }
 
   isBusy(): boolean {
@@ -164,8 +184,16 @@ export class Chair {
     this.opts = { ...this.opts, model: o.model, effort: o.effort };
   }
 
+  /** the chair runs on whatever CLI its account belongs to */
+  provider(): CliProvider {
+    const p = this.council.accounts.get(this.account())?.provider;
+    return p === "gpt" || p === "gemini" ? p : "claude";
+  }
+
   model(): string | undefined {
-    return this.opts.model ?? this.council.project.chair.model;
+    const m = this.opts.model ?? this.council.project.chair.model;
+    const p = this.provider();
+    return p === "claude" ? m : chairModelFor(p, m);
   }
 
   effort(): string | undefined {
@@ -173,6 +201,7 @@ export class Chair {
   }
 
   advisor(): string | undefined {
+    if (this.provider() !== "claude") return undefined;
     return advisorFor(this.model(), this.council.project.chair.advisor);
   }
 
@@ -207,7 +236,7 @@ export class Chair {
 
   /** Switch the chair to another usable claude account (persisted). Returns the new account or undefined. */
   private switchAccount(exclude: string[]): Account | undefined {
-    const next = this.council.accounts.pick("claude", { exclude });
+    const next = this.council.accounts.pick(this.provider(), { exclude });
     if (!next) return undefined;
     const p = this.council.project;
     p.chair.account = next.id;
@@ -232,21 +261,23 @@ export class Chair {
       let res: Awaited<ReturnType<Chair["runOnce"]>> | undefined;
       for (let attempt = 0; attempt <= MAX_ACCOUNT_SWITCHES; attempt++) {
         const session = store.chairSession();
-        res = await this.runOnce(message, session.sessionId, account, onEvent);
+        // a session belongs to one CLI (older sessions are Claude ones)
+        const resumeId = (session.provider ?? "claude") === account.provider ? session.sessionId : undefined;
+        res = await this.runOnce(message, resumeId, account, onEvent);
         if (res.isError && res.resumeFailed) {
           onEvent({ kind: "text", text: "(이전 의장 세션을 찾지 못해 새 세션으로 시작합니다. state.md는 이어집니다.)" });
           this.resetSession();
           res = await this.runOnce(message, undefined, account, onEvent);
         }
         if (!res.isError) break;
-        const failure = classifyFailure("claude", `${res.stderr}\n${res.text}`, res.exitCode);
+        const failure = classifyFailure(account.provider as CliProvider, `${res.stderr}\n${res.text}`, res.exitCode);
         if (failure.kind === "other") break;
         if (failure.kind === "quota") this.council.accounts.markExhausted(account.id, failure.message, failure.resetAt);
         else this.council.accounts.markAuth(account.id, failure.message);
         tried.push(account.id);
         const next = this.switchAccount(tried);
         if (!next) {
-          res.text = `의장 계정 ${account.id} ${failure.kind === "quota" ? "한도 소진" : "로그인 필요"}: ${failure.message}. 쓸 수 있는 다른 claude 계정이 없습니다. 'gencouncil account add'로 계정을 추가하거나 리셋을 기다리세요.`;
+          res.text = `의장 계정 ${account.id} ${failure.kind === "quota" ? "한도 소진" : "로그인 필요"}: ${failure.message}. 쓸 수 있는 다른 ${account.provider} 계정이 없습니다. 'gencouncil account add'로 계정을 추가하거나 리셋을 기다리세요.`;
           break;
         }
         this.appendLog(`=== ${new Date().toISOString()} account switch ${account.id} -> ${next.id} (${failure.kind}: ${failure.message})`);
@@ -259,7 +290,7 @@ export class Chair {
         const note = await this.commitOwnEdits(shownText ?? message);
         if (note) res.text = `${res.text}\n\n${note}`;
       }
-      if (res.sessionId && !res.isError) store.saveChairSession({ sessionId: res.sessionId, model: this.model() });
+      if (res.sessionId && !res.isError) store.saveChairSession({ sessionId: res.sessionId, model: this.model(), provider: account.provider });
       store.appendTranscript({ role: "assistant", text: res.text, isError: res.isError, costUsd: res.costUsd });
       return { text: res.text, sessionId: res.sessionId, isError: res.isError, costUsd: res.costUsd };
     } finally {
@@ -287,7 +318,24 @@ export class Chair {
     onEvent: (e: ClaudeEvent) => void,
   ): Promise<ChairTurnResult & { resumeFailed?: boolean; stderr: string; exitCode: number | null }> {
     const store = this.council.store;
-    // the message goes on stdin and the system prompt in a file: Windows caps a command line at 32,767 chars
+    const provider = (account.provider === "gpt" || account.provider === "gemini" ? account.provider : "claude") as CliProvider;
+    const launch = provider === "gpt" ? this.codexLaunch(message, resume, account) : provider === "gemini" ? this.agyLaunch(message, resume, account) : this.claudeLaunch(resume, account);
+    const model = this.model();
+    const effort = this.effort();
+    const advisor = this.advisor();
+    this.council.accounts.touch(account.id);
+    fs.mkdirSync(store.chairDir(), { recursive: true });
+    const log = fs.createWriteStream(this.logFile(), { flags: "a" });
+    log.write(
+      `=== ${new Date().toISOString()} chair turn provider=${provider} account=${account.id} model=${model ?? "default"} effort=${effort ?? "default"} advisor=${advisor ?? "off"} resume=${resume ?? "new"}\n` +
+        `[prompt] ${message.slice(0, 4000).replace(/\r?\n/g, " ⏎ ")}\n`,
+    );
+    return this.execute(launch, message, resume, log, onEvent);
+  }
+
+  /** Claude Code: the message goes on stdin and the system prompt in a file (Windows caps a command line at 32,767 chars) */
+  private claudeLaunch(resume: string | undefined, account: Account): ChairLaunch {
+    const store = this.council.store;
     const args = ["-p", "--output-format", "stream-json", "--verbose"];
     if (resume) args.push("--resume", resume);
     args.push("--mcp-config", this.mcpFile, "--strict-mcp-config");
@@ -313,16 +361,99 @@ export class Chair {
 
     const env: NodeJS.ProcessEnv = { ...process.env, ...this.council.accounts.env(account), GENCOUNCIL_ROLE: "chair" };
     delete env.CLAUDECODE;
-    this.council.accounts.touch(account.id);
-    fs.mkdirSync(store.chairDir(), { recursive: true });
-    const log = fs.createWriteStream(this.logFile(), { flags: "a" });
-    log.write(
-      `=== ${new Date().toISOString()} chair turn account=${account.id} model=${model ?? "default"} effort=${effort ?? "default"} advisor=${advisor ?? "off"} resume=${resume ?? "new"}\n` +
-        `[prompt] ${message.slice(0, 4000).replace(/\r?\n/g, " ⏎ ")}\n`,
-    );
+    return { cmd: "claude", args, env, parse: parseClaudeLine };
+  }
+
+  /** bearer token of the council endpoint (from the Authorization header the host gave us) */
+  private councilToken(): string | undefined {
+    const h = this.opts.councilHeaders?.Authorization ?? this.opts.councilHeaders?.authorization;
+    return h?.replace(/^Bearer\s+/i, "");
+  }
+
+  /**
+   * Codex and Antigravity have no system-prompt flag: the full chair prompt opens each new session
+   * and later turns carry only what changes between turns (goals, limits, state.md).
+   */
+  private promptWithInstructions(message: string, resume: string | undefined): string {
+    if (!resume) return `<의장_지침>\n${this.systemPrompt()}\n</의장_지침>\n\n${message}`;
+    const store = this.council.store;
+    const agenda = store.agenda();
+    const goals = agenda.goals.map((g, n) => `${n + 1}. ${g}`).join("\n") || "(아직 목표 없음)";
+    const refresh = [
+      `안건: "${agenda.title}"`,
+      `목표:\n${goals}`,
+      `위원 한도(지금 기준):\n${this.council.limitsMarkdown()}`,
+      `state.md:\n${store.chairState() || "(없음)"}`,
+    ].join("\n\n");
+    return `<의장_지침_갱신>\n${refresh}\n</의장_지침_갱신>\n\n${message}`;
+  }
+
+  /** Codex CLI: read-only sandbox unless the chair may edit; MCP servers as -c overrides */
+  private codexLaunch(message: string, resume: string | undefined, account: Account): ChairLaunch {
+    const directEdit = Boolean(this.council.project.chair.directEdit);
+    const council = this.mcpCfg.mcpServers.council;
+    const memory = this.mcpCfg.mcpServers.gencouncil;
+    const opts = [
+      "--json",
+      "--skip-git-repo-check",
+      "-c",
+      `sandbox_mode='${directEdit ? "workspace-write" : "read-only"}'`,
+      "-c",
+      "approval_policy='never'",
+      ...codexMcpArgs({
+        mcpServers: {
+          council: { url: council.url, bearerTokenEnvVar: "GENCOUNCIL_COUNCIL_TOKEN" },
+          gencouncil: { command: memory.command, args: memory.args, env: memory.env },
+        },
+      }),
+    ];
+    const model = this.model();
+    const effort = this.effort();
+    if (model) opts.push("-m", model);
+    if (effort) opts.push("-c", `model_reasoning_effort='${effort}'`);
+    // resume takes no -C/-s: the cwd and the sandbox_mode override cover both
+    const args = resume ? ["exec", "resume", ...opts, resume, "-"] : ["exec", ...opts, "-"];
+    const env: NodeJS.ProcessEnv = { ...process.env, ...this.council.accounts.env(account), GENCOUNCIL_ROLE: "chair" };
+    const token = this.councilToken();
+    if (token) env.GENCOUNCIL_COUNCIL_TOKEN = token;
+    return { cmd: "codex", args, env, stdinText: this.promptWithInstructions(message, resume), parse: parseCodexLine };
+  }
+
+  /**
+   * Antigravity CLI: MCP servers come only from its global config, so the council bridge and the
+   * memory server registered there pick this agenda from the process env. The prompt goes on stdin.
+   */
+  private agyLaunch(message: string, resume: string | undefined, account: Account): ChairLaunch {
+    const store = this.council.store;
+    const accountEnv = this.council.accounts.env(account);
+    ensureAgyCouncil(accountEnv.USERPROFILE ?? os.homedir());
+    const args = ["--input-format", "stream-json", "--output-format", "stream-json", "--print", ""];
+    if (resume) args.push("--conversation", resume);
+    const model = agyModelId(this.model(), this.effort());
+    if (model) args.push("--model", model);
+    if (this.council.project.chair.directEdit) args.push("--mode", "accept-edits");
+    args.push("--add-dir", store.worktreeRoot(), "--add-dir", this.council.project.repo);
+    const attachDir = path.join(store.dir, "attachments");
+    if (fs.existsSync(attachDir)) args.push("--add-dir", attachDir);
+    const env: NodeJS.ProcessEnv = { ...process.env, ...accountEnv, ...this.memoryEnv, GENCOUNCIL_COUNCIL_URL: this.opts.councilUrl };
+    const token = this.councilToken();
+    if (token) env.GENCOUNCIL_COUNCIL_TOKEN = token;
+    const stdinText = JSON.stringify({ event: "user", message: { content: this.promptWithInstructions(message, resume) } }) + "\n";
+    return { cmd: "agy", args, env, stdinText, parse: makeAgyParser() };
+  }
+
+  private execute(
+    launch: ChairLaunch,
+    message: string,
+    resume: string | undefined,
+    log: fs.WriteStream,
+    onEvent: (e: ClaudeEvent) => void,
+  ): Promise<ChairTurnResult & { resumeFailed?: boolean; stderr: string; exitCode: number | null }> {
+    const store = this.council.store;
+    const { cmd, args, env, parse } = launch;
     let child;
     try {
-      child = spawnCli("claude", args, { cwd: store.integrationWorktree(), env });
+      child = spawnCli(cmd, args, { cwd: store.integrationWorktree(), env });
     } catch (e) {
       log.end(`=== spawn failed: ${(e as Error).message}\n`);
       throw e;
@@ -338,17 +469,18 @@ export class Chair {
     } catch {
       /* best effort */
     }
-    const proc = wireProcess(child, { cwd: store.integrationWorktree(), prompt: message, stdinText: message, autonomy: "edits" }, (stream, line) => {
+    const proc = wireProcess(child, { cwd: store.integrationWorktree(), prompt: message, stdinText: launch.stdinText ?? message, autonomy: "edits" }, (stream, line) => {
       log.write(`[${stream}] ${line}\n`);
       if (stream === "stderr") {
         stderr += line + "\n";
         return;
       }
-      for (const ev of parseClaudeLine(line)) {
+      for (const ev of parse(line)) {
         if (ev.kind === "init") sessionId = ev.sessionId;
         else if (ev.kind === "text") texts.push(ev.text);
         else if (ev.kind === "result") {
-          finalText = ev.text;
+          // codex ends with an empty turn.completed: keep the last message text
+          finalText = ev.text || finalText;
           isError = ev.isError;
           costUsd = ev.costUsd;
           sessionId = ev.sessionId ?? sessionId;
@@ -361,10 +493,10 @@ export class Chair {
       this.current = undefined;
       fs.rmSync(this.runningFile(), { force: true });
       await new Promise<void>((r) => log.end(`=== exit code=${exit.code} signal=${exit.signal}\n`, () => r()));
-      const resumeFailed = Boolean(resume) && (/no conversation found/i.test(stderr) || /no conversation found/i.test(finalText));
+      const resumeFailed = Boolean(resume) && RESUME_FAILED.test(`${stderr}\n${isError ? finalText : ""}`);
       if (exit.code !== 0 && !finalText) {
         isError = true;
-        finalText = stderr.trim() || `claude exited with code ${exit.code}`;
+        finalText = stderr.trim() || `${cmd} exited with code ${exit.code}`;
       }
       if (!finalText && texts.length) finalText = texts[texts.length - 1];
       return { text: finalText, sessionId, isError, costUsd, resumeFailed, stderr, exitCode: exit.code };

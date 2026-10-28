@@ -180,11 +180,15 @@ export class Council extends EventEmitter {
   ) {
     super();
     this.project = store.project;
-    this.reviewer = (req) =>
-      chairReview(req, {
-        model: this.project.chair.model,
-        env: this.accounts.env(this.accounts.get(this.project.chair.account ?? "claude")),
+    // the reviewer always runs on Claude; a GPT/Gemini chair borrows a usable claude login with Opus
+    this.reviewer = (req) => {
+      const chairAccount = this.accounts.get(this.project.chair.account ?? "claude");
+      const onClaude = !chairAccount || chairAccount.provider === "claude";
+      return chairReview(req, {
+        model: onClaude ? this.project.chair.model : "opus",
+        env: this.accounts.env(onClaude ? chairAccount : this.accounts.pick("claude")),
       });
+    };
     this.approver = new ChairApprover(
       (req) => this.reviewer(req),
       (req, d) => {

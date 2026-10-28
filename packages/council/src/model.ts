@@ -451,10 +451,10 @@ export class AgendaStore {
     fs.mkdirSync(this.chairDir(), { recursive: true });
     fs.writeFileSync(path.join(this.chairDir(), "state.md"), md.trim() + "\n", "utf8");
   }
-  chairSession(): { sessionId?: string; model?: string } {
+  chairSession(): { sessionId?: string; model?: string; provider?: string } {
     return readJson(path.join(this.chairDir(), "session.json"), {});
   }
-  saveChairSession(s: { sessionId?: string; model?: string }): void {
+  saveChairSession(s: { sessionId?: string; model?: string; provider?: string }): void {
     writeJson(path.join(this.chairDir(), "session.json"), s);
   }
 

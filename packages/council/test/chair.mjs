@@ -56,7 +56,7 @@ const chair = new Chair(council, { councilUrl: "http://127.0.0.1:1/mcp" });
 const res = await chair.turn("첫 지시\n두 번째 줄", () => {});
 check("turn succeeded via fake claude", !res.isError && res.text === "done" && res.sessionId === "s-1", JSON.stringify(res));
 const log = fs.readFileSync(chair.logFile(), "utf8");
-check("header with account/model/advisor", /chair turn account=claude model=opus .*advisor=off resume=new/.test(log), log.split("\n")[0]);
+check("header with account/model/advisor", /chair turn provider=claude account=claude model=opus .*advisor=off resume=new/.test(log), log.split("\n")[0]);
 check("prompt recorded on one line", log.includes("[prompt] 첫 지시 ⏎ 두 번째 줄"));
 check("stdout stream-json recorded", log.includes('[stdout] {"type":"result"'));
 check("stderr recorded", log.includes("[stderr] fake-warning-on-stderr"));
@@ -88,6 +88,74 @@ check("chair edit committed on the agenda branch", head === "chair: README 오�
 check("turn reply mentions the commit", /통합 브랜치에 커밋/.test(r3.text), r3.text);
 check("worktree clean after commit", execFileSync("git", ["status", "--porcelain"], { cwd: integ, encoding: "utf8" }).trim() === "");
 delete process.env.GC_FAKE_EDIT;
+council.project.chair.directEdit = false;
+
+// ---- GPT / Gemini chairs: fake codex and agy record their args and stdin ----
+const rec = path.join(tmp, "rec");
+fs.mkdirSync(rec);
+process.env.GC_REC = rec;
+fs.writeFileSync(
+  path.join(bin, "codex.cmd"),
+  [
+    "@echo off",
+    'echo %* > "%GC_REC%\\codex-args.txt"',
+    'findstr "^" > "%GC_REC%\\codex-stdin.txt"',
+    'echo token=%GENCOUNCIL_COUNCIL_TOKEN% > "%GC_REC%\\codex-env.txt"',
+    'echo {"type":"thread.started","thread_id":"t-9"}',
+    'echo {"type":"item.completed","item":{"type":"agent_message","text":"gpt chair reply"}}',
+    'echo {"type":"turn.completed"}',
+    "",
+  ].join("\r\n"),
+);
+fs.writeFileSync(
+  path.join(bin, "agy.cmd"),
+  [
+    "@echo off",
+    'echo %* > "%GC_REC%\\agy-args.txt"',
+    'findstr "^" > "%GC_REC%\\agy-stdin.txt"',
+    'echo url=%GENCOUNCIL_COUNCIL_URL% role=%GENCOUNCIL_ROLE% > "%GC_REC%\\agy-env.txt"',
+    'echo {"event":"init","conversation_id":"c-7","init":{"model":"gemini-4-argon-medium"}}',
+    'echo {"event":"result","result":{"conversation_id":"c-7","status":"SUCCESS","response":"gemini chair reply"}}',
+    "",
+  ].join("\r\n"),
+);
+const chairTok = new Chair(council, { councilUrl: "http://127.0.0.1:1/mcp/p/a", councilHeaders: { Authorization: "Bearer tok-1" } });
+const rt = await import("@gencouncil/council");
+council.project.chair.account = "gpt";
+check("chair provider follows the account", chairTok.provider() === "gpt");
+check("claude model swapped for the provider default", chairTok.model() === "gpt-6.1-sol" && rt.chairModelFor("gpt", "gpt-6-astra") === "gpt-6-astra");
+const g1 = await chairTok.turn("GPT 의장 첫 턴", () => {});
+const cArgs = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8");
+const cIn = fs.readFileSync(path.join(rec, "codex-stdin.txt"), "utf8");
+check("gpt chair reply and thread id", !g1.isError && g1.text === "gpt chair reply" && g1.sessionId === "t-9", JSON.stringify(g1));
+check("codex runs read-only with council + memory MCP", /exec --json/.test(cArgs) && cArgs.includes("sandbox_mode='read-only'") && cArgs.includes("mcp_servers.council.url") && cArgs.includes("mcp_servers.gencouncil.command") && cArgs.includes("-m gpt-6.1-sol"), cArgs);
+check("council token reaches codex through env", fs.readFileSync(path.join(rec, "codex-env.txt"), "utf8").includes("token=tok-1"));
+check("first gpt turn carries the full chair prompt", cIn.includes("<의장_지침>") && cIn.includes("GPT 의장 첫 턴"));
+await chairTok.turn("GPT 의장 둘째 턴", () => {});
+const cArgs2 = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8");
+const cIn2 = fs.readFileSync(path.join(rec, "codex-stdin.txt"), "utf8");
+check("next gpt turn resumes the thread with a short refresh", /exec resume .* t-9 -/.test(cArgs2) && cIn2.includes("<의장_지침_갱신>") && !cIn2.includes("<의장_지침>"), cArgs2);
+
+// agy reads MCP only from its global config: keep the test away from the real home
+const fakeHome = path.join(tmp, "userhome");
+fs.mkdirSync(fakeHome);
+const realProfile = process.env.USERPROFILE;
+process.env.USERPROFILE = fakeHome;
+council.project.chair.account = "gemini";
+const m1 = await chairTok.turn("제미나이 의장 첫 턴", () => {});
+process.env.USERPROFILE = realProfile;
+const aArgs = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8");
+const aIn = fs.readFileSync(path.join(rec, "agy-stdin.txt"), "utf8");
+check("gemini chair reply and conversation id", !m1.isError && m1.text === "gemini chair reply" && m1.sessionId === "c-7", JSON.stringify(m1));
+check("gpt session not resumed by gemini", !aArgs.includes("--conversation"), aArgs);
+check("agy gets the prompt as stream-json on stdin", aIn.startsWith('{"event":"user","message":{"content":"<의장_지침>'), aIn.slice(0, 80));
+check("agy model carries the effort suffix", aArgs.includes("--model gemini-4-argon-"), aArgs);
+check("agy env points the bridge at this agenda", fs.readFileSync(path.join(rec, "agy-env.txt"), "utf8").includes("url=http://127.0.0.1:1/mcp/p/a role=member"));
+const agyMcp = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "config", "mcp_config.json"), "utf8"));
+const agySet = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "antigravity-cli", "settings.json"), "utf8"));
+check("council bridge and memory registered for agy", agyMcp.mcpServers.gencouncil_council?.args?.[0]?.endsWith("bridge.js") && agyMcp.mcpServers.gencouncil?.args?.[0]?.endsWith("server.js"));
+check("their tools allowed without prompts", agySet.permissions.allow.includes("mcp(gencouncil_council/*)") && agySet.permissions.allow.includes("mcp(gencouncil/*)"));
+council.project.chair.account = "claude";
 
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });

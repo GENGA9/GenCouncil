@@ -60,6 +60,7 @@ export function findExecutable(name: string): string | null {
 }
 
 function quoteForCmd(a: string): string {
+  if (a === "") return '""';
   if (!/[\s"&|<>^()]/.test(a)) return a;
   return `"${a.replace(/"/g, '\\"')}"`;
 }

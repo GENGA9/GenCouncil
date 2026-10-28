@@ -7,7 +7,8 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import type { MemoryStore } from "@gencouncil/core";
-import { Chair, type ChairOptions, type ChairTurnResult } from "./chair.js";
+import { CHAIR_DEFAULT_MODEL, Chair, chairModelFor, type ChairOptions, type ChairTurnResult } from "./chair.js";
+import { tierOf } from "./models.js";
 import { Council, type CouncilState } from "./council.js";
 import type { ClaudeEvent } from "./drivers.js";
 import { memberDisplayName, type AgendaStore, type MemberRecord } from "./model.js";
@@ -67,7 +68,7 @@ export interface ResumeInfo {
 export interface RuntimeState extends CouncilState {
   key: string;
   resume?: ResumeInfo;
-  chair: { model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean };
+  chair: { provider: "claude" | "gpt" | "gemini"; model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean };
   /** tool/text events per minute for the last ACTIVITY_MINUTES minutes, per member */
   activity: Record<string, number[]>;
 }
@@ -268,6 +269,7 @@ export class AgendaRuntime extends EventEmitter {
       ...s,
       key: this.key,
       chair: {
+        provider: this.chair.provider(),
         model: this.chair.model(),
         effort: this.chair.effort(),
         advisor: this.council.project.chair.advisor,
@@ -313,6 +315,10 @@ export class AgendaRuntime extends EventEmitter {
       // a Claude Code session lives in one config dir; the new account starts fresh from state.md
       this.chair.resetSession();
     }
+    // the model must belong to the chair account's CLI (moving to a GPT account turns "opus" into its default)
+    const provider = this.chair.provider();
+    if (provider !== "claude") p.chair.model = chairModelFor(provider, p.chair.model);
+    else if (p.chair.model && tierOf("claude", p.chair.model) < 0) p.chair.model = CHAIR_DEFAULT_MODEL.claude;
     this.council.registry.save(p);
     this.emitEvent({ type: "state" });
   }
