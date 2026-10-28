@@ -389,6 +389,32 @@ export class MemoryStore {
     return this.persist({ meta, body: cur.body, file }, `retire: ${id}${mergedInto ? ` -> ${mergedInto}` : ""}`);
   }
 
+  /**
+   * Delete every entry (verified, retired and proposals). The whole memory folder is copied to
+   * ~/.gencouncil/backups/memory-<time> first, so the user can bring it back by copying it over.
+   */
+  clearAll(): { removed: number; backup: string } {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    // outside the space git repo so the copy is not committed again
+    const backup = path.join(path.dirname(this.root), "backups", `memory-${stamp}`);
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    if (fs.existsSync(this.dir)) fs.cpSync(this.dir, backup, { recursive: true });
+    let removed = 0;
+    for (const d of [...ENTRY_TYPES.map((t) => TYPE_DIR[t]), PROPOSALS_DIR]) {
+      const full = path.join(this.dir, d);
+      if (!fs.existsSync(full)) continue;
+      for (const f of fs.readdirSync(full)) {
+        if (!f.endsWith(".md")) continue;
+        fs.rmSync(path.join(full, f));
+        removed++;
+      }
+    }
+    this.load();
+    this.writeIndex();
+    this.commit(`clear: all memory (${removed} entries, backup ${path.basename(backup)})`);
+    return { removed, backup };
+  }
+
   remove(id: string): boolean {
     const cur = this.entries.get(id);
     if (!cur) return false;

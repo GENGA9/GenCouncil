@@ -24,14 +24,45 @@ interface Props {
   onFinish: () => Promise<void>;
   onDelete: () => Promise<void>;
   onApproveFinish: () => Promise<void>;
+  onMergeBase: () => Promise<void>;
   onDismissFinish: () => Promise<void>;
 }
 
-export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onResume, onDismissResume, onFinish, onDelete, onApproveFinish, onDismissFinish }: Props) {
+export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onResume, onDismissResume, onFinish, onDelete, onApproveFinish, onDismissFinish, onMergeBase }: Props) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // the goals card can be folded to give the chat more room; remembered on this device
+  const [goalsFolded, setGoalsFolded] = useState(() => {
+    try {
+      return localStorage.getItem("gc.goalsFolded") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleGoals = () => {
+    const next = !goalsFolded;
+    setGoalsFolded(next);
+    try {
+      localStorage.setItem("gc.goalsFolded", next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
+  // the decision card can be folded so the chat above it stays readable on phones; a new question unfolds it
+  const [foldedAsk, setFoldedAsk] = useState<string | null>(null);
+  const askFolded = Boolean(state?.agenda.waitingForUser) && foldedAsk === state?.agenda.waitingForUser?.question;
+  const askHead = (label: string) => (
+    <button
+      className="ask-head"
+      onClick={() => setFoldedAsk(askFolded ? null : state?.agenda.waitingForUser?.question ?? null)}
+      title={askFolded ? "펼치기" : "접어서 위 대화 보기"}
+    >
+      <span>{label}</span>
+      <span className="ask-fold">{askFolded ? "펼치기 ▴" : "접기 ▾"}</span>
+    </button>
+  );
   const fileInput = useRef<HTMLInputElement>(null);
   const [showState, setShowState] = useState(false);
   const addFiles = (list: FileList | File[] | null | undefined) => {
@@ -118,17 +149,27 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           <button className="ghost small" onClick={() => setShowState((v) => !v)}>{showState ? "대화" : "의장 상태"}</button>
           <button className="ghost small" onClick={onReset} title="의장 세션을 새로 시작 (state.md 유지)">세션 초기화</button>
           <button className="ghost small" onClick={onRetrospect} disabled={busy || firstTurn} title="의장이 교훈·모델 성향을 공유 기억에 기록하고 제안을 검토">회고</button>
+          <button className="ghost small" onClick={() => void onMergeBase()} disabled={state.agenda.status === "closed"} title="안건을 닫지 않고 지금까지의 결과를 메인(베이스 브랜치)에 합칩니다">메인 반영</button>
           <button className={`small ${allDone ? "primary" : "ghost"}`} onClick={onFinish} disabled={state.agenda.status === "closed"}>안건 종료</button>
           <button className="ghost small danger" onClick={onDelete} disabled={busy} title="이 안건을 지웁니다. 대화 기록은 프로젝트의 deleted 폴더로 옮겨집니다">삭제</button>
         </div>
       </div>
 
-      <div className="goals">
-        <div className="goals-head">
+      <div className={`goals ${goalsFolded ? "folded" : ""}`}>
+        <button className="goals-head" onClick={toggleGoals} title={goalsFolded ? "목표 펼치기" : "목표 접기"}>
           <span>{state.agenda.title}</span>
-          <span className="muted small mono">{state.agenda.branch}</span>
-        </div>
-        {state.agenda.goals.map((g, i) => (
+          <span className="goals-meta">
+            {goalsFolded ? (
+              <span className="muted small">
+                목표 {state.agenda.goals.length} · 작업 {state.tasks.filter((t) => t.status === "done").length}/{state.tasks.length}
+              </span>
+            ) : (
+              <span className="muted small mono">{state.agenda.branch}</span>
+            )}
+            <span className="ask-fold muted small">{goalsFolded ? "펼치기 ▾" : "접기 ▴"}</span>
+          </span>
+        </button>
+        {!goalsFolded && state.agenda.goals.map((g, i) => (
           <div key={i} className="goal">
             <div className="goal-title">
               <span className="goal-n">목표{i + 1}</span> {g}
@@ -138,13 +179,13 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
             </div>
           </div>
         ))}
-        {orphanTasks.length > 0 && (
+        {!goalsFolded && orphanTasks.length > 0 && (
           <div className="goal">
             <div className="goal-title muted">기타 작업</div>
             <div className="goal-tasks">{orphanTasks.map((t) => <TaskChip key={t.id} t={t} member={t.memberId ? memberById.get(t.memberId) : undefined} />)}</div>
           </div>
         )}
-        {state.agenda.goals.length === 0 && <div className="muted small">아직 목표가 없습니다. 아래 채팅으로 할 일을 말하면 의장이 제목과 목표를 정합니다.</div>}
+        {!goalsFolded && state.agenda.goals.length === 0 && <div className="muted small">아직 목표가 없습니다. 아래 채팅으로 할 일을 말하면 의장이 제목과 목표를 정합니다.</div>}
       </div>
 
       {showState ? (
@@ -220,19 +261,19 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
       )}
 
       {state.agenda.waitingForUser?.kind === "finish" && !busy && state.agenda.status !== "closed" && (
-        <div className="ask-card finish">
-          <div className="ask-head">의장이 안건 종료를 제안합니다</div>
+        <div className={`ask-card finish ${askFolded ? "folded" : ""}`}>
+          {askHead("의장이 안건 종료를 제안합니다")}
           <div className="ask-question">{state.agenda.waitingForUser.question}</div>
           <div className="ask-options">
             <button className="primary small" disabled={sending} onClick={() => void onApproveFinish()}>안건 종료 승인</button>
             <button className="ghost small" disabled={sending} onClick={() => void onDismissFinish()}>계속 진행</button>
           </div>
-          <div className="small muted">승인하면 안건 브랜치를 베이스 브랜치에 합치고 안건을 닫습니다. 더 고칠 것이 있으면 아래에 바로 적어도 됩니다.</div>
+          <div className="small muted ask-hint">승인하면 안건 브랜치를 베이스 브랜치에 합치고 안건을 닫습니다. 더 고칠 것이 있으면 아래에 바로 적어도 됩니다.</div>
         </div>
       )}
       {state.agenda.waitingForUser && state.agenda.waitingForUser.kind !== "finish" && !busy && state.agenda.status !== "closed" && (
-        <div className="ask-card">
-          <div className="ask-head">의장이 결정을 기다립니다</div>
+        <div className={`ask-card ${askFolded ? "folded" : ""}`}>
+          {askHead("의장이 결정을 기다립니다")}
           <div className="ask-question">{state.agenda.waitingForUser.question}</div>
           {(state.agenda.waitingForUser.options?.length ?? 0) > 0 && (
             <div className="ask-options">
@@ -241,7 +282,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
               ))}
             </div>
           )}
-          <div className="small muted">버튼을 누르거나 아래에 직접 답하세요.</div>
+          <div className="small muted ask-hint">버튼을 누르거나 아래에 직접 답하세요.</div>
         </div>
       )}
       {files.length > 0 && (

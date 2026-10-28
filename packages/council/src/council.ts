@@ -52,6 +52,7 @@ import {
   ProjectRegistry,
   projectMemoryKey,
   SHOW_TYPES,
+  type AgendaConfig,
   type MemberRecord,
   type ProjectConfig,
   type Provider,
@@ -1189,8 +1190,8 @@ ${rows.join("\n")}`;
     return { scheduled: true, problems: [] };
   }
 
-  async finish(): Promise<string> {
-    if (this.running.size) throw new Error("members still running");
+  /** merge the agenda branch into the base branch in the main checkout (shared by finish and mergeToBase) */
+  private async mergeAgendaIntoBase(message: string): Promise<{ output: string; agenda: AgendaConfig }> {
     const repo = this.project.repo;
     const agenda = this.store.agenda();
     const cur = await currentBranch(repo);
@@ -1199,8 +1200,30 @@ ${rows.join("\n")}`;
     if (this.project.localGit) await commitUserEdits(this.project);
     const changed = await trackedChanges(repo);
     if (changed.length) throw new Error(`main checkout has uncommitted changes (${changed.slice(0, 10).join(", ")}); commit or stash them first`);
-    const res = await mergeInto(repo, agenda.branch, `agenda: ${agenda.title}`);
+    const res = await mergeInto(repo, agenda.branch, message);
     if (!res.ok) throw new Error(`merge conflict in main checkout: ${res.conflicts.join(", ")}`);
+    return { output: res.output, agenda };
+  }
+
+  /**
+   * Merge what the agenda branch has so far into the base branch and keep the agenda open, so the
+   * user sees the results in the main folder and later merges stay small. Member work that is not
+   * merged into the agenda branch yet is not included.
+   */
+  async mergeToBase(by: "user" | "chair"): Promise<string> {
+    if (this.store.agenda().status === "closed") throw new Error("이 안건은 이미 종료되었습니다.");
+    const { output, agenda } = await this.mergeAgendaIntoBase(`agenda (중간 반영): ${this.store.agenda().title}`);
+    const a = this.store.agenda();
+    a.baseMerges = [...(a.baseMerges ?? []), { at: new Date().toISOString(), by }];
+    this.store.saveAgenda(a);
+    this.log(`merged ${agenda.branch} into ${agenda.baseBranch} (agenda stays open, by ${by})`);
+    return output;
+  }
+
+  async finish(): Promise<string> {
+    if (this.running.size) throw new Error("members still running");
+    const { output, agenda } = await this.mergeAgendaIntoBase(`agenda: ${this.store.agenda().title}`);
+    const res = { output };
     // the merge is the finish; from here on the agenda is closed even if a folder stays locked
     agenda.status = "closed";
     agenda.closed = new Date().toISOString();
@@ -1276,6 +1299,14 @@ ${rows.join("\n")}`;
  * Did the user ask to end the agenda? ("종료해", "마무리하자", "그만 끝내", "안건 닫아", "finish")
  * Negations ("종료하지 마", "끝내지 말고", "아직 종료 말고") do not count.
  */
+/** the user's message asks to bring the agenda's results into the main branch now (without ending it) */
+export function userAskedToMergeBase(text: string | undefined): boolean {
+  if (!text) return false;
+  const t = text.replace(/\s+/g, " ").trim();
+  if (/(메인|main|베이스|base)[^.?!\n]{0,12}(합치|머지|반영|merge)[^.?!\n]{0,6}(지\s*마|말고|마세요|않|금지)/i.test(t)) return false;
+  return /(메인|main|베이스|base)[^.?!\n]{0,12}(합치|합쳐|머지|반영|merge)/i.test(t);
+}
+
 export function userAskedToFinish(text: string | undefined): boolean {
   if (!text) return false;
   const t = text.replace(/\s+/g, " ").trim();

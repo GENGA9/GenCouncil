@@ -7,7 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { permissionToolResult } from "./approval.js";
-import type { Council } from "./council.js";
+import { userAskedToMergeBase, type Council } from "./council.js";
 
 function text(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
@@ -107,7 +107,7 @@ export function createCouncilMcp(council: Council): McpServer {
       inputSchema: {
         task_id: z.string(),
         provider: z.enum(["claude", "gemini", "gpt", "relay"]).optional().describe("default: project.members.defaultProvider"),
-        model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-3.8-flash | gemini-4-argon, gpt-6-luna | gpt-6.1-sol | gpt-6-astra. default: the workhorse model within the limit"),
+        model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-3.8-flash | gemini-4-argon, gpt-6-luna | gpt-6.1-terra | gpt-6.1-sol | gpt-6-astra. default: the workhorse model within the limit"),
         effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("claude/gpt only. default medium (clamped to the limit)"),
         advisor: z.string().optional().describe("claude only: stronger model consulted before locking a plan, after a repeated error and before declaring done, e.g. opus. omit for short tasks"),
         account: z.string().optional().describe("preferred account id (see council_accounts)"),
@@ -303,6 +303,27 @@ export function createCouncilMcp(council: Council): McpServer {
         if (r.proposed)
           return { scheduled: false, proposed: true, note: "사용자가 아직 종료를 요청하지 않아 종료를 제안만 했다(종료 버튼이 있는 카드). 무엇을 합쳤는지 짧게 요약하고 턴을 끝내라. 사용자가 승인하면 서버가 종료한다." };
         return { scheduled: false, problems: r.problems };
+      }),
+  );
+
+  server.registerTool(
+    "council_merge_base",
+    {
+      title: "Merge the agenda branch into the main branch (agenda stays open)",
+      description:
+        "Bring what the agenda branch has so far into the base branch in the main checkout, without ending the agenda. " +
+        "Only when the user's latest message asks for it (\"메인에 반영해\", \"메인에 합쳐\"); otherwise it is refused and you ask the user " +
+        "with council_ask_user. Merge finished member work into the agenda branch first (council_merge); unmerged work is not included. " +
+        "Refused when the main checkout is on another branch or has uncommitted changes.",
+      inputSchema: {},
+    },
+    async () =>
+      guard(async () => {
+        if (!userAskedToMergeBase(council.lastUserMessage()))
+          return { merged: false, note: "사용자가 메인 반영을 요청하지 않았다. 필요하면 council_ask_user로 '지금까지 결과를 메인에 반영할까요?'를 묻는다." };
+        const unmerged = council.unmergedMembers().map((m) => m.id);
+        const output = await council.mergeToBase("chair");
+        return { merged: true, output, notIncluded: unmerged.length ? unmerged : undefined };
       }),
   );
 

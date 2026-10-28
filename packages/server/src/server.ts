@@ -560,14 +560,27 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     rt.council.clearWaiting();
     return { ok: true };
   });
+  on("POST", "/api/a/:id/:slug/merge-base", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    let out: string;
+    try {
+      out = await rt.council.mergeToBase("user");
+    } catch (e) {
+      throw new HttpError(409, `메인 반영 실패: ${(e as Error).message}`);
+    }
+    rt.council.store.appendTranscript({ role: "event", text: "[council event] 사용자가 지금까지의 안건 결과를 메인(베이스 브랜치)에 반영했다. 안건은 계속 열려 있다." });
+    broadcast({ type: "overview" });
+    return { ok: true, output: out, notIncluded: rt.council.unmergedMembers().map((m) => m.id) };
+  });
   on("POST", "/api/a/:id/:slug/finish", async ({ params, body }) => {
     const rt = await getRuntime(params.id, params.slug);
     const b = await body();
     if (rt.council.runningCount()) throw new HttpError(409, "members still running");
+    // every finish runs the chair's retrospective first (once per agenda); retro:false skips it
     let retro: string | undefined;
-    if (b.retro) {
+    if (b.retro !== false) {
       if (rt.chair.isBusy()) throw new HttpError(409, "chair is busy");
-      const r = await rt.retrospect();
+      const r = await rt.retrospectOnce();
       retro = r?.text;
     }
     const out = await rt.council.finish();
@@ -696,6 +709,17 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       log(`memory reorganize finished (${r.isError ? "error" : "ok"})`);
     });
     return curate;
+  });
+  // delete every memory entry; the folder is backed up first and the tidy bookkeeping starts over
+  on("POST", "/api/memory/clear", async ({ body }) => {
+    const b = await body();
+    if (b.confirm !== "전체 삭제") throw new HttpError(400, 'confirm must be "전체 삭제"');
+    if (curate.running) throw new HttpError(409, "기억 정리가 진행 중입니다. 끝난 뒤에 지우세요.");
+    const r = memory.clearAll();
+    fs.rmSync(path.join(memory.root, "curator", "reviewed.json"), { force: true });
+    log(`memory cleared: ${r.removed} entries, backup ${r.backup}`);
+    broadcast({ type: "overview" });
+    return r;
   });
   on("GET", "/api/memory/recent", () => memory.list({ status: "verified", limit: 30 }).map((m) => ({ ...m, scope: entryScope(m) })));
   on("GET", "/api/memory/stats", () => {

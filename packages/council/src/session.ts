@@ -378,7 +378,7 @@ export class AgendaRuntime extends EventEmitter {
     }
     this.emitEvent({ type: "chair:done", text: res.text, isError: res.isError, costUsd: res.costUsd });
     this.emitEvent({ type: "state" });
-    if (this.council.finishRequest) {
+    if (this.council.finishRequest && !this.retrospecting) {
       await this.runRequestedFinish();
       return res;
     }
@@ -393,6 +393,7 @@ export class AgendaRuntime extends EventEmitter {
     try {
       const problems = await this.council.finishProblems({ includeUnmerged: true });
       if (problems.length) throw new Error(problems.join(" / "));
+      await this.retrospectOnce();
       const output = await this.council.finish();
       this.council.store.appendTranscript({ role: "event", text: `[council event] 안건 종료: ${req.reason} (베이스 브랜치에 머지함)` });
       this.emitEvent({ type: "agenda:finished", reason: req.reason, output });
@@ -403,11 +404,33 @@ export class AgendaRuntime extends EventEmitter {
     }
   }
 
+  /** true while the retrospective turn runs; a council_finish inside it does not finish again */
+  private retrospecting = false;
+
   /** Chair retrospective turn (memory + persona notes + proposal review). No-op if the chair never ran. */
   async retrospect(): Promise<ChairTurnResult | undefined> {
     if (this.isFirstTurn()) return undefined;
     if (this.council.runningCount()) throw new Error("members still running");
-    return this.send(retrospectivePrompt(), "user");
+    this.retrospecting = true;
+    let res: ChairTurnResult;
+    try {
+      res = await this.send(retrospectivePrompt(), "user");
+    } finally {
+      this.retrospecting = false;
+      this.council.finishRequest = undefined;
+    }
+    if (!res.isError) {
+      const a = this.council.store.agenda();
+      a.retrospected = new Date().toISOString();
+      this.council.store.saveAgenda(a);
+    }
+    return res;
+  }
+
+  /** Every finish runs the retrospective first, once per agenda. */
+  async retrospectOnce(): Promise<ChairTurnResult | undefined> {
+    if (this.council.store.agenda().retrospected) return undefined;
+    return this.retrospect();
   }
 
   private enqueue(text: string): void {

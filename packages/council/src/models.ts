@@ -39,7 +39,8 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
     { id: "gemini-4-argon", label: "Gemini 4 Argon", note: "최상위. 긴 맥락 분석·리서치·설계", match: /argon|pro/i },
   ],
   gpt: [
-    { id: "gpt-6-luna", label: "GPT-6 Luna", note: "빠르고 저렴. 쉬운 작업", match: /luna|terra|mini/i },
+    { id: "gpt-6-luna", label: "GPT-6 Luna", note: "빠르고 저렴. 쉬운 작업", match: /luna|mini/i },
+    { id: "gpt-6.1-terra", label: "GPT-6.1 Terra", note: "균형형. Sol보다 사용량 2배, 일반 작업", match: /terra/i },
     { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", note: "주력. 코딩·일상 작업", match: /sol/i },
     { id: "gpt-6-astra", label: "GPT-6 Astra", note: "최상위. 가장 어려운 작업", match: /astra|pro/i },
   ],
@@ -146,10 +147,13 @@ export function checkTopModelUsage(provider: CliProvider, model: string | undefi
     throw new LimitError(`${rule.label}은(는) ${provider} 주간 사용량이 ${rule.minWeeklyLeft}% 이상 남았을 때만 쓴다 (지금 ${weeklyLeft}% 남음). 한 단계 낮은 모델을 고른다.`);
 }
 
-/** default = the "workhorse" (2nd rung) clamped to the limit */
+/** the default rung when the chair names no model */
+export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-argon", gpt: "gpt-6.1-sol" };
+
+/** default = the "workhorse" clamped to the limit */
 export function resolveModel(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): string {
   const allowed = allowedModels(provider, limit);
-  if (!requested) return allowed[Math.min(1, allowed.length - 1)].id;
+  if (!requested) return allowed[Math.min(tierOf(provider, WORKHORSE[provider]), allowed.length - 1)].id;
   const t = tierOf(provider, requested);
   const max = tierOf(provider, limit.maxModel);
   if (t < 0) throw new LimitError(`unknown ${provider} model "${requested}". allowed: ${allowed.map((m) => m.id).join(", ")}`);

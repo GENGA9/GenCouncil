@@ -50,6 +50,7 @@ rt.on("event", (e) => events.push(e));
 const chairCalls = [];
 rt.chair.turn = async (message) => {
   chairCalls.push(message);
+  store.saveChairSession({ sessionId: "s-finish" }); // the chair has run, so a retrospective is due
   const r = await rt.council.requestFinish("모든 목표 머지 완료");
   // the worktree must still be there while the chair is working
   return { text: r.scheduled && fs.existsSync(integ) ? "요약: b.txt 추가" : "실패", isError: false };
@@ -61,6 +62,7 @@ check("agenda closed", store.agenda().status === "closed");
 check("integration worktree removed", !fs.existsSync(integ));
 check("finished event emitted", events.some((e) => e.type === "agenda:finished" && e.reason === "모든 목표 머지 완료"));
 check("transcript notes the finish", rt.transcript().some((t) => /안건 종료: 모든 목표 머지 완료/.test(t.text)));
+check("retrospective ran once before the finish", chairCalls.filter((m) => m.startsWith("[회고]")).length === 1 && Boolean(store.agenda().retrospected), JSON.stringify(chairCalls.map((m) => m.slice(0, 12))));
 
 // ---- 3. reopening a closed agenda keeps it closed ----
 const again = await AgendaRuntime.open(store, memory, chairOpts);
@@ -178,6 +180,30 @@ rt2.close({ closeMemory: false });
   await r5.send("안건 종료");
   check("the user saying so ends it", res5.scheduled === true && s5.agenda().status === "closed" && sh(["show", "main:p.txt"]).includes("p"));
   r5.close({ closeMemory: false });
+}
+
+// ---- 4e. merge into main while the agenda stays open ----
+{
+  const { userAskedToMergeBase } = await import("@gencouncil/council");
+  check("merge phrases count", ["메인에 반영해", "지금까지 main에 합쳐줘", "베이스에 머지해"].every((t) => userAskedToMergeBase(t)));
+  check("other messages do not", ["진행해", "메인 화면 고쳐줘", "메인에 합치지 마", ""].every((t) => !userAskedToMergeBase(t)));
+  const s6 = AgendaStore.create(project, "중간 반영", ["m"]);
+  const r6 = await AgendaRuntime.open(s6, memory, chairOpts);
+  const i6 = s6.integrationWorktree();
+  fs.writeFileSync(path.join(i6, "m.txt"), "m1\n");
+  sh(["add", "m.txt"], i6);
+  sh(["commit", "-q", "-m", "m1"], i6);
+  await r6.council.mergeToBase("user");
+  check("main has the agenda's work", sh(["show", "main:m.txt"]).includes("m1"));
+  check("agenda stays open and remembers the merge", s6.agenda().status === "open" && s6.agenda().baseMerges?.length === 1 && fs.existsSync(i6));
+  fs.writeFileSync(path.join(i6, "m.txt"), "m2\n");
+  sh(["commit", "-q", "-am", "m2"], i6);
+  await r6.council.mergeToBase("chair");
+  check("a second merge brings the later work", sh(["show", "main:m.txt"]).includes("m2") && s6.agenda().baseMerges?.length === 2);
+  fs.writeFileSync(path.join(repo, "a.txt"), "dirty\n");
+  check("refused when main has uncommitted changes", await r6.council.mergeToBase("user").then(() => false, (e) => /uncommitted/.test(e.message)));
+  sh(["checkout", "--", "a.txt"]);
+  r6.close({ closeMemory: false });
 }
 
 // ---- 5. deleting agendas ----

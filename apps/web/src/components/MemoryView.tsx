@@ -68,6 +68,25 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
       notify((e as Error).message);
     }
   };
+  const clearAll = async () => {
+    const typed = prompt(`공유 기억을 전부 지웁니다 (승인된 기억 ${stats?.verified ?? "?"}개, 대기 제안 ${proposals.length}개, 은퇴한 기억 포함). 모든 프로젝트의 의장·위원이 더 이상 이 기억을 보지 못합니다.
+지우기 전에 기억 폴더 전체를 backups 폴더에 복사해 둡니다.
+
+계속하려면 "전체 삭제"라고 입력하세요.`);
+    if (typed === null) return;
+    if (typed.trim() !== "전체 삭제") {
+      notify("입력이 달라서 지우지 않았습니다.");
+      return;
+    }
+    try {
+      const r = await api.clearMemory();
+      notify(`기억 ${r.removed}개를 지웠습니다. 백업: ${r.backup}`);
+      setOpen(null);
+      await reload();
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  };
   const reload = async () => {
     setProposals(await api.memoryProposals());
     setRecent(await api.memoryRecent());
@@ -167,6 +186,12 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
         <section>
           <h3>최근 기억</h3>
           {recent.map((h) => <Row key={h.id} h={h} />)}
+        </section>
+        <section className="mem-danger">
+          <button className="ghost small danger" disabled={curate?.running} onClick={clearAll} title="승인된 기억·대기 제안·은퇴한 기억을 모두 지웁니다. 지우기 전에 기억 폴더를 backups에 복사합니다">
+            공유 기억 전체 삭제
+          </button>
+          <div className="small muted">지우기 전에 기억 폴더 전체를 백업해 둡니다. 되돌리려면 백업 폴더 내용을 기억 폴더에 다시 복사하면 됩니다.</div>
         </section>
       </div>
     </div>

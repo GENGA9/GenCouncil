@@ -149,6 +149,15 @@ const reread = new MemoryStore({ git: false });
 await reread.init();
 check("scope survives reload", reread.get(promoted.meta.id)?.meta.scope === "common" && reread.get(proj.meta.id)?.meta.scope === "project");
 
+// clearAll: everything goes, a backup copy stays
+const before = reread.size();
+reread.propose({ type: "tool", title: "지울 제안", body: "x" });
+const cleared = reread.clearAll();
+check("clearAll removes every entry", reread.size() === 0 && cleared.removed === before + 1, JSON.stringify(cleared));
+check("clearAll keeps a backup", fs.existsSync(cleared.backup) && fs.readdirSync(path.join(cleared.backup, "proposals")).length >= 1);
+check("index empty after clear", !reread.renderIndex().includes(promoted.meta.id));
+check("clear survives reload", (() => { const r = new MemoryStore({ git: false }); r.load(); return r.size() === 0; })());
+
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall checks passed");
 process.exitCode = failed ? 1 : 0;

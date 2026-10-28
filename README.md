@@ -89,7 +89,7 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
 |------|------|------------------------|------|
 | 클로드 | Claude Code CLI | haiku · sonnet · opus · fable | low ~ max |
 | 제미나이 CLI | Gemini CLI | gemini-2.5-flash-lite · flash · pro | 없음 |
-| GPT | Codex CLI | gpt-6-luna · gpt-6.1-sol · gpt-6-astra | low ~ max |
+| GPT | Codex CLI | gpt-6-luna · gpt-6.1-terra · gpt-6.1-sol · gpt-6-astra | low ~ max |
 | 웹 제미나이 / AI Studio / ChatGPT 웹 | 릴레이 (사람이 전달) | 웹에서 고름 | - |
 
 의장은 이 한도 안에서 작업마다 provider·model·effort·advisor를 직접 고른다. 원칙은 "실행은 싸게, 판단은 비싸게"다. 쉬운 작업은 하위 모델, 일반 코딩은 주력 모델, 어려운 설계만 상위 모델을 쓴다. 여러 단계에 걸친 긴 클로드 작업에는 sonnet + advisor opus를 붙여 계획 확정 전·같은 오류 2회·완료 선언 전에만 opus에 상담하게 한다. 클로드 위원에게는 읽기 전용 Haiku 탐색기(search/grep/docs)가 자동으로 붙는다. 한도를 넘는 배정은 서버가 거절하고 허용 목록을 의장에게 돌려준다. 동시 인원이 차면 의장은 다른 종류를 쓰거나 하나가 끝나길 기다린다.

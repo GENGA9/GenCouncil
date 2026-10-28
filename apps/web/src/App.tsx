@@ -112,6 +112,36 @@ export function App() {
     }
   }, []);
 
+  // after the phone sleeps or the socket drops, events were missed: reload the open agenda quietly
+  const resync = useCallback(async () => {
+    void refreshOverview();
+    const key = selectedRef.current;
+    if (!key || isSpecial(key)) return;
+    try {
+      const r = await api.agenda(key);
+      if (key !== selectedRef.current) return;
+      setState(r.state);
+      setFirstTurn(r.firstTurn);
+      setChat(
+        r.transcript.map((t: TranscriptEntry) => ({
+          ...item(t.role === "assistant" && t.isError ? "error" : t.role, t.text, t.ts),
+          attachments: t.attachments,
+        })),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [refreshOverview]);
+
+  useEffect(() => {
+    if (!authed) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void resync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [authed, resync]);
+
   // auth bootstrap
   useEffect(() => {
     api.me().then(
@@ -142,6 +172,7 @@ export function App() {
         void refreshState(key);
       }, 800);
     };
+    let everUp = false;
     return connectWs((msg) => {
       const type = msg.type as string;
       if (type === "overview") {
@@ -205,8 +236,12 @@ export function App() {
           void refreshState(key);
           break;
       }
-    }, setWsUp);
-  }, [authed, refreshOverview, refreshState]);
+    }, (up) => {
+      setWsUp(up);
+      if (up && everUp) void resync();
+      if (up) everUp = true;
+    });
+  }, [authed, refreshOverview, refreshState, resync]);
 
   const send = useCallback(
     async (message: string, files: File[] = []) => {
@@ -368,9 +403,21 @@ export function App() {
         onApproveFinish={async () => {
           if (!selected) return;
           try {
-            await api.finish(selected, false);
+            notify("회고 후 종료합니다…");
+            await api.finish(selected, true);
             notify("안건을 종료했습니다.");
             void refreshOverview();
+            void refreshState(selected);
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+        onMergeBase={async () => {
+          if (!selected) return;
+          if (!confirm("지금까지 안건 브랜치에 합쳐진 결과를 메인(베이스 브랜치)에 반영합니다. 안건은 계속 열려 있습니다. 진행할까요?")) return;
+          try {
+            const r = await api.mergeBase(selected);
+            notify(r.notIncluded.length ? `메인에 반영했습니다. 아직 안건에 합치지 않은 위원 결과(${r.notIncluded.join(", ")})는 빠졌습니다.` : "메인에 반영했습니다.");
             void refreshState(selected);
           } catch (e) {
             notify((e as Error).message);
@@ -384,7 +431,8 @@ export function App() {
         }}
         onFinish={async () => {
           if (!selected || !confirm("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?")) return;
-          const retro = confirm("종료 전에 의장이 회고(교훈·성향을 공유 기억에 기록, 제안 승인)를 먼저 할까요?\n확인 = 회고 후 종료 / 취소 = 바로 종료");
+          if (!confirm("안건을 종료할까요? 의장이 회고(교훈·모델 성향을 공유 기억에 제안)를 먼저 하고, 안건 브랜치를 베이스 브랜치에 합친 뒤 닫습니다.")) return;
+          const retro = true;
           try {
             if (retro) notify("회고 중… 끝나면 종료합니다.");
             await api.finish(selected, retro);

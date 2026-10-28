@@ -87,6 +87,10 @@ export interface AgendaConfig {
   cleanupPending?: string[];
   /** the chair asked the user something and is waiting (council_ask_user); cleared by the user's next message */
   waitingForUser?: { question: string; options?: string[]; at: string; kind?: "finish" };
+  /** when the chair's retrospective ran; every finish runs one first unless this is set */
+  retrospected?: string;
+  /** merges of the agenda branch into the base branch while the agenda stayed open */
+  baseMerges?: { at: string; by: "user" | "chair" }[];
 }
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "blocked";
