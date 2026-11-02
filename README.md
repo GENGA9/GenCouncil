@@ -20,7 +20,7 @@
 gencouncil web telegram --token <봇 토큰> --chat <내 chat id> --agenda rf-project-제작위원회/밸런스-안건
 ```
 
-(chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. 보내는 것: 의장 답변, 위원 완료/실패/인계, 릴레이 패킷 대기, 의장 계정 전환, 안건 종료. 받는 것: `/list` `/agenda <project/slug>` `/status`, 그 외 텍스트는 그 안건의 의장에게 전달된다. 설정된 chat id 외의 메시지는 무시한다. 끄려면 `gencouncil web telegram --off`.
+(chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. 보내는 것: 의장 답변, 위원 완료/실패/인계, 릴레이 패킷 대기, 의장 계정 전환, 안건 종료. 받는 것: `/list` `/agenda <project/slug>` `/status`, 그 외 텍스트는 그 안건의 의장에게 전달된다. 설정된 chat id 외의 메시지는 무시한다. 의장 질문 선택지는 알림에 붙은 버튼을 눌러 답할 수 있다. 끄려면 `gencouncil web telegram --off`.
 
 ### 상주 (Windows 로그온 작업)
 
