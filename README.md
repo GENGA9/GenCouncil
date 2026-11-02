@@ -20,7 +20,17 @@
 gencouncil web telegram --token <봇 토큰> --chat <내 chat id> --agenda rf-project-제작위원회/밸런스-안건
 ```
 
-(chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. 보내는 것: 의장 답변, 위원 완료/실패/인계, 릴레이 패킷 대기, 의장 계정 전환, 안건 종료. 받는 것: `/list` `/agenda <project/slug>` `/status`, 그 외 텍스트는 그 안건의 의장에게 전달된다. 설정된 chat id 외의 메시지는 무시한다. 끄려면 `gencouncil web telegram --off`.
+(chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. 보내는 것: 의장 답변, 위원 완료/실패/인계, 릴레이 패킷 대기, 의장 계정 전환, 안건 종료. 받는 것: `/list` `/agenda <project/slug>` `/status`, 그 외 텍스트는 그 안건의 의장에게 전달된다. 설정된 chat id 외의 메시지는 무시한다. 의장 질문 선택지는 알림에 붙은 버튼을 눌러 답할 수 있다. 끄려면 `gencouncil web telegram --off`.
+
+#### 안건별 포럼 토픽
+
+그룹의 토픽(포럼) 기능을 쓰면 안건마다 토픽이 하나씩 생겨, 그 안건의 알림은 그 토픽으로 오고 토픽에 쓴 글·누른 버튼은 그 안건의 의장에게만 간다. 포럼을 연결하면 안건 알림은 개인 대화로 가지 않는다(개인 대화의 `/agenda`·`/list` 등은 그대로 동작).
+
+1. 텔레그램에서 그룹을 만들고 그룹 설정에서 **토픽**을 켠다(슈퍼그룹이 된다).
+2. 봇을 그룹에 추가하고 **관리자**로 올리며 **토픽 관리** 권한을 준다.
+3. 그룹에서 `/forum` 을 보낸다(봇 주인만 가능). "이 그룹을 GenCouncil 포럼으로 연결했습니다"라고 답하면 끝이며 서버 재시작은 필요 없다. 터미널에서는 `gencouncil web telegram --forum <그룹 chat id>` (해제는 `--forum off`).
+
+토픽은 안건의 첫 알림 때 안건 제목으로 자동 생성되고 `server.json`의 `telegram.topics`에 저장된다. 사람이 토픽을 지우면 다음 알림에 다시 만들고, 안건이 종료되면 마지막 메시지 뒤 토픽을 닫는다. 토픽 밖(일반)에서는 `/list` `/help` `/forum` `/status`만 받고 일반 글은 "안건 토픽 안에 쓰세요"라고 안내한다. 그룹에서는 주인(`--chat`의 사용자) 외의 글·버튼을 무시한다.
 
 ### 상주 (Windows 로그온 작업)
 

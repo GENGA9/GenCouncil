@@ -8,7 +8,7 @@ export interface ServerConfig {
   token: string;
   port: number;
   host: string;
-  telegram?: { botToken: string; chatId: string; agenda?: string };
+  telegram?: { botToken: string; chatId: string; agenda?: string; forumChatId?: string; topics?: Record<string, number> };
 }
 
 export function serverConfigFile(): string {
