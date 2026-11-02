@@ -199,7 +199,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
             // the chair ended the agenda (council_finish); it is merged and closed now
             runtimes.delete(key);
             broadcast({ type: "overview" });
-            void telegram?.send(`[${key}] 의장이 안건을 종료했습니다: ${e.reason}`);
+            void telegram?.finishFor(key, `[${key}] 의장이 안건을 종료했습니다: ${e.reason}`);
           }
         });
         log(`opened ${key}`);
@@ -587,7 +587,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     rt.close({ closeMemory: false });
     runtimes.delete(rt.key);
     broadcast({ type: "overview" });
-    void telegram?.send(`[${rt.key}] 안건 종료: 베이스 브랜치에 머지됨${retro ? "\n회고:\n" + retro.slice(0, 1500) : ""}`);
+    void telegram?.finishFor(rt.key, `[${rt.key}] 안건 종료: 베이스 브랜치에 머지됨${retro ? "\n회고:\n" + retro.slice(0, 1500) : ""}`);
     return { ok: true, output: out, retro };
   });
   on("GET", "/api/telegram", () => ({
@@ -595,6 +595,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     user: telegramUser,
     chatId: config.telegram?.chatId,
     agenda: config.telegram?.agenda,
+    forumChatId: config.telegram?.forumChatId,
+    topics: Object.keys(config.telegram?.topics ?? {}).length,
   }));
   on("DELETE", "/api/a/:id/:slug", async ({ params, url }) => {
     const { project, store } = findAgenda(params.id, params.slug);
@@ -856,12 +858,16 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         config.telegram = { ...config.telegram!, agenda: key };
         saveServerConfig({ telegram: config.telegram });
       },
+      onConfig: (patch) => {
+        config.telegram = { ...config.telegram!, ...patch };
+        saveServerConfig({ telegram: config.telegram });
+      },
     });
     try {
       telegramUser = await tg.verify();
       telegram = tg;
       tg.start();
-      log(`telegram bot @${telegramUser} connected (chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""})`);
+      log(`telegram bot @${telegramUser} connected (chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
     } catch (e) {
       log(`telegram disabled: ${(e as Error).message}`);
     }

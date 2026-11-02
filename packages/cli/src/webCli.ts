@@ -5,6 +5,8 @@ export const WEB_HELP = `web
   web [--port 7700] [--host 127.0.0.1]   start the web UI + API server (foreground)
   web token [--reset]                     print (or regenerate) the access token
   web telegram --token <bot token> --chat <chat id> [--agenda project/slug]   enable the Telegram bot
+  web telegram --forum <group chat id>    connect a forum (topics) group: one topic per agenda (or send /forum in the group)
+  web telegram --forum off                disconnect the forum group (back to the private chat)
   web telegram --off                      disable it
 `;
 
@@ -16,9 +18,16 @@ export async function webMain(rest: string[]): Promise<number> {
     return 0;
   }
   if (rest[0] === "telegram") {
+    // group chat ids are negative ("-100123..."): glue them to their flag so parseArgs does not read them as options
+    const args: string[] = [];
+    for (const a of rest.slice(1)) {
+      const prev = args[args.length - 1];
+      if (/^-\d+$/.test(a) && (prev === "--chat" || prev === "--forum")) args[args.length - 1] = `${prev}=${a}`;
+      else args.push(a);
+    }
     const { values } = parseArgs({
-      args: rest.slice(1),
-      options: { token: { type: "string" }, chat: { type: "string" }, agenda: { type: "string" }, off: { type: "boolean" } },
+      args,
+      options: { token: { type: "string" }, chat: { type: "string" }, agenda: { type: "string" }, forum: { type: "string" }, off: { type: "boolean" } },
     });
     if (values.off) {
       saveServerConfig({ telegram: null });
@@ -26,6 +35,16 @@ export async function webMain(rest: string[]): Promise<number> {
       return 0;
     }
     const cur = loadServerConfig().telegram;
+    if (values.forum === "off") {
+      if (!cur) {
+        console.error("telegram is not configured");
+        return 2;
+      }
+      const { forumChatId: _f, topics: _t, ...rest2 } = cur;
+      saveServerConfig({ telegram: rest2 });
+      console.log("telegram forum disconnected; restart 'gencouncil web' to apply");
+      return 0;
+    }
     const botToken = values.token ?? cur?.botToken;
     const chatId = values.chat ?? cur?.chatId;
     if (!botToken || !chatId) {
@@ -35,7 +54,10 @@ export async function webMain(rest: string[]): Promise<number> {
       );
       return 2;
     }
-    const telegram = { botToken, chatId, agenda: values.agenda ?? cur?.agenda };
+    const forumChatId = values.forum ?? cur?.forumChatId;
+    // topics belong to one group: keep them only while the forum group stays the same
+    const topics = forumChatId && forumChatId === cur?.forumChatId ? cur?.topics : undefined;
+    const telegram = { botToken, chatId, agenda: values.agenda ?? cur?.agenda, ...(forumChatId ? { forumChatId } : {}), ...(topics ? { topics } : {}) };
     const bridge = new TelegramBridge(telegram, { log: console.error, listAgendas: () => [], getRuntime: () => Promise.reject(new Error("n/a")), onBind: () => undefined });
     try {
       const user = await bridge.verify();
