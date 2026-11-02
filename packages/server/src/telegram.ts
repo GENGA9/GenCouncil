@@ -62,6 +62,9 @@ const BUTTON_LEN = 60;
 const TOPIC_NAME_LEN = 128;
 
 const MAX_LEN = 3900;
+/** Telegram bot upload limits: 10MB for photos, 50MB for any file */
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 
 /** Telegram errors that mean the topic no longer exists (deleted by hand) */
 const TOPIC_GONE = /message thread not found|TOPIC_DELETED|TOPIC_ID_INVALID/i;
@@ -183,27 +186,42 @@ export class TelegramBridge {
     return text.replace(/^\[[^\]\n]+\] ?/, "");
   }
 
-  /** the chair showed drafts: images go as photos, other files as a short note */
+  /** the chair showed drafts: images go as photos, other files as documents; what cannot be sent is only named */
   async sendShown(key: string, caption: string, files: Array<{ name: string; type: string; path?: string }>): Promise<void> {
     const tag = `[${key.split("/")[1] ?? key}]`;
-    const images = files.filter((f) => f.path && /^image\/(png|jpeg|gif|webp)$/.test(f.type));
-    for (const [i, f] of images.entries()) {
+    const unsent: string[] = [];
+    let sentAny = false;
+    for (const f of files) {
+      let data: Buffer<ArrayBuffer> | undefined;
+      let asPhoto = false;
       try {
-        const data = fs.readFileSync(f.path!);
-        await this.route(key, async (chat, thread) => {
-          const form = new FormData();
-          form.append("chat_id", chat);
-          if (thread !== undefined) form.append("message_thread_id", String(thread));
-          if (i === 0) form.append("caption", `${thread !== undefined ? "" : tag + " "}의장 시안: ${caption}`.slice(0, 1000));
-          form.append("photo", new Blob([data], { type: f.type }), f.name);
-          await this.call("sendPhoto", form);
-        });
+        if (f.path) {
+          const size = fs.statSync(f.path).size;
+          if (size <= MAX_DOCUMENT_BYTES) {
+            data = fs.readFileSync(f.path);
+            asPhoto = /^image\/(png|jpeg|gif|webp)$/.test(f.type) && size <= MAX_PHOTO_BYTES;
+          }
+        }
       } catch {
-        /* a failed photo must not stop the chair */
+        data = undefined;
       }
+      if (!data) {
+        unsent.push(f.name);
+        continue;
+      }
+      const first = !sentAny;
+      const ok = await this.route(key, async (chat, thread) => {
+        const form = new FormData();
+        form.append("chat_id", chat);
+        if (thread !== undefined) form.append("message_thread_id", String(thread));
+        if (first) form.append("caption", `${thread !== undefined ? "" : tag + " "}의장 시안: ${caption}`.slice(0, 1000));
+        form.append(asPhoto ? "photo" : "document", new Blob([data!], { type: f.type }), f.name);
+        await this.call(asPhoto ? "sendPhoto" : "sendDocument", form);
+      });
+      if (ok) sentAny = true;
+      else unsent.push(f.name);
     }
-    const others = files.filter((f) => !images.includes(f));
-    if (others.length || images.length === 0) await this.sendFor(key, `${tag} 의장 시안: ${caption}${others.length ? "\n파일: " + others.map((f) => f.name).join(", ") + " (웹 화면에서 보기)" : ""}`);
+    if (unsent.length || !sentAny) await this.sendFor(key, `${tag} 의장 시안: ${caption}${unsent.length ? "\n파일: " + unsent.join(", ") + " (웹 화면에서 보기)" : ""}`);
   }
 
   private async sendChunks(chat: string, thread: number | undefined, text: string, extra?: Record<string, unknown>): Promise<void> {
