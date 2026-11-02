@@ -26,13 +26,25 @@ export interface TelegramDeps {
 interface TgUpdate {
   update_id: number;
   message?: { message_id: number; text?: string; chat: { id: number | string }; from?: { username?: string; first_name?: string } };
+  callback_query?: { id: string; data?: string; message?: { message_id: number; chat: { id: number | string } } };
 }
+
+interface PendingAsk {
+  key: string;
+  question: string;
+  options: string[];
+}
+
+const MAX_ASKS = 50;
+const BUTTON_LEN = 60;
 
 const MAX_LEN = 3900;
 
 export class TelegramBridge {
   private offset = 0;
   private running = false;
+  private asks = new Map<string, PendingAsk>();
+  private askSeq = 0;
   private readonly fetchImpl: typeof fetch;
 
   constructor(
@@ -79,7 +91,7 @@ export class TelegramBridge {
     if (others.length || images.length === 0) await this.send(`${tag} 의장 시안: ${caption}${others.length ? "\n파일: " + others.map((f) => f.name).join(", ") + " (웹 화면에서 보기)" : ""}`);
   }
 
-  async send(text: string): Promise<void> {
+  async send(text: string, extra?: Record<string, unknown>): Promise<void> {
     const chunks: string[] = [];
     let rest = text;
     while (rest.length > MAX_LEN) {
@@ -89,9 +101,9 @@ export class TelegramBridge {
       rest = rest.slice(cut);
     }
     chunks.push(rest);
-    for (const c of chunks) {
+    for (const [i, c] of chunks.entries()) {
       try {
-        await this.api("sendMessage", { chat_id: this.cfg.chatId, text: c, disable_web_page_preview: true });
+        await this.api("sendMessage", { chat_id: this.cfg.chatId, text: c, disable_web_page_preview: true, ...(i === chunks.length - 1 ? extra : {}) });
       } catch (e) {
         this.deps.log(`telegram send failed: ${(e as Error).message}`);
         return;
@@ -124,7 +136,57 @@ export class TelegramBridge {
 
   notify(key: string, e: RuntimeEvent): void {
     const text = TelegramBridge.format(key, e);
-    if (text) void this.send(text);
+    if (!text) return;
+    if (e.type === "chair:ask" && e.options?.length) {
+      const id = (++this.askSeq).toString(36);
+      this.asks.set(id, { key, question: e.question, options: e.options });
+      while (this.asks.size > MAX_ASKS) this.asks.delete(this.asks.keys().next().value as string);
+      const inline_keyboard = e.options.map((o, i) => [{ text: o.length > BUTTON_LEN ? o.slice(0, BUTTON_LEN - 1) + "…" : o, callback_data: `a:${id}:${i}` }]);
+      void this.send(text, { reply_markup: { inline_keyboard } });
+      return;
+    }
+    void this.send(text);
+  }
+
+  private async handleCallback(cq: NonNullable<TgUpdate["callback_query"]>): Promise<string | undefined> {
+    if (String(cq.message?.chat.id) !== String(this.cfg.chatId)) {
+      this.deps.log(`telegram: ignored callback from chat ${cq.message?.chat.id}`);
+      return undefined;
+    }
+    const answer = async (t: string) => {
+      await this.api("answerCallbackQuery", { callback_query_id: cq.id, text: t }).catch(() => {});
+      return t;
+    };
+    const clearButtons = async () => {
+      if (cq.message) await this.api("editMessageReplyMarkup", { chat_id: this.cfg.chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    };
+    const m = /^a:([^:]+):(\d+)$/.exec(cq.data ?? "");
+    const ask = m ? this.asks.get(m[1]) : undefined;
+    const choice = ask?.options[Number(m?.[2])];
+    if (!m || !ask || choice === undefined) {
+      await clearButtons();
+      return answer("이미 지난 질문입니다");
+    }
+    let rt: AgendaRuntime;
+    try {
+      rt = await this.deps.getRuntime(ask.key);
+    } catch (e) {
+      return answer(`안건을 열 수 없습니다: ${(e as Error).message}`);
+    }
+    const waiting = rt.state().agenda.waitingForUser;
+    if (waiting?.question !== ask.question) {
+      this.asks.delete(m[1]);
+      await clearButtons();
+      return answer("이미 지난 질문입니다");
+    }
+    if (rt.chair.isBusy()) return answer("의장이 처리 중입니다");
+    this.asks.delete(m[1]);
+    if (waiting.kind === "finish" && choice === "계속 진행") rt.council.clearWaiting();
+    else void rt.send(choice).catch((e) => this.deps.log(`telegram → chair failed: ${(e as Error).message}`));
+    await answer("의장에게 전달했습니다");
+    await clearButtons();
+    await this.send(`선택: ${choice} → 의장에게 전달했습니다`);
+    return choice;
   }
 
   start(): void {
@@ -140,7 +202,7 @@ export class TelegramBridge {
   private async loop(): Promise<void> {
     while (this.running) {
       try {
-        const updates = (await this.api("getUpdates", { offset: this.offset, timeout: 25, allowed_updates: ["message"] })) as TgUpdate[];
+        const updates = (await this.api("getUpdates", { offset: this.offset, timeout: 25, allowed_updates: ["message", "callback_query"] })) as TgUpdate[];
         for (const u of updates) {
           this.offset = Math.max(this.offset, u.update_id + 1);
           await this.handleUpdate(u);
@@ -154,6 +216,7 @@ export class TelegramBridge {
 
   /** Exposed for tests. Returns the reply text that was sent (if any). */
   async handleUpdate(u: TgUpdate): Promise<string | undefined> {
+    if (u.callback_query) return this.handleCallback(u.callback_query);
     const msg = u.message;
     if (!msg?.text) return undefined;
     if (String(msg.chat.id) !== String(this.cfg.chatId)) {
