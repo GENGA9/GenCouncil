@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { gencouncilHome } from "@gencouncil/core";
-import { CLI_PROVIDERS, SITE_INFO, WEB_SITES, type CliProvider, type WebSite } from "./models.js";
+import { CLI_PROVIDERS, LADDERS, SITE_INFO, WEB_SITES, tierOf, type CliProvider, type WebSite } from "./models.js";
 
 export type AccountProvider = CliProvider | WebSite;
 export type AccountStatus = "ok" | "exhausted" | "auth" | "disabled";
@@ -30,7 +30,12 @@ export interface Account {
   /** set after a login window was opened at least once */
   loginOpenedAt?: string;
   note?: string;
+  /** Antigravity limits each model on its own: ladder model id -> when it is usable again */
+  modelBlocks?: Record<string, string>;
 }
+
+/** CLIs whose quota runs out per model, not per login (Antigravity: Argon can be spent while Flash still runs) */
+const PER_MODEL_QUOTA: ReadonlySet<CliProvider> = new Set(["gemini"]);
 
 /** default cooldown when the error gives no reset time */
 export const DEFAULT_COOLDOWN_MS: Record<CliProvider, number> = {
@@ -88,6 +93,10 @@ export class AccountRegistry {
         a.status = "ok";
         a.exhaustedAt = undefined;
         a.resetAt = undefined;
+      }
+      if (a.modelBlocks) {
+        for (const [m, at] of Object.entries(a.modelBlocks)) if (Date.parse(at) <= now) delete a.modelBlocks[m];
+        if (!Object.keys(a.modelBlocks).length) a.modelBlocks = undefined;
       }
     }
     return list;
@@ -157,6 +166,35 @@ export class AccountRegistry {
     });
   }
 
+  /**
+   * A quota error on a per-model CLI blocks only that model. Returns false when the CLI is not
+   * per-model or no lower model is left; the caller then marks the whole account exhausted.
+   */
+  blockModel(id: string, model: string | undefined, error: string, resetAt?: string): boolean {
+    const a = this.get(id);
+    if (!a || !isCliProvider(a.provider) || !PER_MODEL_QUOTA.has(a.provider)) return false;
+    const t = tierOf(a.provider, model);
+    if (t < 0) return false;
+    const provider = a.provider;
+    const until = resetAt ?? new Date(Date.now() + DEFAULT_COOLDOWN_MS[provider]).toISOString();
+    this.patch(id, (x) => {
+      x.modelBlocks = { ...(x.modelBlocks ?? {}), [LADDERS[provider][t].id]: until };
+      x.lastError = error.slice(0, 500);
+    });
+    return this.fitModel(id, LADDERS[provider][t].id) !== undefined;
+  }
+
+  /** the model itself, or the closest lower one this account can still run; undefined when none is left */
+  fitModel(id: string, model: string | undefined): string | undefined {
+    const a = this.get(id);
+    if (!model || !a?.modelBlocks || !isCliProvider(a.provider)) return model;
+    const ladder = LADDERS[a.provider];
+    const t = tierOf(a.provider, model);
+    if (t < 0 || !a.modelBlocks[ladder[t].id]) return model;
+    for (let i = t - 1; i >= 0; i--) if (!a.modelBlocks[ladder[i].id]) return ladder[i].id;
+    return undefined;
+  }
+
   markAuth(id: string, error: string): Account {
     return this.patch(id, (a) => {
       a.status = "auth";
@@ -170,6 +208,7 @@ export class AccountRegistry {
       a.exhaustedAt = undefined;
       a.resetAt = undefined;
       a.lastError = undefined;
+      a.modelBlocks = undefined;
     });
   }
 

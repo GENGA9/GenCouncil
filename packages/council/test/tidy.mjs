@@ -6,7 +6,7 @@ import path from "node:path";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-tidy-"));
 process.env.GENCOUNCIL_HOME = home;
 const { MemoryStore } = await import("@gencouncil/core");
-const { selectTidyCandidates, markReviewed, verifiedHashes, tidyPrompt, loadReviewed } = await import("@gencouncil/council");
+const { selectTidyCandidates, markReviewed, verifiedHashes, tidyPrompt, reorganizePrompt, curatorPrompt, loadReviewed } = await import("@gencouncil/council");
 
 let failed = 0;
 const check = (name, cond, extra = "") => {
@@ -56,6 +56,9 @@ check("batch limit keeps the rest for later", sel.candidates.length === 3 && sel
 
 const prompt = tidyPrompt([{ key: "demo", name: "Demo" }], sel.candidates, 3);
 check("prompt lists only the candidates", sel.candidates.every((c) => prompt.includes(c.id)) && !prompt.includes(long.meta.id));
+
+check("every memory pass applies the one-off test", [prompt, reorganizePrompt([], undefined, 5, 8), curatorPrompt()].every((p) => p.includes("남길 가치 기준") && p.includes("일회성")));
+check("full check says how to cut and its cap", reorganizePrompt([], undefined, 5, 8).includes('"일회성: <한 줄 이유>"') && reorganizePrompt([], undefined, 5, 8).includes("최대 8개"));
 
 // full check marks everything
 markReviewed(store, { before: verifiedHashes(store), all: true });

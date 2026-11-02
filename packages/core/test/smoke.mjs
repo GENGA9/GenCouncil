@@ -123,6 +123,20 @@ await session("owner", async (c) => {
   await w("예산 시험 셋 B");
   check("[budget] split after writing its parts still allowed", !(await call(c, "memory_retire", { id: e3, reason: "분할: 셋 A, 셋 B" })).isError);
 });
+process.env.GENCOUNCIL_PRUNE_BUDGET = "1";
+await session("owner", async (c) => {
+  const w = async (title) => (await call(c, "memory_write", { title, type: "solution", body: "본문 열 글자 이상입니다" })).content[0].text.match(/written (\S+)/)[1];
+  const a = await w("일회성 시험 하나");
+  const b = await w("일회성 시험 둘");
+  const d = await w("일회성 시험 셋");
+  const first = await call(c, "memory_retire", { id: a, reason: "일회성: 버그 수정 기록" });
+  check("[prune] one-off cut allowed", !first.isError, first.content[0].text);
+  const over = await call(c, "memory_retire", { id: b, reason: "일회성: 버그 수정 기록" });
+  check("[prune] cut beyond the cap refused", over.isError && /일회성/.test(over.content[0].text), over.content[0].text);
+  const merge = await call(c, "memory_retire", { id: d, reason: "중복: 둘", merged_into: b });
+  check("[prune] cuts do not spend the merge budget", !merge.isError, merge.content[0].text);
+});
+delete process.env.GENCOUNCIL_PRUNE_BUDGET;
 delete process.env.GENCOUNCIL_RETIRE_BUDGET;
 
 // ---- scope: common vs project knowledge ----

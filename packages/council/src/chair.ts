@@ -193,7 +193,10 @@ export class Chair {
   model(): string | undefined {
     const m = this.opts.model ?? this.council.project.chair.model;
     const p = this.provider();
-    return p === "claude" ? m : chairModelFor(p, m);
+    if (p === "claude") return m;
+    const want = chairModelFor(p, m);
+    // a model spent on this login (Antigravity counts per model) steps down to the next one still open
+    return this.council.accounts.fitModel(this.account(), want) ?? want;
   }
 
   effort(): string | undefined {
@@ -272,6 +275,15 @@ export class Chair {
         if (!res.isError) break;
         const failure = classifyFailure(account.provider as CliProvider, `${res.stderr}\n${res.text}`, res.exitCode);
         if (failure.kind === "other") break;
+        const spent = this.model();
+        if (failure.kind === "quota" && this.council.accounts.blockModel(account.id, spent, failure.message, failure.resetAt)) {
+          // only this model is spent (Antigravity): the same login goes on with the next lower model
+          const lower = this.model();
+          this.appendLog(`=== ${new Date().toISOString()} model ${spent} quota spent -> ${lower} (${failure.message})`);
+          onEvent({ kind: "text", text: `(의장 모델 ${spent} 한도 소진 → ${lower}로 이어갑니다.)` });
+          account = this.council.accounts.get(account.id) ?? account;
+          continue;
+        }
         if (failure.kind === "quota") this.council.accounts.markExhausted(account.id, failure.message, failure.resetAt);
         else this.council.accounts.markAuth(account.id, failure.message);
         tried.push(account.id);
@@ -359,7 +371,8 @@ export class Chair {
     const advisor = this.advisor();
     if (advisor) args.push("--advisor", advisor);
 
-    const env: NodeJS.ProcessEnv = { ...process.env, ...this.council.accounts.env(account), GENCOUNCIL_ROLE: "chair" };
+    // only the council and memory servers are loaded (strict), so their tools go up front: no ToolSearch round trip first
+    const env: NodeJS.ProcessEnv = { ...process.env, ...this.council.accounts.env(account), GENCOUNCIL_ROLE: "chair", ENABLE_TOOL_SEARCH: "false" };
     delete env.CLAUDECODE;
     return { cmd: "claude", args, env, parse: parseClaudeLine };
   }

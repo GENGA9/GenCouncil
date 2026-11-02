@@ -16,7 +16,7 @@ import { ENTRY_TYPES, MemoryStore, type EntryType, entryScope } from "@gencounci
 type Role = "owner" | "chair" | "member";
 
 /** per-process counters for one curator run (one MCP server process per run) */
-const session = { writes: 0, retires: 0 };
+const session = { writes: 0, retires: 0, prunes: 0 };
 
 function role(): Role {
   const r = (process.env.GENCOUNCIL_ROLE ?? "member").toLowerCase();
@@ -172,7 +172,8 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
       title: "Propose memory entry",
       description:
         "Propose a new reusable memory (lands in proposals/ until the owner or chair approves). " +
-        "Use when you solved something non-obvious, found where a tool lives, or learned a convention.",
+        "Use when you solved something non-obvious that will come up again, found where a tool lives, or learned a convention. " +
+        "Not for the fix of one specific bug or the result of this task: those are in the code and git history.",
       inputSchema: newEntryShape,
     },
     async (input) => {
@@ -267,8 +268,8 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
     {
       title: "Retire a verified entry (owner)",
       description:
-        "Take a verified entry out of use because it was merged into another entry (merged_into) or is outdated/wrong. " +
-        "It is kept with the rejected records. owner/chair only.",
+        "Take a verified entry out of use because it was merged into another entry (merged_into), is outdated/wrong, " +
+        "or is a one-off record (reason starts with 일회성). It is kept with the rejected records and memory_approve restores it. owner/chair only.",
       inputSchema: { id: z.string().min(1), reason: z.string().min(3), merged_into: z.string().optional() },
     },
     async ({ id, reason, merged_into }) => {
@@ -276,11 +277,17 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
       // a split retires the bundle only after writing its parts: no knowledge leaves, so it is not budgeted
       const isSplit = /^분할/.test(reason.trim()) && !merged_into && session.writes >= 2;
       const budget = Number(process.env.GENCOUNCIL_RETIRE_BUDGET ?? "");
-      if (!isSplit && Number.isFinite(budget) && budget > 0 && session.retires >= budget)
+      // one-off records are cut on their own larger budget, so merges stay capped
+      const pruneBudget = Number(process.env.GENCOUNCIL_PRUNE_BUDGET ?? "");
+      const isPrune = /^일회성/.test(reason.trim()) && !merged_into && Number.isFinite(pruneBudget) && pruneBudget > 0;
+      if (isPrune && session.prunes >= pruneBudget)
+        return err(`이번 정리에서 일회성 쳐내기는 ${pruneBudget}개까지만 된다. 나머지는 다음 정리에 맡긴다.`);
+      if (!isSplit && !isPrune && Number.isFinite(budget) && budget > 0 && session.retires >= budget)
         return err(`이번 정리에서 합치기·삭제는 ${budget}개까지만 된다(이미 ${session.retires}개). 더 합치지 말고 나누기·줄이기만 한다.`);
       try {
         const e = store.retire(id, reason, merged_into);
         if (isSplit) session.writes -= 2;
+        else if (isPrune) session.prunes++;
         else session.retires++;
         return text(`retired ${e.meta.id}${merged_into ? ` (merged into ${merged_into})` : ""}`);
       } catch (ex) {

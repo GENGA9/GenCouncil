@@ -77,9 +77,13 @@ export function parseReset(text: string, now = Date.now()): string | undefined {
   const delay = /retry[_ -]?delay\D{0,5}(\d+(?:\.\d+)?)\s*s/i.exec(text);
   const m = rel ?? (delay ? [delay[0], delay[1], "s"] : null);
   if (m) {
-    const n = Number(m[1]);
-    const unit = m[2].toLowerCase();
-    const ms = unit.startsWith("h") ? n * 3_600_000 : unit.startsWith("m") ? n * 60_000 : n * 1000;
+    const unitMs = (u: string) => (u.toLowerCase().startsWith("h") ? 3_600_000 : u.toLowerCase().startsWith("m") ? 60_000 : 1000);
+    let ms = Number(m[1]) * unitMs(m[2]);
+    // compound durations ("Resets in 59h36m39s"): add the parts after the first
+    if (rel) {
+      const rest = /^(?:\s*\d+(?:\.\d+)?\s*[smh](?![a-z]))+/i.exec(text.slice(rel.index + rel[0].length));
+      for (const p of rest?.[0].matchAll(/(\d+(?:\.\d+)?)\s*([smh])/gi) ?? []) ms += Number(p[1]) * unitMs(p[2]);
+    }
     return new Date(now + Math.max(ms, 30_000)).toISOString();
   }
   const abs = /resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(text);

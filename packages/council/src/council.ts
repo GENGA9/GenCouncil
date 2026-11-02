@@ -445,6 +445,17 @@ ${rows.join("\n")}`;
   }
 
   /** Choose the account for a CLI member; falls back to another provider when configured. */
+  /** step down to a model this login can still run (Antigravity quota is per model) */
+  private fitModel(account: Account, model: string): string {
+    const fit = this.accounts.fitModel(account.id, model);
+    if (!fit) {
+      const blocks = Object.entries(account.modelBlocks ?? {}).map(([m, at]) => `${m}(reset ${at})`).join(", ");
+      throw new Error(`${account.id}: 이 계정은 ${model} 이하 모델 한도가 모두 찼습니다 (${blocks})`);
+    }
+    if (fit !== model) this.log(`${account.id}: ${model} 한도 소진 → ${fit}로 실행`);
+    return fit;
+  }
+
   private chooseAccount(provider: CliProvider, prefer?: string, exclude: string[] = []): { provider: CliProvider; account: Account } {
     const a = this.accounts.pick(provider, { prefer, exclude });
     if (a) return { provider, account: a };
@@ -485,7 +496,7 @@ ${rows.join("\n")}`;
       const p = provider as CliProvider;
       this.checkSlot(p);
       // a fallback provider cannot use the other provider's model name
-      model = resolveModel(p, p === requested ? input.model : undefined, limits[p]);
+      model = this.fitModel(account, resolveModel(p, p === requested ? input.model : undefined, limits[p]));
       checkTopModelUsage(p, model, this.weeklyLeft(p));
       effort = resolveEffort(p, input.effort, limits[p]);
       if (p === "claude") advisor = resolveAdvisor(model, input.advisor, limits.claude);
@@ -613,7 +624,13 @@ ${rows.join("\n")}`;
           model: member.model,
           effort: member.effort,
           autonomy: this.project.members.autonomy,
-          env: { ...this.accounts.env(account), GENCOUNCIL_ROLE: "member", GENCOUNCIL_AGENT: agentLabel },
+          env: {
+            ...this.accounts.env(account),
+            GENCOUNCIL_ROLE: "member",
+            GENCOUNCIL_AGENT: agentLabel,
+            // strict MCP config keeps the tool list small: load it up front instead of a ToolSearch round trip
+            ...(provider === "claude" ? { ENABLE_TOOL_SEARCH: "false" } : {}),
+          },
           extraArgs,
         },
         (stream, line) => {
@@ -716,7 +733,11 @@ ${rows.join("\n")}`;
     if (member.status === "failed" && member.provider !== "relay") {
       member.failure = classifyFailure(member.provider, `${output}\n${resultText}`, code);
       member.error = member.failure.message;
-      if (member.account && member.failure.kind === "quota") this.accounts.markExhausted(member.account, member.failure.message, member.failure.resetAt);
+      if (member.account && member.failure.kind === "quota") {
+        // Antigravity spends each model on its own: a spent Argon leaves Flash on the same login
+        if (!this.accounts.blockModel(member.account, member.model, member.failure.message, member.failure.resetAt))
+          this.accounts.markExhausted(member.account, member.failure.message, member.failure.resetAt);
+      }
       if (member.account && member.failure.kind === "auth") this.accounts.markAuth(member.account, member.failure.message);
       if (member.failure.kind !== "other" && (this.project.members.autoHandover ?? true)) {
         try {
@@ -797,14 +818,15 @@ ${rows.join("\n")}`;
         pick = this.chooseAccount(wantProvider, undefined, []);
       }
     } else {
-      const exclude = prev.account && !opts.account ? [prev.account] : [];
+      const modelOnly = prev.failure?.kind === "quota" && prev.account !== undefined && this.accounts.get(prev.account)?.status === "ok";
+      const exclude = prev.account && !opts.account && !modelOnly ? [prev.account] : [];
       pick = this.chooseAccount(wantProvider, opts.account, exclude);
     }
     const provider = pick.provider;
     const limits = this.limits();
     this.checkSlot(provider);
     const sameProvider = provider === prev.provider;
-    const model = resolveModel(provider, opts.model ?? (sameProvider ? prev.model : undefined), limits[provider]);
+    const model = this.fitModel(pick.account, resolveModel(provider, opts.model ?? (sameProvider ? prev.model : undefined), limits[provider]));
     const effort = resolveEffort(provider, opts.effort ?? (sameProvider ? prev.effort : undefined), limits[provider]);
     let advisor: string | undefined;
     if (provider === "claude" && sameProvider && prev.advisor) {

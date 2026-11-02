@@ -23,6 +23,7 @@ fs.writeFileSync(
     'echo {"type":"system","subtype":"init","session_id":"s-1","model":"claude-sonnet-5-5"}',
     "echo fake-warning-on-stderr 1>&2",
     "if defined GC_FAKE_EDIT echo edited by chair> chair-edit.txt",
+    'if defined GC_REC echo ets=%ENABLE_TOOL_SEARCH% > "%GC_REC%\\claude-env.txt"',
     'echo {"type":"result","subtype":"success","result":"done","is_error":false,"session_id":"s-1","total_cost_usd":0.01}',
     "",
   ].join("\r\n"),
@@ -114,6 +115,12 @@ fs.writeFileSync(
     'echo %* > "%GC_REC%\\agy-args.txt"',
     'findstr "^" > "%GC_REC%\\agy-stdin.txt"',
     'echo url=%GENCOUNCIL_COUNCIL_URL% role=%GENCOUNCIL_ROLE% > "%GC_REC%\\agy-env.txt"',
+    'if not defined GC_ARGON_SPENT goto run',
+    'echo %* | findstr /c:"gemini-4-argon" >nul || goto run',
+    "echo error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59h36m39s. 1>&2",
+    'echo {"event":"result","result":{"conversation_id":"c-8","status":"ERROR","response":"","error":"Individual quota reached. Resets in 59h36m39s."}}',
+    "exit /b 1",
+    ":run",
     'echo {"event":"init","conversation_id":"c-7","init":{"model":"gemini-4-argon-medium"}}',
     'echo {"event":"result","result":{"conversation_id":"c-7","status":"SUCCESS","response":"gemini chair reply"}}',
     "",
@@ -155,7 +162,21 @@ const agyMcp = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "config
 const agySet = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "antigravity-cli", "settings.json"), "utf8"));
 check("council bridge and memory registered for agy", agyMcp.mcpServers.gencouncil_council?.args?.[0]?.endsWith("bridge.js") && agyMcp.mcpServers.gencouncil?.args?.[0]?.endsWith("server.js"));
 check("their tools allowed without prompts", agySet.permissions.allow.includes("mcp(gencouncil_council/*)") && agySet.permissions.allow.includes("mcp(gencouncil/*)"));
+// Antigravity spends Argon on its own: the chair goes on with Flash on the same login
+process.env.GC_ARGON_SPENT = "1";
+process.env.USERPROFILE = fakeHome;
+const shown = [];
+const m2 = await chairTok.turn("아르곤 한도 소진", (e) => e.kind === "text" && shown.push(e.text));
+process.env.USERPROFILE = realProfile;
+delete process.env.GC_ARGON_SPENT;
+const aArgs2 = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8");
+check("argon quota: same gemini login retried with flash", !m2.isError && aArgs2.includes("--model gemini-3.8-flash") && council.accounts.get("gemini").status === "ok", JSON.stringify([m2, aArgs2]));
+check("the user is told about the step down", shown.some((t) => /gemini-4-argon 한도 소진 → gemini-3\.8-flash/.test(t)), JSON.stringify(shown));
+check("chair model now reports flash", chairTok.model() === "gemini-3.8-flash");
+council.accounts.markOk("gemini");
 council.project.chair.account = "claude";
+await chairTok.turn("클로드 의장", () => {});
+check("claude chair loads its tools up front (no ToolSearch)", fs.readFileSync(path.join(rec, "claude-env.txt"), "utf8").includes("ets=false"));
 
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });
