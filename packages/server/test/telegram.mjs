@@ -14,7 +14,7 @@ const fakeFetch = async (url, init) => {
   const method = url.split("/").pop();
   if (init.body instanceof FormData) {
     // photo uploads are multipart, not JSON
-    sent.push({ method, chat_id: init.body.get("chat_id"), message_thread_id: init.body.get("message_thread_id"), caption: init.body.get("caption"), photo: init.body.get("photo")?.name });
+    sent.push({ method, chat_id: init.body.get("chat_id"), message_thread_id: init.body.get("message_thread_id"), caption: init.body.get("caption"), photo: init.body.get("photo")?.name, document: init.body.get("document")?.name });
     return { json: async () => ({ ok: true, result: {} }) };
   }
   const body = JSON.parse(init.body);
@@ -106,11 +106,18 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   const fsm = await import("node:fs"); const osm = await import("node:os"); const pathm = await import("node:path");
   const png = pathm.join(osm.tmpdir(), "gc-shot-test.png");
   fsm.writeFileSync(png, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  let before2;
   const before = sent.length;
-  await bridge.sendShown("proj/agenda", "A안: 타이틀", [{ name: "a.png", type: "image/png", path: png }, { name: "mock.html", type: "text/html", path: png }]);
+  await bridge.sendShown("proj/agenda", "A안: 타이틀", [{ name: "a.png", type: "image/png", path: png }, { name: "spec.pdf", type: "application/pdf", path: png }, { name: "big.pdf", type: "application/pdf" }]);
   const newOnes = sent.slice(before);
   check("shown image goes as a photo with caption", newOnes.some((m) => m.method === "sendPhoto" && /의장 시안: A안/.test(m.caption ?? "") && m.photo === "a.png"), JSON.stringify(newOnes));
-  check("non-image drafts are named in a text note", newOnes.some((m) => (m.text ?? "").includes("mock.html")));
+  const doc = newOnes.find((m) => m.method === "sendDocument");
+  check("shown pdf goes as a document in the DM, without caption", doc && doc.document === "spec.pdf" && String(doc.chat_id) === "123" && !doc.caption, JSON.stringify(newOnes));
+  check("unsendable file is only named in a text note", newOnes.some((m) => (m.text ?? "").includes("big.pdf") && !(m.text ?? "").includes("spec.pdf")), JSON.stringify(newOnes));
+  before2 = sent.length;
+  await bridge.sendShown("proj/agenda", "문서만", [{ name: "x.pdf", type: "application/pdf", path: png }, { name: "y.pdf", type: "application/pdf", path: png }]);
+  const docs = sent.slice(before2).filter((m) => m.method === "sendDocument");
+  check("caption goes on the first file only (document first)", docs.length === 2 && /^\[agenda\] 의장 시안: 문서만$/.test(docs[0].caption ?? "") && !docs[1].caption, JSON.stringify(docs));
   fsm.rmSync(png, { force: true });
 }
 
@@ -312,6 +319,10 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
     await fb.sendShown("proj/tg", "C안", [{ name: "c.png", type: "image/png", path: png }]);
     const ph = sent.find((m) => m.method === "sendPhoto");
     check("shown photo goes to the topic", ph && String(ph.chat_id) === String(FORUM) && String(ph.message_thread_id) === String(topicB) && ph.caption === "의장 시안: C안", JSON.stringify(ph));
+    sent.length = 0;
+    await fb.sendShown("proj/tg", "D안", [{ name: "d.pdf", type: "application/pdf", path: png }]);
+    const dd = sent.find((m) => m.method === "sendDocument");
+    check("shown pdf goes to the topic as a document", dd && String(dd.message_thread_id) === String(topicB) && dd.document === "d.pdf" && dd.caption === "의장 시안: D안", JSON.stringify(dd));
     fsm.rmSync(png, { force: true });
   }
   sent.length = 0;
