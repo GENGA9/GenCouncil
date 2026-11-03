@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { familyColor, memberName } from "../model";
-import type { ChatItem, Member, ProjectOv, RuntimeState, Task } from "../types";
+import type { ChatItem, Member, ProjectOv, RuntimeState, Task, UploadHooks } from "../types";
+
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+const fmtSize = (n: number) => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)}GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
 import { GridSpinner } from "./GridSpinner";
 
 /** chair models per CLI; the chair runs on whatever CLI its account belongs to */
@@ -85,7 +88,7 @@ interface Props {
   firstTurn: boolean;
   loading: boolean;
   project?: ProjectOv;
-  onSend: (message: string, files?: File[]) => Promise<void>;
+  onSend: (message: string, files?: File[], hooks?: UploadHooks) => Promise<void>;
   onSetChair: (model: string, effort: string, account?: string, advisor?: string) => Promise<void>;
   onReset: () => Promise<void>;
   onSetAutonomy: (autonomy: string) => Promise<void>;
@@ -103,6 +106,9 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  // per pending file: upload progress, or the failure message (the chip stays so it can be retried or removed); key -1 = rejected before upload
+  const [upProgress, setUpProgress] = useState<Record<number, number>>({});
+  const [upFailed, setUpFailed] = useState<Record<number, string>>({});
   const [dragOver, setDragOver] = useState(false);
   // the goals card can be folded to give the chat more room; remembered on this device
   const [goalsFolded, setGoalsFolded] = useState(() => {
@@ -138,7 +144,10 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
   const [showState, setShowState] = useState(false);
   const addFiles = (list: FileList | File[] | null | undefined) => {
     const arr = Array.from(list ?? []).filter((f) => f.size > 0);
-    if (arr.length) setFiles((cur) => [...cur, ...arr].slice(0, 10));
+    const tooBig = arr.filter((f) => f.size > MAX_UPLOAD_BYTES);
+    const ok = arr.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    if (tooBig.length) setUpFailed((cur) => ({ ...cur, [-1]: `업로드 실패: ${tooBig.map((f) => f.name || "파일").join(", ")} — 2GB를 넘어 올릴 수 없습니다 (${fmtSize(tooBig[0].size)})` }));
+    if (ok.length) setFiles((cur) => [...cur, ...ok].slice(0, 10));
   };
   const listRef = useRef<HTMLDivElement>(null);
   const busy = state?.chair.busy ?? false;
@@ -156,10 +165,16 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
     const t = text.trim();
     if ((!t && files.length === 0) || busy || sending) return;
     setSending(true);
+    setUpProgress({});
+    setUpFailed({});
     try {
-      await onSend(t, files);
+      await onSend(t, files, {
+        onProgress: (i, pct) => setUpProgress((cur) => ({ ...cur, [i]: pct })),
+        onFail: (i, msg) => setUpFailed((cur) => ({ ...cur, [i]: msg })),
+      });
       setText("");
       setFiles([]);
+      setUpProgress({});
     } catch {
       /* the app shows the error; keep the draft */
     } finally {
@@ -369,14 +384,35 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           <div className="small muted ask-hint">버튼을 누르거나 아래에 직접 답하세요.</div>
         </div>
       )}
-      {files.length > 0 && (
+      {(files.length > 0 || upFailed[-1]) && (
         <div className="pending-files">
           {files.map((f, i) => (
-            <span key={i} className="file-chip">
+            <span key={i} className={`file-chip ${upFailed[i] ? "failed" : ""}`} title={upFailed[i]}>
               {f.type.startsWith("image/") ? <img src={URL.createObjectURL(f)} alt="" /> : "📎"} {f.name || "붙여넣은 이미지"}
-              <button className="icon" title="빼기" onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}>✕</button>
+              <span className="muted"> {fmtSize(f.size)}</span>
+              {sending && upProgress[i] !== undefined && !upFailed[i] && <span className="up-progress"> {upProgress[i] >= 100 ? "처리 중…" : `${upProgress[i]}%`}</span>}
+              {upFailed[i] && <span className="up-failed"> ⚠ 실패</span>}
+              <button
+                className="icon"
+                title="빼기"
+                disabled={sending}
+                onClick={() => {
+                  setFiles((cur) => cur.filter((_, j) => j !== i));
+                  setUpFailed({});
+                  setUpProgress({});
+                }}
+              >
+                ✕
+              </button>
             </span>
           ))}
+          {Object.entries(upFailed).map(([k, msg]) => (
+            <div key={k} className="up-error" role="alert">
+              {msg}
+              {Number(k) >= 0 && " — 전송을 다시 눌러 재시도하거나 ✕로 뺄 수 있습니다."}
+            </div>
+          ))}
+          {sending && Object.keys(upProgress).length > 0 && <div className="up-status small muted">올리는 중… (끝나면 의장에게 전달됩니다)</div>}
         </div>
       )}
       <div

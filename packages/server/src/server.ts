@@ -41,10 +41,11 @@ import {
   type Autonomy,
   type CliProvider,
   type Attachment,
+  AttachmentTooLargeError,
   type RuntimeEvent,
 } from "@gencouncil/council";
 
-const MAX_UPLOAD = 25 * 1024 * 1024;
+const MAX_UPLOAD = 2 * 1024 * 1024 * 1024;
 import { listFolder } from "./fsbrowse.js";
 import { WebSocketServer, type WebSocket } from "ws";
 import { detectTailscale, loadServerConfig, saveServerConfig, type ServerConfig, type TailscaleInfo } from "./config.js";
@@ -54,6 +55,8 @@ export interface ServerOptions extends Partial<ServerConfig> {
   /** directory with the built web app (apps/web/dist) */
   webDir?: string;
   log?: (line: string) => void;
+  /** web attachment upload limit in bytes (default 2GB; tests lower it) */
+  maxUploadBytes?: number;
 }
 
 export interface RunningServer {
@@ -461,16 +464,21 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   });
   on("POST", "/api/a/:id/:slug/attachments", async ({ params, req, url }) => {
     const rt = await getRuntime(params.id, params.slug);
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const c of req) {
-      size += (c as Buffer).length;
-      if (size > MAX_UPLOAD) throw new HttpError(413, `file too large (max ${MAX_UPLOAD / 1024 / 1024}MB)`);
-      chunks.push(c as Buffer);
+    const maxUpload = opts.maxUploadBytes ?? MAX_UPLOAD;
+    const gb = 1024 * 1024 * 1024;
+    const limitMsg = `file too large (max ${maxUpload >= gb ? `${+(maxUpload / gb).toFixed(1)}GB` : `${Math.max(1, Math.round(maxUpload / 1024 / 1024))}MB`})`;
+    if (Number(req.headers["content-length"] ?? 0) > maxUpload) {
+      req.resume(); // drain so the browser sees the 413 instead of a dropped connection
+      throw new HttpError(413, limitMsg);
     }
     const name = url.searchParams.get("name") ?? "file";
     const type = String(req.headers["content-type"] ?? "application/octet-stream");
-    return rt.saveAttachment(name, type, Buffer.concat(chunks));
+    try {
+      return await rt.saveAttachmentStream(name, type, req, maxUpload);
+    } catch (e) {
+      if (e instanceof AttachmentTooLargeError) throw new HttpError(413, limitMsg);
+      throw e;
+    }
   });
   on("GET", "/api/a/:id/:slug/attachments/:file", async ({ params, res }) => {
     const rt = await getRuntime(params.id, params.slug);
