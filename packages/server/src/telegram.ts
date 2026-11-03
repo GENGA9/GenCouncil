@@ -18,6 +18,21 @@ export interface TelegramConfig {
   forumChatId?: string;
   /** agenda key -> message_thread_id of its topic */
   topics?: Record<string, number>;
+  /** push runtime events (chair replies, drafts, questions, ...) to Telegram by itself; default off: the chair sends only when the user asks (council_telegram) */
+  autoNotify?: boolean;
+}
+
+/** what the chair's council_telegram tool asks the bridge to send */
+export interface TelegramSendRequest {
+  text: string;
+  files: Array<{ name: string; type: string; path: string }>;
+  /** attach the agenda's current question as buttons */
+  ask?: { question: string; options: string[] };
+}
+
+export interface TelegramSendResult {
+  ok: boolean;
+  detail: string;
 }
 
 export interface TelegramDeps {
@@ -57,6 +72,8 @@ interface PendingAsk {
   options: string[];
 }
 
+/** prefix of messages relayed to the chair, so it knows they came from Telegram */
+const TG_MARK = "[텔레그램] ";
 const MAX_ASKS = 50;
 const BUTTON_LEN = 60;
 const TOPIC_NAME_LEN = 128;
@@ -186,11 +203,14 @@ export class TelegramBridge {
     return text.replace(/^\[[^\]\n]+\] ?/, "");
   }
 
-  /** the chair showed drafts: images go as photos, other files as documents; what cannot be sent is only named */
-  async sendShown(key: string, caption: string, files: Array<{ name: string; type: string; path?: string }>): Promise<void> {
-    const tag = `[${key.split("/")[1] ?? key}]`;
+  /** Send files to an agenda's destination: images as photos, other files as documents; what cannot be sent is returned by name. */
+  private async deliverFiles(
+    key: string,
+    files: Array<{ name: string; type: string; path?: string }>,
+    captionFor: (inTopic: boolean) => string | undefined,
+  ): Promise<{ sent: string[]; unsent: string[] }> {
+    const sent: string[] = [];
     const unsent: string[] = [];
-    let sentAny = false;
     for (const f of files) {
       let data: Buffer<ArrayBuffer> | undefined;
       let asPhoto = false;
@@ -209,19 +229,71 @@ export class TelegramBridge {
         unsent.push(f.name);
         continue;
       }
-      const first = !sentAny;
+      const first = sent.length === 0;
       const ok = await this.route(key, async (chat, thread) => {
         const form = new FormData();
         form.append("chat_id", chat);
         if (thread !== undefined) form.append("message_thread_id", String(thread));
-        if (first) form.append("caption", `${thread !== undefined ? "" : tag + " "}의장 시안: ${caption}`.slice(0, 1000));
+        const caption = first ? captionFor(thread !== undefined) : undefined;
+        if (caption) form.append("caption", caption.slice(0, 1000));
         form.append(asPhoto ? "photo" : "document", new Blob([data!], { type: f.type }), f.name);
         await this.call(asPhoto ? "sendPhoto" : "sendDocument", form);
       });
-      if (ok) sentAny = true;
+      if (ok) sent.push(f.name);
       else unsent.push(f.name);
     }
-    if (unsent.length || !sentAny) await this.sendFor(key, `${tag} 의장 시안: ${caption}${unsent.length ? "\n파일: " + unsent.join(", ") + " (웹 화면에서 보기)" : ""}`);
+    return { sent, unsent };
+  }
+
+  private static tag(key: string): string {
+    return `[${key.split("/")[1] ?? key}]`;
+  }
+
+  /** (auto mode) the chair showed drafts: images go as photos, other files as documents; what cannot be sent is only named */
+  async sendShown(key: string, caption: string, files: Array<{ name: string; type: string; path?: string }>): Promise<void> {
+    if (!this.cfg.autoNotify) return;
+    const tag = TelegramBridge.tag(key);
+    const { sent, unsent } = await this.deliverFiles(key, files, (inTopic) => `${inTopic ? "" : tag + " "}의장 시안: ${caption}`);
+    if (unsent.length || !sent.length) await this.sendFor(key, `${tag} 의장 시안: ${caption}${unsent.length ? "\n파일: " + unsent.join(", ") + " (웹 화면에서 보기)" : ""}`);
+  }
+
+  /**
+   * The user told the chair to send something to Telegram (council_telegram): text, files and the
+   * pending question as buttons, to the agenda's topic (forum) or the private chat. Reports what happened.
+   */
+  async sendRequested(key: string, req: TelegramSendRequest): Promise<TelegramSendResult> {
+    const tag = TelegramBridge.tag(key);
+    const parts: string[] = [];
+    const problems: string[] = [];
+    let sentFiles = 0;
+    let captionUsed = false;
+    // a short text with files and no question rides as the first file's caption
+    const canCaption = req.files.length > 0 && !req.ask && req.text.length <= 1000;
+    if (req.files.length) {
+      const r = await this.deliverFiles(key, req.files, (inTopic) => {
+        if (!canCaption) return undefined;
+        captionUsed = true;
+        return `${inTopic ? "" : tag + " "}${req.text}`;
+      });
+      sentFiles = r.sent.length;
+      if (r.sent.length) parts.push(`파일 ${r.sent.length}개`);
+      if (r.unsent.length) problems.push(`못 보낸 파일: ${r.unsent.join(", ")}`);
+      if (!r.sent.length) captionUsed = false;
+    }
+    let textOk = true;
+    if (!captionUsed) {
+      let body = req.text;
+      if (req.ask && !body.includes(req.ask.question)) body += `\n\n${req.ask.question}`;
+      const buttons = Boolean(req.ask?.options.length);
+      if (req.ask && buttons) body += `\n선택지: ${req.ask.options.join(" / ")}`;
+      const extra = req.ask && buttons ? { reply_markup: { inline_keyboard: this.registerAsk(key, req.ask.question, req.ask.options) } } : undefined;
+      textOk = await this.sendFor(key, `${tag} ${body}`, extra);
+      if (textOk) parts.push(buttons ? "글+선택 버튼" : "글");
+      else problems.push("글 전송 실패");
+    }
+    const ok = textOk && sentFiles === req.files.length;
+    const where = this.forumChat() ? "포럼 토픽" : "텔레그램 DM";
+    return { ok, detail: `${ok ? "보냈다" : "일부만 보냈거나 실패했다"} (${where}): ${parts.join(", ") || "없음"}${problems.length ? ". " + problems.join("; ") : ""}` };
   }
 
   private async sendChunks(chat: string, thread: number | undefined, text: string, extra?: Record<string, unknown>): Promise<void> {
@@ -259,15 +331,15 @@ export class TelegramBridge {
     await this.say(String(this.cfg.chatId), undefined, text, extra);
   }
 
-  /** Send text about an agenda: to its forum topic when a forum is connected, else to the private chat. */
-  async sendFor(key: string, text: string, extra?: Record<string, unknown>): Promise<void> {
-    if (!this.forumChat()) return this.send(text, extra);
-    await this.route(key, (chat, thread) => this.sendChunks(chat, thread, TelegramBridge.untag(text), extra));
+  /** Send text about an agenda: to its forum topic when a forum is connected, else to the private chat. Resolves to whether it was sent. */
+  async sendFor(key: string, text: string, extra?: Record<string, unknown>): Promise<boolean> {
+    if (!this.forumChat()) return this.route(key, (chat) => this.sendChunks(chat, undefined, text, extra));
+    return this.route(key, (chat, thread) => this.sendChunks(chat, thread, TelegramBridge.untag(text), extra));
   }
 
-  /** Send the closing message of an agenda, then close its topic (a failure to close is ignored). */
+  /** An agenda ended: close its topic (a failure to close is ignored); the closing message goes out only in auto mode. */
   async finishFor(key: string, text: string): Promise<void> {
-    await this.sendFor(key, text);
+    if (this.cfg.autoNotify) await this.sendFor(key, text);
     const forum = this.forumChat();
     const thread = this.cfg.topics?.[key];
     if (forum && thread !== undefined) await this.api("closeForumTopic", { chat_id: forum, message_thread_id: thread }).catch(() => {});
@@ -296,15 +368,21 @@ export class TelegramBridge {
     }
   }
 
+  /** remember a question so a button press can be matched to it; returns the inline keyboard */
+  private registerAsk(key: string, question: string, options: string[]): Array<Array<{ text: string; callback_data: string }>> {
+    const id = (++this.askSeq).toString(36);
+    this.asks.set(id, { key, question, options });
+    while (this.asks.size > MAX_ASKS) this.asks.delete(this.asks.keys().next().value as string);
+    return options.map((o, i) => [{ text: o.length > BUTTON_LEN ? o.slice(0, BUTTON_LEN - 1) + "…" : o, callback_data: `a:${id}:${i}` }]);
+  }
+
+  /** (auto mode) push a runtime event; does nothing unless autoNotify is on */
   notify(key: string, e: RuntimeEvent): void {
+    if (!this.cfg.autoNotify) return;
     const text = TelegramBridge.format(key, e);
     if (!text) return;
     if (e.type === "chair:ask" && e.options?.length) {
-      const id = (++this.askSeq).toString(36);
-      this.asks.set(id, { key, question: e.question, options: e.options });
-      while (this.asks.size > MAX_ASKS) this.asks.delete(this.asks.keys().next().value as string);
-      const inline_keyboard = e.options.map((o, i) => [{ text: o.length > BUTTON_LEN ? o.slice(0, BUTTON_LEN - 1) + "…" : o, callback_data: `a:${id}:${i}` }]);
-      void this.sendFor(key, text, { reply_markup: { inline_keyboard } });
+      void this.sendFor(key, text, { reply_markup: { inline_keyboard: this.registerAsk(key, e.question, e.options) } });
       return;
     }
     void this.sendFor(key, text);
@@ -392,6 +470,11 @@ export class TelegramBridge {
     return all.length ? all.map((a) => `${a.key === this.cfg.agenda ? "▶ " : ""}${a.key} [${a.status}] ${a.title}`).join("\n") : "안건이 없습니다.";
   }
 
+  /** the chair's answers do not come here by themselves unless autoNotify is on */
+  private autoHint(): string {
+    return this.cfg.autoNotify ? "" : "\n의장 답은 자동으로 오지 않습니다. 받으려면 의장에게 '텔레그램으로 보내 줘'라고 하세요.";
+  }
+
   /** `/forum` sent inside a group: the owner connects that group as the forum. */
   private connectForum(msg: TgMessage, reply: (t: string) => Promise<string>): Promise<string | undefined> {
     if (String(msg.from?.id) !== String(this.cfg.chatId)) {
@@ -414,8 +497,8 @@ export class TelegramBridge {
       return reply(`안건을 열 수 없습니다: ${(e as Error).message}`);
     }
     if (text === "/status") return reply(this.statusText(rt));
-    if (rt.chair.isBusy()) return reply("의장이 아직 이전 턴을 처리 중입니다. 끝나면 알림이 옵니다.");
-    void rt.send(text).catch((e) => this.deps.log(`telegram → chair failed: ${(e as Error).message}`));
+    if (rt.chair.isBusy()) return reply(this.cfg.autoNotify ? "의장이 아직 이전 턴을 처리 중입니다. 끝나면 알림이 옵니다." : "의장이 아직 이전 턴을 처리 중입니다. 잠시 뒤 다시 보내세요.");
+    void rt.send(TG_MARK + text).catch((e) => this.deps.log(`telegram → chair failed: ${(e as Error).message}`));
     return reply("의장에게 전달했습니다.");
   }
 
@@ -455,7 +538,7 @@ export class TelegramBridge {
       }
       if (text === "/forum") return this.connectForum(msg, reply);
       if (text === "/start" || text === "/help") {
-        return reply("GenCouncil 봇입니다.\n안건 토픽 안에 쓴 글은 그 안건 의장에게 전달됩니다.\n/status 그 안건 상태\n/list 안건 목록");
+        return reply("GenCouncil 봇입니다.\n안건 토픽 안에 쓴 글은 그 안건 의장에게 전달됩니다.\n/status 그 안건 상태\n/list 안건 목록" + this.autoHint());
       }
       if (text === "/list") return reply(this.listText());
       const key = this.keyForThread(thread);
@@ -466,7 +549,7 @@ export class TelegramBridge {
 
     if (text === "/forum") return reply("/forum 은 포럼으로 쓸 그룹(토픽 켬) 안에서 보내세요. 봇을 그 그룹의 관리자(토픽 관리 권한)로 추가해야 합니다.");
     if (text === "/start" || text === "/help") {
-      return reply("GenCouncil 봇입니다.\n/list 안건 목록\n/agenda <project/slug> 대화할 안건 선택\n/status 현재 안건 상태\n그 외 텍스트는 의장에게 전달됩니다.");
+      return reply("GenCouncil 봇입니다.\n/list 안건 목록\n/agenda <project/slug> 대화할 안건 선택\n/status 현재 안건 상태\n그 외 텍스트는 의장에게 전달됩니다." + this.autoHint());
     }
     if (text === "/list") return reply(this.listText());
     if (text.startsWith("/agenda")) {

@@ -60,7 +60,7 @@ const fakeRuntime = {
 };
 let bound;
 const bridge = new TelegramBridge(
-  { botToken: "T", chatId: "123" },
+  { botToken: "T", chatId: "123", autoNotify: true },
   {
     fetch: fakeFetch,
     log: () => {},
@@ -97,7 +97,7 @@ check("/list shows agendas", (await bridge.handleUpdate(upd("/list"))).includes(
 check("/agenda binds by slug suffix", (await bridge.handleUpdate(upd("/agenda agenda"))).includes("proj/agenda") && bound === "proj/agenda");
 check("/status reports", (await bridge.handleUpdate(upd("/status"))).includes("Sonnet 5.5(claude-1) running"));
 const r = await bridge.handleUpdate(upd("목표 2를 배정해줘"));
-check("plain text relayed to chair", r === "의장에게 전달했습니다." && chairMessages[0] === "목표 2를 배정해줘");
+check("plain text relayed to chair", r === "의장에게 전달했습니다." && chairMessages[0] === "[텔레그램] 목표 2를 배정해줘");
 busy = true;
 check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("처리 중") && chairMessages.length === 1);
 
@@ -186,7 +186,7 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   const runtimes = { "proj/agenda": A, "proj/tg": B };
   const configs = [];
   const fb = new TelegramBridge(
-    { botToken: "T", chatId: "123", agenda: "proj/agenda" },
+    { botToken: "T", chatId: "123", agenda: "proj/agenda", autoNotify: true },
     {
       fetch: fakeFetch,
       log: () => {},
@@ -245,7 +245,7 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   sent.length = 0;
   A.msgs.length = 0; B.msgs.length = 0;
   let out = await fb.handleUpdate(gmsg("B 안건 지시", { thread: topicB }));
-  check("topic text goes to that agenda's chair (not the bound one)", out === "의장에게 전달했습니다." && B.msgs[0] === "B 안건 지시" && A.msgs.length === 0);
+  check("topic text goes to that agenda's chair (not the bound one)", out === "의장에게 전달했습니다." && B.msgs[0] === "[텔레그램] B 안건 지시" && A.msgs.length === 0);
   check("reply goes to the same topic", to(sent, FORUM, topicB).length === 1 && to(sent, "123").length === 0);
   B.busy = true;
   out = await fb.handleUpdate(gmsg("또", { thread: topicB }));
@@ -308,7 +308,7 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   check("DM /status still uses the bound agenda", out.startsWith("밸런스 안건"));
   A.msgs.length = 0;
   out = await fb.handleUpdate(upd("DM 에서 지시"));
-  check("DM text still goes to the bound agenda", A.msgs[0] === "DM 에서 지시");
+  check("DM text still goes to the bound agenda", A.msgs[0] === "[텔레그램] DM 에서 지시");
 
   // drafts and closing
   {
@@ -344,13 +344,103 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   // CLI-style config: forum present at start, topics already known
   {
     sent.length = 0;
-    const pre = new TelegramBridge({ botToken: "T", chatId: "123", forumChatId: String(FORUM), topics: { "proj/agenda": 777 } }, { fetch: fakeFetch, log: () => {}, listAgendas: () => [], getRuntime: async () => A.runtime, onBind: () => {} });
+    const pre = new TelegramBridge({ botToken: "T", chatId: "123", forumChatId: String(FORUM), topics: { "proj/agenda": 777 }, autoNotify: true }, { fetch: fakeFetch, log: () => {}, listAgendas: () => [], getRuntime: async () => A.runtime, onBind: () => {} });
     pre.notify("proj/agenda", { type: "chair:done", text: "미리 설정", isError: false });
     await settle();
     check("preconfigured forum + known topic: no creation, goes to the topic", sent.every((m) => m.method !== "createForumTopic") && to(sent, FORUM, 777).length === 1);
     const noForum = await pre.handleUpdate(gmsg("/forum", { chat: -777 }));
     check("works without an onConfig callback", noForum.includes("연결"));
   }
+}
+
+
+// ---- default (autoNotify off): nothing goes out by itself; the chair sends on request ----
+{
+  const fsm = await import("node:fs"); const osm = await import("node:os"); const pathm = await import("node:path");
+  const FORUM = -1009998887776;
+  const settle = (ms = 40) => new Promise((r) => setTimeout(r, ms));
+  const msgs = [];
+  let waiting2;
+  let busy2 = false;
+  const rt = {
+    chair: { isBusy: () => busy2 },
+    council: { clearWaiting: () => {} },
+    state: () => ({ agenda: { title: "조용한 안건", goals: [], waitingForUser: waiting2 }, tasks: [], members: [], chair: { busy: busy2 } }),
+    send: async (t) => { msgs.push(t); return { text: "ok", isError: false }; },
+  };
+  const mk = (cfg) => new TelegramBridge({ botToken: "T", chatId: "123", agenda: "proj/q", ...cfg }, {
+    fetch: fakeFetch, log: () => {},
+    listAgendas: () => [{ key: "proj/q", title: "조용한 안건", status: "open" }],
+    getRuntime: async () => rt, onBind: () => {}, onConfig: () => {},
+  });
+  const png = pathm.join(osm.tmpdir(), "gc-quiet.png");
+  fsm.writeFileSync(png, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+
+  const dm = mk({});
+  sent.length = 0;
+  for (const e of [
+    { type: "chair:done", text: "끝", isError: false },
+    { type: "chair:ask", question: "어느 쪽?", options: ["A", "B"] },
+    { type: "member:done", member: { id: "claude-1", provider: "claude", model: "claude-sonnet-5-5", status: "done" } },
+    { type: "chair:handover", from: "a", to: "b", reason: "quota" },
+  ]) dm.notify("proj/q", e);
+  await dm.sendShown("proj/q", "시안", [{ name: "a.png", type: "image/png", path: png }]);
+  await dm.finishFor("proj/q", "[proj/q] 안건 종료");
+  await settle();
+  check("autoNotify off: notify, sendShown and finishFor send nothing", sent.length === 0, JSON.stringify(sent));
+
+  // receiving still works, with the source mark; replies to the user's own action stay
+  const u = (text) => ({ update_id: 1, message: { message_id: 1, text, chat: { id: 123 } } });
+  check("autoNotify off: /status still answers", (await dm.handleUpdate(u("/status"))).startsWith("조용한 안건"));
+  check("autoNotify off: text is relayed with the [텔레그램] mark and acknowledged", (await dm.handleUpdate(u("종료해"))) === "의장에게 전달했습니다." && msgs[0] === "[텔레그램] 종료해");
+  busy2 = true;
+  const busyReply = await dm.handleUpdate(u("또"));
+  check("autoNotify off: busy notice does not promise a notification", busyReply.includes("처리 중") && !busyReply.includes("알림이 옵니다"), busyReply);
+  busy2 = false;
+
+  // explicit send: DM
+  sent.length = 0;
+  let r1 = await dm.sendRequested("proj/q", { text: "텔레그램으로 보내 달라고 하셔서 보냅니다", files: [] });
+  check("sendRequested text goes to the DM with the agenda tag", r1.ok && sent.length === 1 && sent[0].text === "[q] 텔레그램으로 보내 달라고 하셔서 보냅니다" && String(sent[0].chat_id) === "123", JSON.stringify([r1, sent]));
+  sent.length = 0;
+  r1 = await dm.sendRequested("proj/q", { text: "시안 보냅니다", files: [{ name: "a.png", type: "image/png", path: png }, { name: "b.pdf", type: "application/pdf", path: png }] });
+  check("sendRequested files: first file carries the text as caption, no extra message", r1.ok && sent.length === 2 && sent[0].method === "sendPhoto" && sent[0].caption === "[q] 시안 보냅니다" && sent[1].method === "sendDocument" && !sent[1].caption, JSON.stringify([r1, sent]));
+  sent.length = 0;
+  r1 = await dm.sendRequested("proj/q", { text: "없는 파일", files: [{ name: "gone.pdf", type: "application/pdf", path: pathm.join(osm.tmpdir(), "gc-no-such-file.pdf") }] });
+  check("sendRequested reports an unsendable file as a failure, text still goes", !r1.ok && r1.detail.includes("gone.pdf") && sent.some((m) => m.text?.includes("없는 파일")), JSON.stringify([r1, sent]));
+
+  // explicit send with the pending question as buttons
+  sent.length = 0;
+  waiting2 = { question: "어느 시안으로 갈까요?", options: ["A안", "B안"], at: 1 };
+  r1 = await dm.sendRequested("proj/q", { text: "골라 주세요", files: [], ask: { question: waiting2.question, options: waiting2.options } });
+  const askMsg = sent.find((m) => m.reply_markup);
+  check("sendRequested ask:true attaches buttons and the question", r1.ok && askMsg?.reply_markup.inline_keyboard.length === 2 && askMsg.text.includes("어느 시안으로 갈까요?") && askMsg.text.includes("골라 주세요"), JSON.stringify([r1, sent]));
+  msgs.length = 0; sent.length = 0;
+  await dm.handleUpdate({ update_id: 5, callback_query: { id: "q1", data: askMsg.reply_markup.inline_keyboard[1][0].callback_data, message: { message_id: 9, chat: { id: 123 } } } });
+  check("a button sent on request works like an automatic one (choice unmarked)", msgs[0] === "B안" && sent.some((m) => m.text === "선택: B안 → 의장에게 전달했습니다"), JSON.stringify([msgs, sent]));
+  waiting2 = undefined;
+
+  // forum mode: explicit send goes to the agenda topic; finishFor closes the topic silently
+  const fm = mk({ forumChatId: String(FORUM), topics: { "proj/q": 555 } });
+  sent.length = 0;
+  r1 = await fm.sendRequested("proj/q", { text: "토픽으로", files: [{ name: "c.pdf", type: "application/pdf", path: png }] });
+  check("sendRequested in forum mode: document in the agenda topic with caption", r1.ok && sent.length === 1 && sent[0].method === "sendDocument" && String(sent[0].chat_id) === String(FORUM) && String(sent[0].message_thread_id) === "555" && sent[0].caption === "토픽으로", JSON.stringify([r1, sent]));
+  sent.length = 0;
+  r1 = await fm.sendRequested("proj/q", { text: "글만", files: [] });
+  check("sendRequested text in forum mode: topic, no tag", r1.ok && sent[0].text === "글만" && String(sent[0].message_thread_id) === "555", JSON.stringify(sent));
+  sent.length = 0;
+  await fm.finishFor("proj/q", "[proj/q] 안건 종료");
+  check("autoNotify off: finishFor closes the topic without a message", sent.length === 1 && sent[0].method === "closeForumTopic" && sent[0].message_thread_id === 555, JSON.stringify(sent));
+  sent.length = 0;
+  await fm.sendShown("proj/q", "시안", [{ name: "a.png", type: "image/png", path: png }]);
+  check("autoNotify off in forum mode: sendShown sends nothing", sent.length === 0);
+
+  // a failing API is reported, not thrown
+  const bad = new TelegramBridge({ botToken: "T", chatId: "123" }, { fetch: async () => ({ json: async () => ({ ok: false, description: "chat not found" }), status: 400 }), log: () => {}, listAgendas: () => [], getRuntime: async () => rt, onBind: () => {} });
+  const rb = await bad.sendRequested("proj/q", { text: "안 가요", files: [] });
+  check("sendRequested reports a Telegram failure instead of throwing", rb.ok === false && rb.detail.includes("실패"), JSON.stringify(rb));
+
+  fsm.rmSync(png, { force: true });
 }
 
 
