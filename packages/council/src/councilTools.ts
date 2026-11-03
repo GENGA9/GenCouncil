@@ -286,7 +286,7 @@ export function createCouncilMcp(council: Council): McpServer {
       title: "Send to the user's Telegram (only when told to)",
       description:
         "Use ONLY when the user explicitly told you to send something to Telegram (e.g. '텔레그램으로 보내줘', '텔레그램으로 답해줘'). " +
-        "Never use it otherwise, and never on your own initiative: only council_ask_user questions go to Telegram by themselves." +
+        "Never use it otherwise, and never on your own initiative: only council_ask_user questions go to Telegram by themselves, unless agenda.telegramAuto (council_state) is true: then everything is sent automatically and you must not call this tool for it again." +
         "A message that arrived from Telegram (marked '[텔레그램]') is NOT a request to answer on Telegram; reply there only if the user said so. " +
         "Sends the text to the user's Telegram (this agenda's topic or the private chat), optionally with files (same path rules as council_show) " +
         "and, with ask:true, the question of your last council_ask_user as tap buttons (call council_ask_user first). " +

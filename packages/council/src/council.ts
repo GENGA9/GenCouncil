@@ -114,7 +114,7 @@ export type TelegramSender = (req: TelegramRequest) => Promise<{ ok: boolean; de
 
 export interface CouncilState {
   project: { id: string; name: string; repo: string; baseBranch: string };
-  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: { question: string; options?: string[]; at: string; kind?: "finish" } };
+  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: { question: string; options?: string[]; at: string; kind?: "finish" }; telegramAuto?: boolean };
   tasks: Task[];
   members: Array<Omit<MemberRecord, "result"> & { result?: { summary: string; unfinished: string } }>;
   integrationWorktree: string;
@@ -324,7 +324,7 @@ export class Council extends EventEmitter {
     const a = this.store.agenda();
     return {
       project: { id: this.project.id, name: this.project.name, repo: this.project.repo, baseBranch: this.project.baseBranch },
-      agenda: { slug: a.slug, title: a.title, goals: a.goals, branch: a.branch, status: a.status, waitingForUser: a.waitingForUser },
+      agenda: { slug: a.slug, title: a.title, goals: a.goals, branch: a.branch, status: a.status, waitingForUser: a.waitingForUser, telegramAuto: Boolean(a.telegramAuto) },
       tasks: this.store.tasks(),
       members: this.members().map((m) => ({
         ...m,
@@ -1181,6 +1181,17 @@ ${rows.join("\n")}`;
     this.emit("ask", a.waitingForUser);
     this.emit("agenda");
     return { waiting: true };
+  }
+
+  /** the user turned this agenda's automatic Telegram sending on or off (web button or Telegram /auto) */
+  setTelegramAuto(on: boolean): void {
+    const a = this.store.agenda();
+    if (Boolean(a.telegramAuto) === on) return;
+    if (on) a.telegramAuto = true;
+    else delete a.telegramAuto;
+    this.store.saveAgenda(a);
+    this.log(`telegram auto send ${on ? "on" : "off"}`);
+    this.emit("agenda");
   }
 
   /** the user answered (any message): no longer waiting */

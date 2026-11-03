@@ -18,7 +18,7 @@ export interface TelegramConfig {
   forumChatId?: string;
   /** agenda key -> message_thread_id of its topic */
   topics?: Record<string, number>;
-  /** push runtime events (chair replies, drafts, questions, ...) to Telegram by itself; default off: the chair sends only when the user asks (council_telegram) */
+  /** force automatic sending (chair replies, drafts, ...) for every agenda; default off: an agenda opts in by itself (isAuto) or the chair sends when the user asks (council_telegram) */
   autoNotify?: boolean;
 }
 
@@ -44,6 +44,10 @@ export interface TelegramDeps {
   onBind: (key: string | undefined) => void;
   /** persist forum settings (forumChatId, topics) */
   onConfig?: (patch: Pick<TelegramConfig, "forumChatId" | "topics">) => void;
+  /** the agenda has its own automatic Telegram sending switched on (web button / /auto) */
+  isAuto?: (key: string) => boolean;
+  /** switch an agenda's automatic Telegram sending (same path as the web button) */
+  setAuto?: (key: string, on: boolean) => Promise<void>;
 }
 
 interface TgChat {
@@ -249,9 +253,19 @@ export class TelegramBridge {
     return `[${key.split("/")[1] ?? key}]`;
   }
 
+  /** automatic sending is on for this agenda: server-wide (autoNotify) or the agenda's own switch */
+  private isAuto(key: string): boolean {
+    if (this.cfg.autoNotify) return true;
+    try {
+      return Boolean(this.deps.isAuto?.(key));
+    } catch {
+      return false;
+    }
+  }
+
   /** (auto mode) the chair showed drafts: images go as photos, other files as documents; what cannot be sent is only named */
   async sendShown(key: string, caption: string, files: Array<{ name: string; type: string; path?: string }>): Promise<void> {
-    if (!this.cfg.autoNotify) return;
+    if (!this.isAuto(key)) return;
     const tag = TelegramBridge.tag(key);
     const { sent, unsent } = await this.deliverFiles(key, files, (inTopic) => `${inTopic ? "" : tag + " "}의장 시안: ${caption}`);
     if (unsent.length || !sent.length) await this.sendFor(key, `${tag} 의장 시안: ${caption}${unsent.length ? "\n파일: " + unsent.join(", ") + " (웹 화면에서 보기)" : ""}`);
@@ -339,7 +353,7 @@ export class TelegramBridge {
 
   /** An agenda ended: close its topic (a failure to close is ignored); the closing message goes out only in auto mode. */
   async finishFor(key: string, text: string): Promise<void> {
-    if (this.cfg.autoNotify) await this.sendFor(key, text);
+    if (this.isAuto(key)) await this.sendFor(key, text);
     const forum = this.forumChat();
     const thread = this.cfg.topics?.[key];
     if (forum && thread !== undefined) await this.api("closeForumTopic", { chat_id: forum, message_thread_id: thread }).catch(() => {});
@@ -376,9 +390,9 @@ export class TelegramBridge {
     return options.map((o, i) => [{ text: o.length > BUTTON_LEN ? o.slice(0, BUTTON_LEN - 1) + "…" : o, callback_data: `a:${id}:${i}` }]);
   }
 
-  /** push a runtime event: a question waiting for the user's decision always goes out; everything else only when autoNotify is on */
+  /** push a runtime event: a question waiting for the user's decision always goes out; everything else only when automatic sending is on for the agenda */
   notify(key: string, e: RuntimeEvent): void {
-    if (!this.cfg.autoNotify && e.type !== "chair:ask") return;
+    if (!this.isAuto(key) && e.type !== "chair:ask") return;
     const text = TelegramBridge.format(key, e);
     if (!text) return;
     if (e.type === "chair:ask" && e.options?.length) {
@@ -471,8 +485,25 @@ export class TelegramBridge {
   }
 
   /** the chair's answers do not come here by themselves unless autoNotify is on */
-  private autoHint(): string {
-    return this.cfg.autoNotify ? "" : "\n결정을 묻는 질문만 자동으로 옵니다. 그 밖의 의장 답은 의장에게 '텔레그램으로 보내 줘'라고 해야 옵니다.";
+  private autoHint(key?: string): string {
+    if (this.cfg.autoNotify) return "";
+    if (key && this.isAuto(key)) return "\n이 안건은 자동 전송이 켜져 있어 의장 답과 진행 알림이 모두 옵니다. (/auto off 로 끔)";
+    return "\n결정을 묻는 질문만 자동으로 옵니다. 그 밖의 의장 답은 의장에게 '텔레그램으로 보내 줘'라고 하거나, /auto on 으로 이 안건의 자동 전송을 켜세요.";
+  }
+
+  /** `/auto`, `/auto on`, `/auto off`: show or switch the agenda's automatic sending */
+  private async autoCommand(key: string, text: string, reply: (t: string) => Promise<string>): Promise<string> {
+    const arg = text.slice(5).trim().toLowerCase();
+    if (this.cfg.autoNotify) return reply("서버 설정(--auto on)으로 모든 안건의 자동 전송이 켜져 있습니다.");
+    if (arg === "") return reply(`${this.isAuto(key) ? "자동 전송 켜짐: 이 안건의 모든 알림을 보냅니다." : "자동 전송 꺼짐: 결정 대기 질문만 보냅니다."}\n/auto on 또는 /auto off`);
+    if (arg !== "on" && arg !== "off") return reply("/auto on 또는 /auto off 로 보내세요. (/auto 는 현재 상태)");
+    if (!this.deps.setAuto) return reply("이 서버에서는 /auto 를 쓸 수 없습니다.");
+    try {
+      await this.deps.setAuto(key, arg === "on");
+    } catch (e) {
+      return reply(`안건을 열 수 없습니다: ${(e as Error).message}`);
+    }
+    return reply(arg === "on" ? "자동 전송을 켰습니다. 이 안건의 모든 알림을 보냅니다." : "자동 전송을 껐습니다. 이제 결정 대기 질문만 보냅니다.");
   }
 
   /** `/forum` sent inside a group: the owner connects that group as the forum. */
@@ -497,7 +528,7 @@ export class TelegramBridge {
       return reply(`안건을 열 수 없습니다: ${(e as Error).message}`);
     }
     if (text === "/status") return reply(this.statusText(rt));
-    if (rt.chair.isBusy()) return reply(this.cfg.autoNotify ? "의장이 아직 이전 턴을 처리 중입니다. 끝나면 알림이 옵니다." : "의장이 아직 이전 턴을 처리 중입니다. 잠시 뒤 다시 보내세요.");
+    if (rt.chair.isBusy()) return reply(this.isAuto(key) ? "의장이 아직 이전 턴을 처리 중입니다. 끝나면 알림이 옵니다." : "의장이 아직 이전 턴을 처리 중입니다. 잠시 뒤 다시 보내세요.");
     void rt.send(TG_MARK + text).catch((e) => this.deps.log(`telegram → chair failed: ${(e as Error).message}`));
     return reply("의장에게 전달했습니다.");
   }
@@ -538,10 +569,11 @@ export class TelegramBridge {
       }
       if (text === "/forum") return this.connectForum(msg, reply);
       if (text === "/start" || text === "/help") {
-        return reply("GenCouncil 봇입니다.\n안건 토픽 안에 쓴 글은 그 안건 의장에게 전달됩니다.\n/status 그 안건 상태\n/list 안건 목록" + this.autoHint());
+        return reply("GenCouncil 봇입니다.\n안건 토픽 안에 쓴 글은 그 안건 의장에게 전달됩니다.\n/status 그 안건 상태\n/auto on|off 그 안건 자동 전송 켜기/끄기 (/auto 는 상태)\n/list 안건 목록" + this.autoHint(this.keyForThread(thread) ?? this.cfg.agenda));
       }
       if (text === "/list") return reply(this.listText());
       const key = this.keyForThread(thread);
+      if (text === "/auto" || text.startsWith("/auto ")) return key ? this.autoCommand(key, text, reply) : reply("/auto 는 안건 토픽 안에서 보내세요.");
       if (key) return this.relayToChair(key, text, reply);
       if (text === "/status" && this.cfg.agenda) return this.relayToChair(this.cfg.agenda, text, reply);
       return reply("안건 토픽 안에 쓰세요. 일반 토픽의 글은 의장에게 전달되지 않습니다. (/list /help /forum /status 만 쓸 수 있습니다)");
@@ -549,7 +581,7 @@ export class TelegramBridge {
 
     if (text === "/forum") return reply("/forum 은 포럼으로 쓸 그룹(토픽 켬) 안에서 보내세요. 봇을 그 그룹의 관리자(토픽 관리 권한)로 추가해야 합니다.");
     if (text === "/start" || text === "/help") {
-      return reply("GenCouncil 봇입니다.\n/list 안건 목록\n/agenda <project/slug> 대화할 안건 선택\n/status 현재 안건 상태\n그 외 텍스트는 의장에게 전달됩니다." + this.autoHint());
+      return reply("GenCouncil 봇입니다.\n/list 안건 목록\n/agenda <project/slug> 대화할 안건 선택\n/status 현재 안건 상태\n/auto on|off 현재 안건 자동 전송 켜기/끄기 (/auto 는 상태)\n그 외 텍스트는 의장에게 전달됩니다." + this.autoHint(this.cfg.agenda));
     }
     if (text === "/list") return reply(this.listText());
     if (text.startsWith("/agenda")) {
@@ -561,6 +593,7 @@ export class TelegramBridge {
       return reply(`대화 대상: ${hit.key} (${hit.title})`);
     }
     if (!this.cfg.agenda) return reply("먼저 /agenda <project/slug> 로 안건을 고르세요. /list 로 목록을 봅니다.");
+    if (text === "/auto" || text.startsWith("/auto ")) return this.autoCommand(this.cfg.agenda, text, reply);
     return this.relayToChair(this.cfg.agenda, text, reply);
   }
 }

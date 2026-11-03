@@ -592,6 +592,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     void telegram?.finishFor(rt.key, `[${rt.key}] 안건 종료: 베이스 브랜치에 머지됨${retro ? "\n회고:\n" + retro.slice(0, 1500) : ""}`);
     return { ok: true, output: out, retro };
   });
+  on("POST", "/api/a/:id/:slug/telegram-auto", async ({ params, body }) => {
+    const b = await body();
+    if (typeof b.on !== "boolean") throw new HttpError(400, "on (boolean) required");
+    const rt = await getRuntime(params.id, params.slug);
+    if (rt.council.store.agenda().status === "closed") throw new HttpError(409, "closed agenda");
+    rt.council.setTelegramAuto(b.on);
+    return { ok: true, telegramAuto: b.on };
+  });
   on("GET", "/api/telegram", () => ({
     configured: Boolean(config.telegram),
     user: telegramUser,
@@ -865,12 +873,23 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         config.telegram = { ...config.telegram!, ...patch };
         saveServerConfig({ telegram: config.telegram });
       },
+      // per-agenda automatic sending: read the agenda's own setting, written by the web button or /auto
+      isAuto: (key) => {
+        const [id, slug] = key.split("/");
+        const project = registry.get(id);
+        const store = project ? AgendaStore.find(project, slug) : undefined;
+        return Boolean(store?.agenda().telegramAuto);
+      },
+      setAuto: async (key, on) => {
+        const [id, slug] = key.split("/");
+        (await getRuntime(id, slug)).council.setTelegramAuto(on);
+      },
     });
     try {
       telegramUser = await tg.verify();
       telegram = tg;
       tg.start();
-      log(`telegram bot @${telegramUser} connected (${config.telegram.autoNotify ? "auto notify on" : "sends only when the chair is told to"}; chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
+      log(`telegram bot @${telegramUser} connected (${config.telegram.autoNotify ? "auto notify on for all agendas" : "auto sending per agenda (web button, /auto); chair questions always"}; chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
     } catch (e) {
       log(`telegram disabled: ${(e as Error).message}`);
     }

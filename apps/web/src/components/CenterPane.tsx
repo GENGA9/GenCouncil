@@ -19,6 +19,61 @@ const PROVIDER_LABEL: Record<string, string> = { claude: "클로드", gpt: "GPT"
 const CLI_PROVIDERS = ["claude", "gpt", "gemini"];
 const STATUS_KO: Record<Task["status"], string> = { todo: "대기", doing: "진행", review: "검토", done: "완료", blocked: "막힘" };
 
+/** Telegram paper-plane logo (circle with the plane); on = Telegram blue filled, off = grey outline */
+function TelegramIcon({ on }: { on: boolean }) {
+  return (
+    <svg className="tg-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <circle cx="12" cy="12" r="10.5" fill={on ? "#229ED9" : "none"} stroke={on ? "#229ED9" : "currentColor"} strokeWidth="1.4" />
+      <path
+        d="M5.6 11.9l10.9-4.2c.5-.2 1 .1.8.9l-1.9 8.8c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.3-4.8c.2-.2 0-.3-.3-.1l-6.6 4.1-2.8-.9c-.6-.2-.6-.6.3-.9z"
+        fill={on ? "#fff" : "currentColor"}
+      />
+    </svg>
+  );
+}
+
+/** whether Telegram is set up on the server; asked once per page load */
+let telegramInfo: Promise<{ configured: boolean; autoNotify: boolean }> | undefined;
+const loadTelegramInfo = () => (telegramInfo ??= api.telegram().catch(() => ({ configured: false, autoNotify: false })));
+
+/** Per-agenda switch for sending every notification to Telegram automatically (pending questions always go). */
+function TelegramAutoButton({ agendaKey, on, closed, onError }: { agendaKey: string; on: boolean; closed: boolean; onError: (msg: string) => void }) {
+  const [info, setInfo] = useState<{ configured: boolean; autoNotify: boolean } | null>(null);
+  const [pending, setPending] = useState<boolean | null>(null);
+  useEffect(() => {
+    void loadTelegramInfo().then(setInfo);
+  }, []);
+  // the real state arrived (or the agenda changed): drop the optimistic value
+  useEffect(() => setPending(null), [on, agendaKey]);
+  if (!info?.configured) return null;
+  const forced = info.autoNotify;
+  const shown = forced || (pending ?? on);
+  const title = forced
+    ? "텔레그램 자동 전송 켜짐(서버 설정 --auto on): 모든 안건의 알림을 보냅니다"
+    : shown
+      ? "텔레그램 자동 전송 켜짐: 이 안건의 모든 알림을 보냅니다"
+      : "텔레그램 자동 전송 꺼짐: 결정 대기 질문만 보냅니다";
+  return (
+    <button
+      className={`ghost small tg-auto ${shown ? "on" : "off"}`}
+      title={title}
+      aria-label={title}
+      aria-pressed={shown}
+      disabled={closed || forced}
+      onClick={() => {
+        const next = !shown;
+        setPending(next);
+        api.setTelegramAuto(agendaKey, next).catch((e: Error) => {
+          setPending(null);
+          onError(e.message);
+        });
+      }}
+    >
+      <TelegramIcon on={shown} />
+    </button>
+  );
+}
+
 interface Props {
   state: RuntimeState | null;
   chat: ChatItem[];
@@ -173,6 +228,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           <button className="ghost small" onClick={onReset} title="의장 세션을 새로 시작 (state.md 유지)">세션 초기화</button>
           <button className="ghost small" onClick={onRetrospect} disabled={busy || firstTurn} title="의장이 교훈·모델 성향을 공유 기억에 기록하고 제안을 검토">회고</button>
           <button className="ghost small" onClick={() => void onMergeBase()} disabled={state.agenda.status === "closed"} title="안건을 닫지 않고 지금까지의 결과를 메인(베이스 브랜치)에 합칩니다">메인 반영</button>
+          <TelegramAutoButton agendaKey={state.key} on={Boolean(state.agenda.telegramAuto)} closed={state.agenda.status === "closed"} onError={(m) => window.alert(m)} />
           <button className={`small ${allDone ? "primary" : "ghost"}`} onClick={onFinish} disabled={state.agenda.status === "closed"}>안건 종료</button>
           <button className="ghost small danger" onClick={onDelete} disabled={busy} title="이 안건을 지웁니다. 대화 기록은 프로젝트의 deleted 폴더로 옮겨집니다">삭제</button>
         </div>
