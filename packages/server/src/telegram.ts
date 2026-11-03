@@ -376,9 +376,9 @@ export class TelegramBridge {
     return options.map((o, i) => [{ text: o.length > BUTTON_LEN ? o.slice(0, BUTTON_LEN - 1) + "…" : o, callback_data: `a:${id}:${i}` }]);
   }
 
-  /** (auto mode) push a runtime event; does nothing unless autoNotify is on */
+  /** push a runtime event: a question waiting for the user's decision always goes out; everything else only when autoNotify is on */
   notify(key: string, e: RuntimeEvent): void {
-    if (!this.cfg.autoNotify) return;
+    if (!this.cfg.autoNotify && e.type !== "chair:ask") return;
     const text = TelegramBridge.format(key, e);
     if (!text) return;
     if (e.type === "chair:ask" && e.options?.length) {
@@ -472,7 +472,7 @@ export class TelegramBridge {
 
   /** the chair's answers do not come here by themselves unless autoNotify is on */
   private autoHint(): string {
-    return this.cfg.autoNotify ? "" : "\n의장 답은 자동으로 오지 않습니다. 받으려면 의장에게 '텔레그램으로 보내 줘'라고 하세요.";
+    return this.cfg.autoNotify ? "" : "\n결정을 묻는 질문만 자동으로 옵니다. 그 밖의 의장 답은 의장에게 '텔레그램으로 보내 줘'라고 해야 옵니다.";
   }
 
   /** `/forum` sent inside a group: the owner connects that group as the forum. */
