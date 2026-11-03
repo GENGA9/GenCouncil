@@ -268,7 +268,7 @@ export function createCouncilMcp(council: Council): McpServer {
     {
       title: "Ask the user for a decision",
       description:
-        "Mark this agenda as waiting for the user's decision. The UI shows a badge on the agenda and the question with answer buttons. " +
+        "Mark this agenda as waiting for the user's decision. The UI shows a badge on the agenda and the question with answer buttons, and Telegram notifies the user with the question and tap buttons. " +
         "Use it whenever you stop because only the user can decide (a choice between options, an approval, " +
         "information you cannot find). Ask one question, give 2-4 short options when they exist, then end your turn. " +
         "Work that needs no decision continues meanwhile.",
@@ -286,7 +286,7 @@ export function createCouncilMcp(council: Council): McpServer {
       title: "Send to the user's Telegram (only when told to)",
       description:
         "Use ONLY when the user explicitly told you to send something to Telegram (e.g. '텔레그램으로 보내줘', '텔레그램으로 답해줘'). " +
-        "Never use it otherwise, and never on your own initiative: nothing is sent to Telegram automatically. " +
+        "Never use it otherwise, and never on your own initiative: only council_ask_user questions go to Telegram by themselves." +
         "A message that arrived from Telegram (marked '[텔레그램]') is NOT a request to answer on Telegram; reply there only if the user said so. " +
         "Sends the text to the user's Telegram (this agenda's topic or the private chat), optionally with files (same path rules as council_show) " +
         "and, with ask:true, the question of your last council_ask_user as tap buttons (call council_ask_user first). " +
@@ -294,7 +294,7 @@ export function createCouncilMcp(council: Council): McpServer {
       inputSchema: {
         text: z.string().min(1).describe("what to send, in the user's language"),
         paths: z.array(z.string()).max(8).optional().describe("files to send too: absolute paths or paths relative to the integration worktree"),
-        ask: z.boolean().optional().describe("attach the agenda's pending council_ask_user question and options as buttons"),
+        ask: z.boolean().optional().describe("attach the agenda's pending council_ask_user question and options as buttons; that question is already sent automatically, so use this only when the user asks to send it again"),
       },
     },
     async ({ text, paths, ask }) => guard(() => council.sendTelegram(text, paths, ask)),

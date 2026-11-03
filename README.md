@@ -20,7 +20,7 @@
 gencouncil web telegram --token <봇 토큰> --chat <내 chat id> --agenda rf-project-제작위원회/밸런스-안건
 ```
 
-(chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. **기본은 자동 전송이 없다.** 의장 답변·위원 완료·시안·질문·안건 종료 같은 알림은 텔레그램으로 오지 않는다. 텔레그램으로 받고 싶을 때는 의장에게 "텔레그램으로 보내 줘"(예: "이 시안 텔레그램으로 보내 줘", "방금 질문 텔레그램으로도 물어봐")라고 하면 의장이 `council_telegram` 도구로 글·파일(사진은 사진으로, PDF 등은 문서로, 50MB 초과는 이름만)·질문 선택 버튼을 보낸다. 그 밖에는 보내지 않고, 텔레그램에서 쓴 글에 답할 때도 "텔레그램으로 답해 줘"라고 해야 한다. 예전처럼 모든 알림을 자동으로 받으려면 `gencouncil web telegram --auto on`(다시 끄기: `--auto off`, 서버 재시작 필요). 받는 것: `/list` `/agenda <project/slug>` `/status`, 그 외 텍스트는 그 안건의 의장에게 `[텔레그램] ` 표시를 붙여 전달된다(`/status`·`/list` 결과와 "의장에게 전달했습니다" 같은 접수 답은 항상 온다). 설정된 chat id 외의 메시지는 무시한다. 의장이 질문을 선택 버튼과 함께 보낸 경우(`ask`) 버튼을 눌러 답할 수 있다. 끄려면 `gencouncil web telegram --off`.
+(chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. **기본은 "결정 대기" 질문(선택 버튼 포함)만 자동으로 온다.** 의장 답변·위원 완료·시안·안건 종료 같은 알림은 텔레그램으로 오지 않는다. 그 밖에 텔레그램으로 받고 싶을 때는 의장에게 "텔레그램으로 보내 줘"(예: "이 시안 텔레그램으로 보내 줘", "방금 질문 텔레그램으로도 물어봐")라고 하면 의장이 `council_telegram` 도구로 글·파일(사진은 사진으로, PDF 등은 문서로, 50MB 초과는 이름만)·질문 선택 버튼을 보낸다. 그 밖에는 보내지 않고, 텔레그램에서 쓴 글에 답할 때도 "텔레그램으로 답해 줘"라고 해야 한다. 예전처럼 모든 알림을 자동으로 받으려면 `gencouncil web telegram --auto on`(다시 끄기: `--auto off`, 서버 재시작 필요). 받는 것: `/list` `/agenda <project/slug>` `/status`, 그 외 텍스트는 그 안건의 의장에게 `[텔레그램] ` 표시를 붙여 전달된다(`/status`·`/list` 결과와 "의장에게 전달했습니다" 같은 접수 답은 항상 온다). 설정된 chat id 외의 메시지는 무시한다. 의장이 질문을 선택 버튼과 함께 보낸 경우(`ask`) 버튼을 눌러 답할 수 있다. 끄려면 `gencouncil web telegram --off`.
 
 #### 안건별 포럼 토픽
 

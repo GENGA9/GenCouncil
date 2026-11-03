@@ -380,14 +380,23 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   sent.length = 0;
   for (const e of [
     { type: "chair:done", text: "끝", isError: false },
-    { type: "chair:ask", question: "어느 쪽?", options: ["A", "B"] },
     { type: "member:done", member: { id: "claude-1", provider: "claude", model: "claude-sonnet-5-5", status: "done" } },
     { type: "chair:handover", from: "a", to: "b", reason: "quota" },
   ]) dm.notify("proj/q", e);
   await dm.sendShown("proj/q", "시안", [{ name: "a.png", type: "image/png", path: png }]);
   await dm.finishFor("proj/q", "[proj/q] 안건 종료");
   await settle();
-  check("autoNotify off: notify, sendShown and finishFor send nothing", sent.length === 0, JSON.stringify(sent));
+  check("autoNotify off: chair:done, member:done, handover, sendShown and finishFor send nothing", sent.length === 0, JSON.stringify(sent));
+
+  // a question waiting for the user's decision always goes out, with buttons
+  dm.notify("proj/q", { type: "chair:ask", question: "어느 쪽?", options: ["A", "B"] });
+  await settle();
+  const dmAsk = sent.find((m) => m.reply_markup);
+  check("autoNotify off: chair:ask goes to the DM with buttons", sent.length === 1 && String(dmAsk?.chat_id) === "123" && dmAsk.text.includes("어느 쪽?") && dmAsk.reply_markup.inline_keyboard.length === 2, JSON.stringify(sent));
+  sent.length = 0;
+  dm.notify("proj/q", { type: "chair:ask", question: "자유 답?" });
+  await settle();
+  check("autoNotify off: chair:ask without options goes as plain text", sent.length === 1 && sent[0].text.includes("자유 답?") && !sent[0].reply_markup, JSON.stringify(sent));
 
   // receiving still works, with the source mark; replies to the user's own action stay
   const u = (text) => ({ update_id: 1, message: { message_id: 1, text, chat: { id: 123 } } });
@@ -431,6 +440,10 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   sent.length = 0;
   await fm.finishFor("proj/q", "[proj/q] 안건 종료");
   check("autoNotify off: finishFor closes the topic without a message", sent.length === 1 && sent[0].method === "closeForumTopic" && sent[0].message_thread_id === 555, JSON.stringify(sent));
+  sent.length = 0;
+  fm.notify("proj/q", { type: "chair:ask", question: "토픽 질문?", options: ["예", "아니오"] });
+  await settle();
+  check("autoNotify off in forum mode: chair:ask goes to the agenda topic with buttons", sent.length === 1 && String(sent[0].chat_id) === String(FORUM) && String(sent[0].message_thread_id) === "555" && sent[0].reply_markup?.inline_keyboard.length === 2, JSON.stringify(sent));
   sent.length = 0;
   await fm.sendShown("proj/q", "시안", [{ name: "a.png", type: "image/png", path: png }]);
   check("autoNotify off in forum mode: sendShown sends nothing", sent.length === 0);
