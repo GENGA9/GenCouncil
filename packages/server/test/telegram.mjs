@@ -552,5 +552,165 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   fsm.rmSync(png, { force: true });
 }
 
+// ---- photos, videos and files with a caption ----
+{
+  const FORUM = -1009;
+  const files = {
+    "p/small.jpg": Buffer.from("small"),
+    "p/big.jpg": Buffer.from("big-photo"),
+    "v/clip.mp4": Buffer.from("video-bytes"),
+    "d/doc.pdf": Buffer.from("pdf-bytes"),
+  };
+  const out = [];
+  const downloads = [];
+  const mediaFetch = async (url, init) => {
+    if (url.includes("/file/bot")) {
+      const p = url.split("/file/bot")[1].split("/").slice(1).join("/");
+      downloads.push(p);
+      const f = files[p];
+      return { ok: true, status: 200, arrayBuffer: async () => f.buffer.slice(f.byteOffset, f.byteOffset + f.length) };
+    }
+    const method = url.split("/").pop();
+    const body = JSON.parse(init.body);
+    if (method === "getFile") {
+      if (body.file_id === "huge-id") return { json: async () => ({ ok: false, description: "Bad Request: file is too big" }), status: 400 };
+      const map = { "small-id": "p/small.jpg", "big-id": "p/big.jpg", "video-id": "v/clip.mp4", "doc-id": "d/doc.pdf" };
+      return { json: async () => ({ ok: true, result: { file_id: body.file_id, file_path: map[body.file_id] } }) };
+    }
+    if (method === "sendMessage") out.push(body);
+    return { json: async () => ({ ok: true, result: {} }) };
+  };
+  const saved = [];
+  const sends = [];
+  let chairBusy = false;
+  const rt = {
+    chair: { isBusy: () => chairBusy },
+    saveAttachment: (name, type, data) => {
+      const a = { id: `id${saved.length}-${name}`, name, type, size: data.length };
+      saved.push({ ...a, text: data.toString() });
+      return a;
+    },
+    send: async (t, role, atts) => {
+      sends.push({ t, role, atts });
+      return { text: "ok", isError: false };
+    },
+  };
+  const mk = (cfg) => new TelegramBridge({ botToken: "T", chatId: "123", agenda: "proj/agenda", ...cfg }, { fetch: mediaFetch, log: () => {}, listAgendas: () => [{ key: "proj/agenda", title: "x", status: "open" }, { key: "proj/other", title: "y", status: "open" }], getRuntime: async () => rt, onBind: () => {} }, { batchMs: 60, busyPollMs: 25, busyMaxMs: 300 });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const reset = () => { out.length = 0; saved.length = 0; sends.length = 0; downloads.length = 0; };
+  const dm = (extra, id = 1) => ({ update_id: id, message: { message_id: id, chat: { id: 123 }, from: { id: 123 }, ...extra } });
+
+  // photo + caption: the largest size, one send with the caption
+  const b = mk({});
+  const ack = await b.handleUpdate(dm({ caption: "이 인물로 해줘", photo: [{ file_id: "small-id", width: 90, height: 90, file_size: 5 }, { file_id: "big-id", width: 1280, height: 960, file_size: 9 }] }));
+  check("photo gets an acknowledgement with the file count", ack?.includes("받았습니다(파일 1개)") && sends.length === 0, ack);
+  await wait(150);
+  check("photo + caption go to the chair in one send with the largest size", sends.length === 1 && sends[0].t === "[텔레그램] 이 인물로 해줘" && sends[0].role === "user" && sends[0].atts.length === 1 && saved[0].text === "big-photo" && saved[0].name === "photo.jpg" && saved[0].type === "image/jpeg", JSON.stringify({ sends, saved }));
+  check("only the largest photo is downloaded", downloads.length === 1 && downloads[0] === "p/big.jpg", JSON.stringify(downloads));
+  check("delivery is reported with the file count", out.some((m) => m.text === "의장에게 전달했습니다(파일 1개)."), JSON.stringify(out));
+
+  // a video then a photo in a row, plus a plain text: one send, two files, three lines
+  reset();
+  await b.handleUpdate(dm({ caption: "이 영상 분석해서 15초 영상 만들어줘", video: { file_id: "video-id", file_name: "clip.mp4", mime_type: "video/mp4", file_size: 11 } }, 1));
+  await wait(20);
+  await b.handleUpdate(dm({ caption: "이 인물로 해줘", photo: [{ file_id: "big-id", width: 100, height: 100 }] }, 2));
+  await wait(20);
+  const joinReply = await b.handleUpdate(dm({ text: "배경음악도" }, 3));
+  check("a text joining a batch is not acknowledged again", joinReply === undefined);
+  await wait(150);
+  check("video + photo + text arrive as one send", sends.length === 1 && sends[0].atts.length === 2 && sends[0].t === "[텔레그램] 이 영상 분석해서 15초 영상 만들어줘\n이 인물로 해줘\n배경음악도", JSON.stringify(sends));
+  check("video keeps its file name and type", saved[0].name === "clip.mp4" && saved[0].type === "video/mp4");
+  check("batch acknowledged once, delivered once", out.filter((m) => m.text?.startsWith("받았습니다")).length === 1 && out.filter((m) => m.text?.startsWith("의장에게 전달했습니다(파일 2개)")).length === 1, JSON.stringify(out));
+
+  // a document without a caption gets default text; mime type and name default
+  reset();
+  await b.handleUpdate(dm({ document: { file_id: "doc-id" } }));
+  await wait(150);
+  check("file without caption is sent with a placeholder text", sends.length === 1 && sends[0].t === "[텔레그램] 첨부 파일 1개" && saved[0].name === "document" && saved[0].type === "application/octet-stream", JSON.stringify({ sends, saved }));
+  reset();
+  await b.handleUpdate(dm({ voice: { file_id: "doc-id" } }));
+  await wait(150);
+  check("voice defaults to voice.ogg", saved[0]?.name === "voice.ogg" && saved[0].type === "audio/ogg", JSON.stringify(saved));
+
+  // over 20MB: not downloaded, user is told; the caption still goes through
+  reset();
+  const big = await b.handleUpdate(dm({ caption: "큰 파일", video: { file_id: "video-id", file_size: 25 * 1024 * 1024 } }));
+  await wait(150);
+  check("file_size over 20MB is not downloaded and explained", out.some((m) => m.text.includes("20MB 넘는 파일")) && downloads.length === 0 && saved.length === 0, JSON.stringify(out));
+  check("the caption of a refused file still goes to the chair", sends.length === 1 && sends[0].t === "[텔레그램] 큰 파일" && sends[0].atts.length === 0, JSON.stringify(sends));
+  reset();
+  const big2 = await b.handleUpdate(dm({ document: { file_id: "huge-id" } }));
+  await wait(150);
+  check("getFile 'file is too big' is explained, nothing is sent", big2.includes("20MB 넘는 파일") && sends.length === 0 && saved.length === 0, big2);
+  reset();
+  await b.handleUpdate(dm({ caption: "섞어서", video: { file_id: "huge-id" } }, 1));
+  await b.handleUpdate(dm({ photo: [{ file_id: "big-id" }] }, 2));
+  await wait(150);
+  check("a refused file does not stop the others in the batch", sends.length === 1 && sends[0].atts.length === 1 && sends[0].t === "[텔레그램] 섞어서", JSON.stringify(sends));
+
+  // other chats / other users are ignored
+  reset();
+  check("file from another chat ignored", (await b.handleUpdate({ update_id: 5, message: { message_id: 5, chat: { id: 999 }, photo: [{ file_id: "big-id" }] } })) === undefined);
+  const grp = mk({ forumChatId: String(FORUM), topics: { "proj/agenda": 701, "proj/other": 702 } });
+  const gu = (extra, from = 123, thread = 701) => ({ update_id: 6, message: { message_id: 6, chat: { id: FORUM, type: "supergroup", is_forum: true }, message_thread_id: thread, from: { id: from }, ...extra } });
+  check("file from another user in the forum ignored", (await grp.handleUpdate(gu({ photo: [{ file_id: "big-id" }] }, 555))) === undefined);
+  check("file in a not connected group ignored", (await mk({}).handleUpdate({ update_id: 7, message: { message_id: 7, chat: { id: FORUM, type: "supergroup" }, from: { id: 123 }, caption: "/forum", photo: [{ file_id: "big-id" }] } })) === undefined);
+  await wait(100);
+  check("ignored files are neither downloaded nor sent", downloads.length === 0 && sends.length === 0);
+
+  // forum topic file goes to that topic's agenda; General explains
+  const seen = [];
+  const grp2 = new TelegramBridge({ botToken: "T", chatId: "123", forumChatId: String(FORUM), topics: { "proj/agenda": 701, "proj/other": 702 } }, { fetch: mediaFetch, log: () => {}, listAgendas: () => [], getRuntime: async (k) => { seen.push(k); return rt; }, onBind: () => {} }, { batchMs: 40 });
+  await grp2.handleUpdate(gu({ caption: "토픽 지시", photo: [{ file_id: "big-id" }] }, 123, 702));
+  await wait(120);
+  check("forum topic file goes to the topic's agenda", sends.length === 1 && sends[0].t === "[텔레그램] 토픽 지시" && seen.every((k) => k === "proj/other"), JSON.stringify({ sends, seen }));
+  check("forum reply goes to the topic", out.some((m) => m.message_thread_id === 702 && m.text.includes("받았습니다")));
+  const gen = await grp2.handleUpdate(gu({ photo: [{ file_id: "big-id" }] }, 123, 1));
+  check("file in General is not relayed", gen.includes("안건 토픽") && sends.length === 1, gen);
+
+  // unbound DM
+  const unbound = mk({ agenda: undefined });
+  check("file before binding asks for /agenda", (await unbound.handleUpdate(dm({ photo: [{ file_id: "big-id" }] }))).includes("/agenda"));
+
+  // busy chair: kept, delivered when free
+  reset();
+  chairBusy = true;
+  const bb = mk({});
+  await bb.handleUpdate(dm({ caption: "바쁠 때", video: { file_id: "video-id" } }));
+  await wait(110);
+  check("busy chair: told it will be delivered later, not sent yet", out.some((m) => m.text === "의장이 처리 중이라 끝나면 전달합니다.") && sends.length === 0, JSON.stringify({ out, sends }));
+  await bb.handleUpdate(dm({ text: "추가 메모" }, 9));
+  await wait(60);
+  check("still waiting while busy", sends.length === 0);
+  chairBusy = false;
+  await wait(80);
+  check("delivered when the chair is free, with the late text", sends.length === 1 && sends[0].t === "[텔레그램] 바쁠 때\n추가 메모" && sends[0].atts.length === 1, JSON.stringify(sends));
+
+  // busy forever: gives up after busyMaxMs
+  reset();
+  chairBusy = true;
+  const bg = mk({});
+  await bg.handleUpdate(dm({ caption: "영원히", photo: [{ file_id: "big-id" }] }));
+  await wait(500);
+  check("waiting is given up after the limit and the user is told", sends.length === 0 && out.some((m) => m.text.includes("전달하지 못했습니다")), JSON.stringify(out));
+
+  // stop clears pending timers
+  reset();
+  chairBusy = false;
+  const st = mk({});
+  await st.handleUpdate(dm({ caption: "취소", photo: [{ file_id: "big-id" }] }));
+  st.stop();
+  await wait(150);
+  check("stop() drops pending batches", sends.length === 0);
+
+  // commands are immediate even with a batch open
+  reset();
+  const cb = mk({});
+  await cb.handleUpdate(dm({ caption: "대기", photo: [{ file_id: "big-id" }] }));
+  const lst = await cb.handleUpdate(dm({ text: "/list" }, 11));
+  check("/list answers at once while a batch waits", lst.includes("proj/agenda") && sends.length === 0, lst);
+  cb.stop();
+}
+
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall telegram checks passed");
 process.exitCode = failed ? 1 : 0;
