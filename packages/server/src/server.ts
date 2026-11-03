@@ -187,6 +187,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         councilHeaders: { Authorization: `Bearer ${config.token}` },
       }).then((rt) => {
         rt.council.setUsageProvider(() => usageCache?.items);
+        // council_telegram: the chair sends to Telegram only when the user told it to
+        rt.council.setTelegramSender(async (req) => (telegram ? telegram.sendRequested(key, req) : { ok: false, detail: "텔레그램 봇이 연결되어 있지 않다" }));
         rt.council.setMemberMcp((mid) => ({
           url: `http://127.0.0.1:${config.port}/mcp-member/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}/${encodeURIComponent(mid)}`,
           headers: { Authorization: `Bearer ${config.token}` },
@@ -597,6 +599,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     agenda: config.telegram?.agenda,
     forumChatId: config.telegram?.forumChatId,
     topics: Object.keys(config.telegram?.topics ?? {}).length,
+    autoNotify: Boolean(config.telegram?.autoNotify),
   }));
   on("DELETE", "/api/a/:id/:slug", async ({ params, url }) => {
     const { project, store } = findAgenda(params.id, params.slug);
@@ -867,7 +870,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       telegramUser = await tg.verify();
       telegram = tg;
       tg.start();
-      log(`telegram bot @${telegramUser} connected (chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
+      log(`telegram bot @${telegramUser} connected (${config.telegram.autoNotify ? "auto notify on" : "sends only when the chair is told to"}; chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
     } catch (e) {
       log(`telegram disabled: ${(e as Error).message}`);
     }

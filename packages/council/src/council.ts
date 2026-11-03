@@ -102,6 +102,16 @@ export interface HandoverOptions {
   reason?: string;
 }
 
+/** a council_telegram request handed to the Telegram bridge by whoever hosts the council */
+export interface TelegramRequest {
+  text: string;
+  files: Array<{ name: string; type: string; path: string }>;
+  /** the pending question to attach as buttons */
+  ask?: { question: string; options: string[] };
+}
+
+export type TelegramSender = (req: TelegramRequest) => Promise<{ ok: boolean; detail: string }>;
+
 export interface CouncilState {
   project: { id: string; name: string; repo: string; baseBranch: string };
   agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: { question: string; options?: string[]; at: string; kind?: "finish" } };
@@ -1098,23 +1108,11 @@ ${rows.join("\n")}`;
    * agenda's attachments so they outlive worktree cleanup). Used for drafts, screenshots, mockups.
    */
   showFiles(paths: string[], caption: string): Array<{ id: string; name: string; type: string; size: number }> {
-    if (!paths.length) throw new Error("no files to show");
-    if (paths.length > 8) throw new Error("show at most 8 files at once");
-    const roots = [this.store.worktreeRoot(), this.project.repo].map((r) => path.resolve(r));
-    const base = this.store.integrationWorktree();
+    const checked = this.checkShowFiles(paths);
     const dir = path.join(this.store.dir, "attachments");
     fs.mkdirSync(dir, { recursive: true });
     const out: Array<{ id: string; name: string; type: string; size: number }> = [];
-    for (const p of paths) {
-      const abs = path.resolve(path.isAbsolute(p) ? p : path.join(base, p));
-      if (!roots.some((r) => !path.relative(r, abs).startsWith("..") && !path.isAbsolute(path.relative(r, abs)))) throw new Error(`${p}: 이 안건의 작업 폴더나 프로젝트 폴더 밖의 파일은 보여줄 수 없습니다`);
-      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) throw new Error(`${p}: 파일이 없습니다`);
-      const ext = path.extname(abs).toLowerCase();
-      const type = SHOW_TYPES[ext];
-      if (!type) throw new Error(`${p}: 보여줄 수 없는 형식입니다 (${Object.keys(SHOW_TYPES).join(" ")})`);
-      const size = fs.statSync(abs).size;
-      if (size > 25 * 1024 * 1024) throw new Error(`${p}: 25MB보다 큽니다`);
-      const name = path.basename(abs).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(-80);
+    for (const { abs, name, type, size } of checked) {
       const id = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}-${name}`;
       fs.copyFileSync(abs, path.join(dir, id));
       out.push({ id, name, type, size });
@@ -1124,6 +1122,54 @@ ${rows.join("\n")}`;
     this.emit("show", { caption: text, attachments: out });
     this.log(`chair showed ${out.length} file(s): ${out.map((a) => a.name).join(", ")}`);
     return out;
+  }
+
+  /** Path rules shared by council_show and council_telegram: inside this agenda's worktrees or the project folder, known types, at most 8 files / 25MB each. */
+  private checkShowFiles(paths: string[]): Array<{ abs: string; name: string; type: string; size: number }> {
+    if (!paths.length) throw new Error("no files to show");
+    if (paths.length > 8) throw new Error("show at most 8 files at once");
+    const roots = [this.store.worktreeRoot(), this.project.repo].map((r) => path.resolve(r));
+    const base = this.store.integrationWorktree();
+    return paths.map((p) => {
+      const abs = path.resolve(path.isAbsolute(p) ? p : path.join(base, p));
+      if (!roots.some((r) => !path.relative(r, abs).startsWith("..") && !path.isAbsolute(path.relative(r, abs)))) throw new Error(`${p}: 이 안건의 작업 폴더나 프로젝트 폴더 밖의 파일은 보여줄 수 없습니다`);
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) throw new Error(`${p}: 파일이 없습니다`);
+      const ext = path.extname(abs).toLowerCase();
+      const type = SHOW_TYPES[ext];
+      if (!type) throw new Error(`${p}: 보여줄 수 없는 형식입니다 (${Object.keys(SHOW_TYPES).join(" ")})`);
+      const size = fs.statSync(abs).size;
+      if (size > 25 * 1024 * 1024) throw new Error(`${p}: 25MB보다 큽니다`);
+      const name = path.basename(abs).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(-80);
+      return { abs, name, type, size };
+    });
+  }
+
+  /** set by whoever hosts the council and has a Telegram bridge (the web server); absent = Telegram not connected */
+  private telegramSender?: TelegramSender;
+
+  setTelegramSender(fn: TelegramSender | undefined): void {
+    this.telegramSender = fn;
+  }
+
+  /**
+   * council_telegram: send text (and files, and the pending question as buttons) to the user's Telegram.
+   * Only for an explicit user instruction; the prompt and the tool description say so.
+   */
+  async sendTelegram(text: string, paths?: string[], ask?: boolean): Promise<{ sent: true; detail: string }> {
+    if (!this.telegramSender) throw new Error("텔레그램이 연결되어 있지 않다 (gencouncil web telegram 으로 설정하고 서버를 다시 시작해야 한다)");
+    const body = text.trim();
+    if (!body) throw new Error("보낼 글이 비어 있다");
+    const files = paths?.length ? this.checkShowFiles(paths).map(({ abs, name, type }) => ({ name, type, path: abs })) : [];
+    let question: TelegramRequest["ask"];
+    if (ask) {
+      const w = this.store.agenda().waitingForUser;
+      if (!w) throw new Error("ask:true 이지만 지금 기다리는 질문이 없다. 먼저 council_ask_user 를 부른다");
+      question = { question: w.question, options: w.options ?? [] };
+    }
+    const r = await this.telegramSender({ text: body, files, ...(question ? { ask: question } : {}) });
+    this.log(`chair → telegram: ${r.ok ? "ok" : "failed"} ${r.detail}`);
+    if (!r.ok) throw new Error(`텔레그램 전송 실패: ${r.detail}`);
+    return { sent: true, detail: r.detail };
   }
 
   /** The chair needs a decision from the user: mark the agenda as waiting until the user answers. */
@@ -1328,14 +1374,15 @@ ${rows.join("\n")}`;
 /** the user's message asks to bring the agenda's results into the main branch now (without ending it) */
 export function userAskedToMergeBase(text: string | undefined): boolean {
   if (!text) return false;
-  const t = text.replace(/\s+/g, " ").trim();
+  const t = text.replace(/^\[텔레그램\]\s*/, "").replace(/\s+/g, " ").trim();
   if (/(메인|main|베이스|base)[^.?!\n]{0,12}(합치|머지|반영|merge)[^.?!\n]{0,6}(지\s*마|말고|마세요|않|금지)/i.test(t)) return false;
   return /(메인|main|베이스|base)[^.?!\n]{0,12}(합치|합쳐|머지|반영|merge)/i.test(t);
 }
 
 export function userAskedToFinish(text: string | undefined): boolean {
   if (!text) return false;
-  const t = text.replace(/\s+/g, " ").trim();
+  // messages relayed from Telegram carry a "[텔레그램] " source mark that is not part of what the user said
+  const t = text.replace(/^\[텔레그램\]\s*/, "").replace(/\s+/g, " ").trim();
   if (/(종료|마무리|끝내|끝내|닫|close|finish)[^.?!\n]{0,8}(하지\s*마|하지\s*말|말고|마세요|안\s*돼|않|금지)/i.test(t)) return false;
   if (/(아직|나중에)[^.?!\n]{0,6}(종료|마무리|끝내|닫)/.test(t)) return false;
   return /(안건\s*)?(종료|마무리|끝내|끝내자|끝내줘|끝내 줘|닫아|닫자|그만\s*하자|close|finish)/i.test(t);

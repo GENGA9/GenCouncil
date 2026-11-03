@@ -251,7 +251,7 @@ export function createCouncilMcp(council: Council): McpServer {
     {
       title: "Show drafts / screenshots in the chat",
       description:
-        "Put images, screenshots, HTML mockups, PDFs or videos into the user's chat (and Telegram) with a short caption. " +
+        "Put images, screenshots, HTML mockups, PDFs or videos into the user's chat with a short caption. " +
         "Files must be inside this agenda's worktrees or the project folder; relative paths are relative to the integration worktree. " +
         "Members leave screenshots in <their worktree>/.council/shots/ (listed in their completion event). " +
         "Use it whenever a report or a decision is about how something looks: show first, then explain briefly and ask with council_ask_user.",
@@ -268,8 +268,8 @@ export function createCouncilMcp(council: Council): McpServer {
     {
       title: "Ask the user for a decision",
       description:
-        "Mark this agenda as waiting for the user's decision. The UI shows a badge on the agenda and the question with answer buttons, " +
-        "and Telegram notifies the user. Use it whenever you stop because only the user can decide (a choice between options, an approval, " +
+        "Mark this agenda as waiting for the user's decision. The UI shows a badge on the agenda and the question with answer buttons. " +
+        "Use it whenever you stop because only the user can decide (a choice between options, an approval, " +
         "information you cannot find). Ask one question, give 2-4 short options when they exist, then end your turn. " +
         "Work that needs no decision continues meanwhile.",
       inputSchema: {
@@ -278,6 +278,26 @@ export function createCouncilMcp(council: Council): McpServer {
       },
     },
     async ({ question, options }) => guard(() => council.askUser(question, options)),
+  );
+
+  server.registerTool(
+    "council_telegram",
+    {
+      title: "Send to the user's Telegram (only when told to)",
+      description:
+        "Use ONLY when the user explicitly told you to send something to Telegram (e.g. '텔레그램으로 보내줘', '텔레그램으로 답해줘'). " +
+        "Never use it otherwise, and never on your own initiative: nothing is sent to Telegram automatically. " +
+        "A message that arrived from Telegram (marked '[텔레그램]') is NOT a request to answer on Telegram; reply there only if the user said so. " +
+        "Sends the text to the user's Telegram (this agenda's topic or the private chat), optionally with files (same path rules as council_show) " +
+        "and, with ask:true, the question of your last council_ask_user as tap buttons (call council_ask_user first). " +
+        "Returns whether it was sent; fails when Telegram is not connected.",
+      inputSchema: {
+        text: z.string().min(1).describe("what to send, in the user's language"),
+        paths: z.array(z.string()).max(8).optional().describe("files to send too: absolute paths or paths relative to the integration worktree"),
+        ask: z.boolean().optional().describe("attach the agenda's pending council_ask_user question and options as buttons"),
+      },
+    },
+    async ({ text, paths, ask }) => guard(() => council.sendTelegram(text, paths, ask)),
   );
 
   server.registerTool(
