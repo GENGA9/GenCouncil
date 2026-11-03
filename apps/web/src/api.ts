@@ -75,17 +75,29 @@ export const api = {
     call<{ key: string }>("POST", `/api/projects/${encodeURIComponent(id)}/agendas`, { title, goals }),
   agenda: (key: string) => call<{ state: RuntimeState; transcript: TranscriptEntry[]; firstTurn: boolean }>("GET", a(key)),
   chat: (key: string, message: string, attachments: Attachment[] = []) => call<{ started: boolean }>("POST", `${a(key)}/chat`, { message, attachments }),
-  upload: async (key: string, file: File) => {
-    const res = await fetch(`${a(key)}/attachments?name=${encodeURIComponent(file.name || "image.png")}`, {
-      method: "POST",
-      headers: { "content-type": file.type || "application/octet-stream" },
-      body: file,
-      credentials: "same-origin",
-    });
-    const data = await res.json().catch(() => ({ error: res.statusText }));
-    if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? res.statusText);
-    return data as Attachment;
-  },
+  upload: (key: string, file: File, onProgress?: (pct: number) => void) =>
+    new Promise<Attachment>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${a(key)}/attachments?name=${encodeURIComponent(file.name || "image.png")}`);
+      xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress?.(Math.min(100, Math.floor((e.loaded / e.total) * 100)));
+      };
+      xhr.onerror = () => reject(new ApiError(0, "서버에 연결할 수 없거나 연결이 끊겼습니다"));
+      xhr.onabort = () => reject(new ApiError(0, "업로드가 취소되었습니다"));
+      xhr.onload = () => {
+        let data: { error?: string } = {};
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch {
+          /* not JSON */
+        }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data as unknown as Attachment);
+        else reject(new ApiError(xhr.status, data.error ?? (xhr.statusText || `HTTP ${xhr.status}`)));
+      };
+      xhr.send(file);
+    }),
   attachmentUrl: (key: string, id: string) => `${a(key)}/attachments/${encodeURIComponent(id)}`,
   member: (key: string, id: string, opts: { tail?: number; diff?: boolean }) =>
     call<Record<string, unknown> & { logTail: string[]; diff?: string }>(

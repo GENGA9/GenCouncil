@@ -223,3 +223,9 @@ export interface MemoryHit {
   updated: string;
   source?: string;
 }
+
+/** Progress/failure callbacks for the files being uploaded with a chat message (index into the files array). */
+export interface UploadHooks {
+  onProgress: (index: number, pct: number) => void;
+  onFail: (index: number, message: string) => void;
+}

@@ -124,6 +124,12 @@ export function memberEventText(m: MemberRecord): string {
     .join("\n");
 }
 
+export class AttachmentTooLargeError extends Error {
+  constructor(readonly maxBytes: number) {
+    super(`file too large (max ${Math.round(maxBytes / 1024 / 1024)}MB)`);
+  }
+}
+
 export class AgendaRuntime extends EventEmitter {
   readonly key: string;
   private queue: string[] = [];
@@ -341,6 +347,41 @@ export class AgendaRuntime extends EventEmitter {
     const id = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}-${safe}`;
     fs.writeFileSync(path.join(dir, id), data);
     return { id, name: safe, type: type || "application/octet-stream", size: data.length };
+  }
+
+  /**
+   * Stream an upload to disk (temp file, then rename) so large files never sit in memory.
+   * Throws AttachmentTooLargeError when more than maxBytes arrive; the temp file is always removed on failure.
+   */
+  async saveAttachmentStream(name: string, type: string, readable: AsyncIterable<Buffer | string>, maxBytes: number): Promise<Attachment> {
+    const dir = this.attachmentsDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const safe = (name || "file").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(-80) || "file";
+    const id = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}-${safe}`;
+    const tmp = path.join(dir, `.upload-${id}.part`);
+    const fd = fs.openSync(tmp, "w");
+    let size = 0;
+    let tooLarge = false;
+    try {
+      for await (const c of readable) {
+        const buf = typeof c === "string" ? Buffer.from(c) : c;
+        size += buf.length;
+        if (size > maxBytes) {
+          tooLarge = true; // keep draining the request so the client can read our response
+          continue;
+        }
+        let off = 0;
+        while (off < buf.length) off += fs.writeSync(fd, buf, off, buf.length - off);
+      }
+      fs.closeSync(fd);
+      if (tooLarge) throw new AttachmentTooLargeError(maxBytes);
+      fs.renameSync(tmp, path.join(dir, id));
+    } catch (e) {
+      try { fs.closeSync(fd); } catch { /* already closed */ }
+      try { fs.unlinkSync(tmp); } catch { /* gone */ }
+      throw e;
+    }
+    return { id, name: safe, type: type || "application/octet-stream", size };
   }
 
   attachmentPath(id: string): string | undefined {

@@ -7,7 +7,7 @@ import { LeftPane } from "./components/LeftPane";
 import { MemoryView } from "./components/MemoryView";
 import { RightPane } from "./components/RightPane";
 import { GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
-import type { Attachment, ChatItem, Overview, RuntimeState, TranscriptEntry, UsageSnapshot } from "./types";
+import type { Attachment, ChatItem, Overview, RuntimeState, TranscriptEntry, UploadHooks, UsageSnapshot } from "./types";
 
 const MEMORY_KEY = "__memory__";
 const ACCOUNTS_KEY = "__accounts__";
@@ -51,6 +51,7 @@ export function App() {
     | { kind: "handover"; id: string }
   >(null);
   const [toast, setToast] = useState("");
+  const uploaded = useRef(new WeakMap<File, Attachment>());
   const mobile = useMedia("(max-width: 900px)");
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
@@ -244,14 +245,30 @@ export function App() {
   }, [authed, refreshOverview, refreshState, resync]);
 
   const send = useCallback(
-    async (message: string, files: File[] = []) => {
+    async (message: string, files: File[] = [], hooks?: UploadHooks) => {
       if (!selected || isSpecial(selected)) return;
+      let current = -1;
       try {
         const attachments = [];
-        for (const f of files) attachments.push(await api.upload(selected, f));
+        for (let i = 0; i < files.length; i++) {
+          current = i;
+          // uploaded in an earlier attempt: reuse it instead of sending the file again
+          let att = uploaded.current.get(files[i]);
+          if (!att) {
+            hooks?.onProgress(i, 0);
+            att = await api.upload(selected, files[i], (pct) => hooks?.onProgress(i, pct));
+            uploaded.current.set(files[i], att);
+          }
+          attachments.push(att);
+        }
+        current = -1;
         await api.chat(selected, message, attachments);
       } catch (e) {
-        notify((e as Error).message);
+        if (current >= 0) {
+          const msg = `업로드 실패: ${(e as Error).message}`;
+          hooks?.onFail(current, msg);
+          notify(msg);
+        } else notify((e as Error).message);
         throw e;
       }
     },
