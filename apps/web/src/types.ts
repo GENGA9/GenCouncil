@@ -165,7 +165,7 @@ export interface Member {
 export interface RuntimeState {
   key: string;
   project: { id: string; name: string; repo: string; baseBranch: string };
-  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: WaitingForUser };
+  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: WaitingForUser; telegramAuto?: boolean };
   tasks: Task[];
   members: Member[];
   integrationWorktree: string;

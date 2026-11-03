@@ -160,6 +160,11 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .chair-title { display: flex; align-items: center; gap: 8px; font-weight: 700; flex-wrap: wrap; }
 .chair-title select { width: auto; padding: 3px 6px; font-size: 12px; font-weight: 400; }
 .chair-actions { display: flex; gap: 6px; }
+button.tg-auto { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; color: var(--muted); }
+button.tg-auto.on { border-color: #229ED9; }
+button.tg-auto.off .tg-icon { opacity: 0.6; }
+button.tg-auto:disabled.on { opacity: 1; }
+.tg-icon { display: block; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 /* rotating 2x2 squares loader (from the reference mockup) */
 /* squares fill one by one clockwise (TL, TR, BR, BL), then empty in the same order */
