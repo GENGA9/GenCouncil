@@ -137,6 +137,45 @@ check("show event goes out", shownEvents.length === 1 && shownEvents[0].attachme
 check("files outside the agenda are refused", (() => { try { council.showFiles([path.join(os.tmpdir(), "x.png")], "x"); return false; } catch (e) { return /밖의 파일/.test(e.message); } })());
 check("unsupported formats are refused", (() => { try { council.showFiles([path.join(s6m.worktree, ".council", "shots", "notes.zip")], "x"); return false; } catch (e) { return /형식/.test(e.message); } })());
 
+// ---- 3b2. council_telegram: only through a sender hook, same path rules as council_show ----
+{
+  const { createCouncilMcp } = await import("@gencouncil/council");
+  const tool = createCouncilMcp(council)._registeredTools["council_telegram"];
+  const call = async (args) => {
+    const r = await tool.handler(args, {});
+    return { isError: Boolean(r.isError), text: r.content[0].text };
+  };
+  check("council_telegram is registered and says auto sending is the default and it is for explicit instructions only when off", Boolean(tool) && /ONLY when the user explicitly/.test(tool.description) && /ON by default/.test(tool.description) && /agenda.telegramAuto is false/.test(tool.description));
+  const noHook = await call({ text: "안녕" });
+  check("council_telegram without a Telegram hook returns an error", noHook.isError && noHook.text.includes("텔레그램이 연결되어 있지 않다"), noHook.text);
+  const reqs = [];
+  let hookResult = { ok: true, detail: "보냈다 (텔레그램 DM): 글" };
+  council.setTelegramSender(async (req) => {
+    reqs.push(req);
+    return hookResult;
+  });
+  const ok1 = await call({ text: "  보냅니다  " });
+  check("council_telegram calls the hook with the text and reports success", !ok1.isError && reqs.length === 1 && reqs[0].text === "보냅니다" && reqs[0].files.length === 0 && !reqs[0].ask && ok1.text.includes("보냈다"), JSON.stringify([ok1, reqs]));
+  const ok2 = await call({ text: "시안", paths: [s6m.shots[0]] });
+  check("council_telegram resolves files like council_show (name, type, absolute path)", !ok2.isError && reqs[1].files.length === 1 && reqs[1].files[0].name === "title-after.png" && reqs[1].files[0].type === "image/png" && fs.existsSync(reqs[1].files[0].path), JSON.stringify(reqs[1]));
+  const bad1 = await call({ text: "x", paths: [path.join(os.tmpdir(), "x.png")] });
+  check("council_telegram refuses files outside the agenda", bad1.isError && /밖의 파일/.test(bad1.text) && reqs.length === 2, bad1.text);
+  const bad2 = await call({ text: "x", paths: [path.join(s6m.worktree, ".council", "shots", "notes.zip")] });
+  check("council_telegram refuses unsupported formats", bad2.isError && /형식/.test(bad2.text) && reqs.length === 2, bad2.text);
+  const noAsk = await call({ text: "골라 주세요", ask: true });
+  check("council_telegram ask:true without a pending question is an error", noAsk.isError && /질문이 없다/.test(noAsk.text) && reqs.length === 2, noAsk.text);
+  council.askUser("어느 시안으로 갈까요?", ["A안", "B안"]);
+  const withAsk = await call({ text: "골라 주세요", ask: true });
+  check("council_telegram ask:true passes the pending question and options", !withAsk.isError && reqs[2].ask?.question === "어느 시안으로 갈까요?" && reqs[2].ask.options.join() === "A안,B안", JSON.stringify(reqs[2]));
+  council.clearWaiting();
+  hookResult = { ok: false, detail: "일부만 보냈거나 실패했다: 글 전송 실패" };
+  const failed1 = await call({ text: "실패할 글" });
+  check("council_telegram reports a failed send as an error with the reason", failed1.isError && failed1.text.includes("텔레그램 전송 실패") && failed1.text.includes("글 전송 실패"), failed1.text);
+  const empty = await call({ text: "   " });
+  check("council_telegram refuses an empty text", empty.isError && reqs.length === 4, empty.text);
+  council.setTelegramSender(undefined);
+}
+
 // ---- 3c. the chair sees remaining usage next to the limits ----
 council.setUsageProvider(() => [
   { provider: "claude", account: "claude", fiveHour: { usedPct: 85 }, weekly: { usedPct: 72 } },

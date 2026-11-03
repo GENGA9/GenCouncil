@@ -1,4 +1,5 @@
 // Web server smoke test without any LLM: auth, project/agenda creation, runtime open, MCP endpoint, websocket.
+import http from "node:http";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -24,7 +25,7 @@ const check = (name, cond, extra = "") => {
   if (!cond) failed++;
 };
 
-const srv = await startServer({ port: 0, host: "127.0.0.1", token: "test-token", webDir: path.join(tmp, "nowhere"), log: () => {} });
+const srv = await startServer({ port: 0, host: "127.0.0.1", token: "test-token", webDir: path.join(tmp, "nowhere"), log: () => {}, maxUploadBytes: 40 * 1024 * 1024 });
 const base = srv.url.replace(/:\d+$/, "") + ":" + srv.config.port; // url uses config.port
 const api = async (method, p, body, token = "test-token") => {
   const res = await fetch(`http://127.0.0.1:${srv.config.port}${p}`, {
@@ -117,6 +118,15 @@ await setRes.text();
 const after = await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`);
 check("chair set title and goals", after.json.state.agenda.title === "로그인 개선" && after.json.state.agenda.goals.length === 2, JSON.stringify(after.json.state.agenda));
 
+// per-agenda Telegram auto sending: on by default (unset), the API switches it, it lands in the state and agenda.json
+check("telegramAuto is on by default", after.json.state.agenda.telegramAuto === true, JSON.stringify(after.json.state.agenda));
+const taPath = `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/telegram-auto`;
+check("telegram-auto rejects a non-boolean", (await api("POST", taPath, { on: "yes" })).status === 400);
+check("telegram-auto off", (await api("POST", taPath, { on: false })).status === 200 && (await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`)).json.state.agenda.telegramAuto === false);
+check("telegram-auto on", (await api("POST", taPath, { on: true })).json.telegramAuto === true);
+const taOn = await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`);
+check("telegramAuto shows in the agenda state", taOn.json.state.agenda.telegramAuto === true, JSON.stringify(taOn.json.state.agenda));
+
 // attachments: upload then read back
 const upRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments?name=${encodeURIComponent("사진 1.png")}`, {
   method: "POST",
@@ -129,6 +139,33 @@ const getRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeUR
 check("attachment served", getRes.status === 200 && getRes.headers.get("content-type") === "image/png" && (await getRes.arrayBuffer()).byteLength === 7);
 const missRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments/${encodeURIComponent("../state.md")}`, { headers: { authorization: "Bearer test-token" } });
 check("attachment path traversal blocked", missRes.status === 404);
+
+// large upload streams to disk (30MB ok), over the limit gets a readable 413 JSON, no temp files left
+const upUrl = `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments?name=big.bin`;
+const big = Buffer.alloc(30 * 1024 * 1024, 7);
+const bigRes = await fetch(`http://127.0.0.1:${srv.config.port}${upUrl}`, { method: "POST", headers: { authorization: "Bearer test-token", "content-type": "video/mp4" }, body: big });
+const bigUp = await bigRes.json();
+const bigGet = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments/${encodeURIComponent(bigUp.id)}`, { headers: { authorization: "Bearer test-token" } });
+check("30MB upload succeeds with exact size", bigRes.status === 200 && bigUp.size === big.length && (await bigGet.arrayBuffer()).byteLength === big.length, JSON.stringify(bigUp));
+const overRes = await fetch(`http://127.0.0.1:${srv.config.port}${upUrl}`, { method: "POST", headers: { authorization: "Bearer test-token", "content-type": "video/mp4" }, body: Buffer.alloc(41 * 1024 * 1024) });
+const overJson = await overRes.json().catch(() => null);
+check("over-limit upload (content-length) -> 413 JSON", overRes.status === 413 && /file too large/.test(overJson?.error ?? ""), `${overRes.status} ${JSON.stringify(overJson)}`);
+const chunked = await new Promise((resolve, reject) => {
+  const r = http.request({ host: "127.0.0.1", port: srv.config.port, path: upUrl, method: "POST", headers: { authorization: "Bearer test-token", "content-type": "video/mp4" } }, (res) => {
+    let d = "";
+    res.on("data", (c) => (d += c));
+    res.on("end", () => resolve({ status: res.statusCode, body: d }));
+  });
+  r.on("error", reject);
+  const piece = Buffer.alloc(1024 * 1024, 1);
+  for (let i = 0; i < 45; i++) r.write(piece);
+  r.end();
+});
+check("over-limit upload (chunked) -> 413 JSON", chunked.status === 413 && /file too large/.test(JSON.parse(chunked.body).error), JSON.stringify(chunked));
+const attDirs = [];
+const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) e.isDirectory() ? walk(path.join(d, e.name)) : /\.part$/.test(e.name) && attDirs.push(e.name); };
+walk(tmp);
+check("no temp upload files left behind", attDirs.length === 0, attDirs.join(","));
 const htmlUp = await (await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments?name=${encodeURIComponent("mock.html")}`, {
   method: "POST",
   headers: { authorization: "Bearer test-token", "content-type": "text/html" },

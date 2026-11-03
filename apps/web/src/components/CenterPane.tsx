@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { familyColor, memberName } from "../model";
-import type { ChatItem, Member, ProjectOv, RuntimeState, Task } from "../types";
+import type { ChatItem, Member, ProjectOv, RuntimeState, Task, UploadHooks } from "../types";
+
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+const fmtSize = (n: number) => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)}GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
 import { GridSpinner } from "./GridSpinner";
 
 /** chair models per CLI; the chair runs on whatever CLI its account belongs to */
@@ -19,13 +22,73 @@ const PROVIDER_LABEL: Record<string, string> = { claude: "클로드", gpt: "GPT"
 const CLI_PROVIDERS = ["claude", "gpt", "gemini"];
 const STATUS_KO: Record<Task["status"], string> = { todo: "대기", doing: "진행", review: "검토", done: "완료", blocked: "막힘" };
 
+/** Telegram paper-plane logo (circle with the plane); on = Telegram blue filled, off = grey outline */
+function TelegramIcon({ on }: { on: boolean }) {
+  return (
+    <svg className="tg-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <circle cx="12" cy="12" r="10.5" fill={on ? "#229ED9" : "none"} stroke={on ? "#229ED9" : "currentColor"} strokeWidth="1.4" />
+      <path
+        d="M5.6 11.9l10.9-4.2c.5-.2 1 .1.8.9l-1.9 8.8c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.3-4.8c.2-.2 0-.3-.3-.1l-6.6 4.1-2.8-.9c-.6-.2-.6-.6.3-.9z"
+        fill={on ? "#fff" : "currentColor"}
+      />
+    </svg>
+  );
+}
+
+/** whether Telegram is set up on the server; asked once per page load */
+type TelegramInfo = { configured: boolean; user?: string; autoNotify: boolean };
+let telegramInfo: Promise<TelegramInfo> | undefined;
+const loadTelegramInfo = () => (telegramInfo ??= api.telegram().catch((): TelegramInfo => ({ configured: false, autoNotify: false })));
+
+/** Per-agenda switch for sending every notification to Telegram automatically (on by default; pending questions always go). Disabled and shown off while Telegram is not connected. */
+function TelegramAutoButton({ agendaKey, on, closed, onError }: { agendaKey: string; on: boolean; closed: boolean; onError: (msg: string) => void }) {
+  const [info, setInfo] = useState<TelegramInfo | null>(null);
+  const [pending, setPending] = useState<boolean | null>(null);
+  useEffect(() => {
+    void loadTelegramInfo().then(setInfo);
+  }, []);
+  // the real state arrived (or the agenda changed): drop the optimistic value
+  useEffect(() => setPending(null), [on, agendaKey]);
+  if (!info) return null;
+  // connected = configured and the bot answered (the server reports its user name only after verify)
+  const connected = info.configured && Boolean(info.user);
+  const forced = connected && info.autoNotify;
+  const shown = connected && (forced || (pending ?? on));
+  const title = !connected
+    ? "텔레그램이 연결되어 있지 않습니다"
+    : forced
+    ? "텔레그램 자동 전송 켜짐(서버 설정 --auto on): 모든 안건의 알림을 보냅니다"
+    : shown
+      ? "텔레그램 자동 전송 켜짐: 이 안건의 모든 알림을 보냅니다"
+      : "텔레그램 자동 전송 꺼짐: 결정 대기 질문만 보냅니다";
+  return (
+    <button
+      className={`ghost small tg-auto ${shown ? "on" : "off"}`}
+      title={title}
+      aria-label={title}
+      aria-pressed={shown}
+      disabled={closed || forced || !connected}
+      onClick={() => {
+        const next = !shown;
+        setPending(next);
+        api.setTelegramAuto(agendaKey, next).catch((e: Error) => {
+          setPending(null);
+          onError(e.message);
+        });
+      }}
+    >
+      <TelegramIcon on={shown} />
+    </button>
+  );
+}
+
 interface Props {
   state: RuntimeState | null;
   chat: ChatItem[];
   firstTurn: boolean;
   loading: boolean;
   project?: ProjectOv;
-  onSend: (message: string, files?: File[]) => Promise<void>;
+  onSend: (message: string, files?: File[], hooks?: UploadHooks) => Promise<void>;
   onSetChair: (model: string, effort: string, account?: string, advisor?: string) => Promise<void>;
   onReset: () => Promise<void>;
   onSetAutonomy: (autonomy: string) => Promise<void>;
@@ -43,6 +106,9 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  // per pending file: upload progress, or the failure message (the chip stays so it can be retried or removed); key -1 = rejected before upload
+  const [upProgress, setUpProgress] = useState<Record<number, number>>({});
+  const [upFailed, setUpFailed] = useState<Record<number, string>>({});
   const [dragOver, setDragOver] = useState(false);
   // the goals card can be folded to give the chat more room; remembered on this device
   const [goalsFolded, setGoalsFolded] = useState(() => {
@@ -78,7 +144,10 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
   const [showState, setShowState] = useState(false);
   const addFiles = (list: FileList | File[] | null | undefined) => {
     const arr = Array.from(list ?? []).filter((f) => f.size > 0);
-    if (arr.length) setFiles((cur) => [...cur, ...arr].slice(0, 10));
+    const tooBig = arr.filter((f) => f.size > MAX_UPLOAD_BYTES);
+    const ok = arr.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    if (tooBig.length) setUpFailed((cur) => ({ ...cur, [-1]: `업로드 실패: ${tooBig.map((f) => f.name || "파일").join(", ")} — 2GB를 넘어 올릴 수 없습니다 (${fmtSize(tooBig[0].size)})` }));
+    if (ok.length) setFiles((cur) => [...cur, ...ok].slice(0, 10));
   };
   const listRef = useRef<HTMLDivElement>(null);
   const busy = state?.chair.busy ?? false;
@@ -96,10 +165,16 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
     const t = text.trim();
     if ((!t && files.length === 0) || busy || sending) return;
     setSending(true);
+    setUpProgress({});
+    setUpFailed({});
     try {
-      await onSend(t, files);
+      await onSend(t, files, {
+        onProgress: (i, pct) => setUpProgress((cur) => ({ ...cur, [i]: pct })),
+        onFail: (i, msg) => setUpFailed((cur) => ({ ...cur, [i]: msg })),
+      });
       setText("");
       setFiles([]);
+      setUpProgress({});
     } catch {
       /* the app shows the error; keep the draft */
     } finally {
@@ -173,6 +248,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           <button className="ghost small" onClick={onReset} title="의장 세션을 새로 시작 (state.md 유지)">세션 초기화</button>
           <button className="ghost small" onClick={onRetrospect} disabled={busy || firstTurn} title="의장이 교훈·모델 성향을 공유 기억에 기록하고 제안을 검토">회고</button>
           <button className="ghost small" onClick={() => void onMergeBase()} disabled={state.agenda.status === "closed"} title="안건을 닫지 않고 지금까지의 결과를 메인(베이스 브랜치)에 합칩니다">메인 반영</button>
+          <TelegramAutoButton agendaKey={state.key} on={state.agenda.telegramAuto !== false} closed={state.agenda.status === "closed"} onError={(m) => window.alert(m)} />
           <button className={`small ${allDone ? "primary" : "ghost"}`} onClick={onFinish} disabled={state.agenda.status === "closed"}>안건 종료</button>
           <button className="ghost small danger" onClick={onDelete} disabled={busy} title="이 안건을 지웁니다. 대화 기록은 프로젝트의 deleted 폴더로 옮겨집니다">삭제</button>
         </div>
@@ -308,14 +384,35 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           <div className="small muted ask-hint">버튼을 누르거나 아래에 직접 답하세요.</div>
         </div>
       )}
-      {files.length > 0 && (
+      {(files.length > 0 || upFailed[-1]) && (
         <div className="pending-files">
           {files.map((f, i) => (
-            <span key={i} className="file-chip">
+            <span key={i} className={`file-chip ${upFailed[i] ? "failed" : ""}`} title={upFailed[i]}>
               {f.type.startsWith("image/") ? <img src={URL.createObjectURL(f)} alt="" /> : "📎"} {f.name || "붙여넣은 이미지"}
-              <button className="icon" title="빼기" onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}>✕</button>
+              <span className="muted"> {fmtSize(f.size)}</span>
+              {sending && upProgress[i] !== undefined && !upFailed[i] && <span className="up-progress"> {upProgress[i] >= 100 ? "처리 중…" : `${upProgress[i]}%`}</span>}
+              {upFailed[i] && <span className="up-failed"> ⚠ 실패</span>}
+              <button
+                className="icon"
+                title="빼기"
+                disabled={sending}
+                onClick={() => {
+                  setFiles((cur) => cur.filter((_, j) => j !== i));
+                  setUpFailed({});
+                  setUpProgress({});
+                }}
+              >
+                ✕
+              </button>
             </span>
           ))}
+          {Object.entries(upFailed).map(([k, msg]) => (
+            <div key={k} className="up-error" role="alert">
+              {msg}
+              {Number(k) >= 0 && " — 전송을 다시 눌러 재시도하거나 ✕로 뺄 수 있습니다."}
+            </div>
+          ))}
+          {sending && Object.keys(upProgress).length > 0 && <div className="up-status small muted">올리는 중… (끝나면 의장에게 전달됩니다)</div>}
         </div>
       )}
       <div

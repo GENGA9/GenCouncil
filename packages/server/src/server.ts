@@ -41,10 +41,11 @@ import {
   type Autonomy,
   type CliProvider,
   type Attachment,
+  AttachmentTooLargeError,
   type RuntimeEvent,
 } from "@gencouncil/council";
 
-const MAX_UPLOAD = 25 * 1024 * 1024;
+const MAX_UPLOAD = 2 * 1024 * 1024 * 1024;
 import { listFolder } from "./fsbrowse.js";
 import { WebSocketServer, type WebSocket } from "ws";
 import { detectTailscale, loadServerConfig, saveServerConfig, type ServerConfig, type TailscaleInfo } from "./config.js";
@@ -54,6 +55,8 @@ export interface ServerOptions extends Partial<ServerConfig> {
   /** directory with the built web app (apps/web/dist) */
   webDir?: string;
   log?: (line: string) => void;
+  /** web attachment upload limit in bytes (default 2GB; tests lower it) */
+  maxUploadBytes?: number;
 }
 
 export interface RunningServer {
@@ -187,6 +190,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         councilHeaders: { Authorization: `Bearer ${config.token}` },
       }).then((rt) => {
         rt.council.setUsageProvider(() => usageCache?.items);
+        // council_telegram: the chair sends to Telegram only when the user told it to
+        rt.council.setTelegramSender(async (req) => (telegram ? telegram.sendRequested(key, req) : { ok: false, detail: "텔레그램 봇이 연결되어 있지 않다" }));
         rt.council.setMemberMcp((mid) => ({
           url: `http://127.0.0.1:${config.port}/mcp-member/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}/${encodeURIComponent(mid)}`,
           headers: { Authorization: `Bearer ${config.token}` },
@@ -459,16 +464,21 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   });
   on("POST", "/api/a/:id/:slug/attachments", async ({ params, req, url }) => {
     const rt = await getRuntime(params.id, params.slug);
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const c of req) {
-      size += (c as Buffer).length;
-      if (size > MAX_UPLOAD) throw new HttpError(413, `file too large (max ${MAX_UPLOAD / 1024 / 1024}MB)`);
-      chunks.push(c as Buffer);
+    const maxUpload = opts.maxUploadBytes ?? MAX_UPLOAD;
+    const gb = 1024 * 1024 * 1024;
+    const limitMsg = `file too large (max ${maxUpload >= gb ? `${+(maxUpload / gb).toFixed(1)}GB` : `${Math.max(1, Math.round(maxUpload / 1024 / 1024))}MB`})`;
+    if (Number(req.headers["content-length"] ?? 0) > maxUpload) {
+      req.resume(); // drain so the browser sees the 413 instead of a dropped connection
+      throw new HttpError(413, limitMsg);
     }
     const name = url.searchParams.get("name") ?? "file";
     const type = String(req.headers["content-type"] ?? "application/octet-stream");
-    return rt.saveAttachment(name, type, Buffer.concat(chunks));
+    try {
+      return await rt.saveAttachmentStream(name, type, req, maxUpload);
+    } catch (e) {
+      if (e instanceof AttachmentTooLargeError) throw new HttpError(413, limitMsg);
+      throw e;
+    }
   });
   on("GET", "/api/a/:id/:slug/attachments/:file", async ({ params, res }) => {
     const rt = await getRuntime(params.id, params.slug);
@@ -590,6 +600,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     void telegram?.finishFor(rt.key, `[${rt.key}] 안건 종료: 베이스 브랜치에 머지됨${retro ? "\n회고:\n" + retro.slice(0, 1500) : ""}`);
     return { ok: true, output: out, retro };
   });
+  on("POST", "/api/a/:id/:slug/telegram-auto", async ({ params, body }) => {
+    const b = await body();
+    if (typeof b.on !== "boolean") throw new HttpError(400, "on (boolean) required");
+    const rt = await getRuntime(params.id, params.slug);
+    if (rt.council.store.agenda().status === "closed") throw new HttpError(409, "closed agenda");
+    rt.council.setTelegramAuto(b.on);
+    return { ok: true, telegramAuto: b.on };
+  });
   on("GET", "/api/telegram", () => ({
     configured: Boolean(config.telegram),
     user: telegramUser,
@@ -597,6 +615,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     agenda: config.telegram?.agenda,
     forumChatId: config.telegram?.forumChatId,
     topics: Object.keys(config.telegram?.topics ?? {}).length,
+    autoNotify: Boolean(config.telegram?.autoNotify),
   }));
   on("DELETE", "/api/a/:id/:slug", async ({ params, url }) => {
     const { project, store } = findAgenda(params.id, params.slug);
@@ -862,12 +881,23 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         config.telegram = { ...config.telegram!, ...patch };
         saveServerConfig({ telegram: config.telegram });
       },
+      // per-agenda automatic sending: read the agenda's own setting, written by the web button or /auto
+      isAuto: (key) => {
+        const [id, slug] = key.split("/");
+        const project = registry.get(id);
+        const store = project ? AgendaStore.find(project, slug) : undefined;
+        return store?.agenda().telegramAuto !== false;
+      },
+      setAuto: async (key, on) => {
+        const [id, slug] = key.split("/");
+        (await getRuntime(id, slug)).council.setTelegramAuto(on);
+      },
     });
     try {
       telegramUser = await tg.verify();
       telegram = tg;
       tg.start();
-      log(`telegram bot @${telegramUser} connected (chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
+      log(`telegram bot @${telegramUser} connected (${config.telegram.autoNotify ? "auto notify forced on for all agendas" : "auto sending on by default per agenda (web button, /auto off); chair questions always"}; chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
     } catch (e) {
       log(`telegram disabled: ${(e as Error).message}`);
     }

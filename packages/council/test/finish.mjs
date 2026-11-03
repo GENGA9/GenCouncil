@@ -162,6 +162,7 @@ rt2.close({ closeMemory: false });
   const { userAskedToFinish } = await import("@gencouncil/council");
   check("finish phrases count", ["종료해", "안건 종료", "여기서 일단 종료하자", "중단하고 마무리해줘", "그냥 안건 종료", "이제 끝내자", "닫아줘"].every((t) => userAskedToFinish(t)));
   check("other messages do not", ["진행해", "라이브 올려주고 앱도 묶어줘 집에가서 볼게", "80도에 풀로드인데 괜찮을까?", "응", ""].every((t) => !userAskedToFinish(t)));
+  check("a [텔레그램] source mark does not change the verdict", userAskedToFinish("[텔레그램] 종료해") && userAskedToFinish("[텔레그램] 안건 종료") && !userAskedToFinish("[텔레그램] 진행해") && !userAskedToFinish("[텔레그램] 종료하지 마"));
   check("negations do not", ["종료하지 마", "아직 종료 말고 더 고쳐줘", "끝내지 말고 계속해"].every((t) => !userAskedToFinish(t)));
   const s5 = AgendaStore.create(project, "제안만", ["x"]);
   const r5 = await AgendaRuntime.open(s5, memory, chairOpts);

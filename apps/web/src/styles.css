@@ -160,6 +160,11 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .chair-title { display: flex; align-items: center; gap: 8px; font-weight: 700; flex-wrap: wrap; }
 .chair-title select { width: auto; padding: 3px 6px; font-size: 12px; font-weight: 400; }
 .chair-actions { display: flex; gap: 6px; }
+button.tg-auto { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; color: var(--muted); }
+button.tg-auto.on { border-color: #229ED9; }
+button.tg-auto.off .tg-icon { opacity: 0.6; }
+button.tg-auto:disabled.on { opacity: 1; }
+.tg-icon { display: block; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 /* rotating 2x2 squares loader (from the reference mockup) */
 /* squares fill one by one clockwise (TL, TR, BR, BL), then empty in the same order */
@@ -374,3 +379,8 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .shown-html { display: flex; flex-direction: column; gap: 4px; width: min(100%, 720px); }
 .shown-html iframe { width: 100%; height: 420px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
 .mem-danger { margin-top: 24px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.file-chip.failed { border-color: var(--danger, #d33); background: rgba(221, 51, 51, 0.1); }
+.up-progress { color: var(--accent, #4a8); font-variant-numeric: tabular-nums; }
+.up-failed { color: var(--danger, #d33); font-weight: 600; }
+.up-error { flex-basis: 100%; color: var(--danger, #d33); font-size: 0.85rem; padding: 4px 2px; }
+.up-status { flex-basis: 100%; }

@@ -7,6 +7,7 @@ export const WEB_HELP = `web
   web telegram --token <bot token> --chat <chat id> [--agenda project/slug]   enable the Telegram bot
   web telegram --forum <group chat id>    connect a forum (topics) group: one topic per agenda (or send /forum in the group)
   web telegram --forum off                disconnect the forum group (back to the private chat)
+  web telegram --auto on|off              on: force automatic sending for every agenda (overrides the per-agenda switch); off (default): no force, each agenda sends everything by itself unless turned off (web button, Telegram /auto off); questions waiting for your decision always go
   web telegram --off                      disable it
 `;
 
@@ -27,8 +28,12 @@ export async function webMain(rest: string[]): Promise<number> {
     }
     const { values } = parseArgs({
       args,
-      options: { token: { type: "string" }, chat: { type: "string" }, agenda: { type: "string" }, forum: { type: "string" }, off: { type: "boolean" } },
+      options: { token: { type: "string" }, chat: { type: "string" }, agenda: { type: "string" }, forum: { type: "string" }, auto: { type: "string" }, off: { type: "boolean" } },
     });
+    if (values.auto !== undefined && values.auto !== "on" && values.auto !== "off") {
+      console.error("--auto takes on or off");
+      return 2;
+    }
     if (values.off) {
       saveServerConfig({ telegram: null });
       console.log("telegram disabled");
@@ -45,6 +50,14 @@ export async function webMain(rest: string[]): Promise<number> {
       console.log("telegram forum disconnected; restart 'gencouncil web' to apply");
       return 0;
     }
+    const autoNotify = values.auto === undefined ? cur?.autoNotify : values.auto === "on";
+    if (values.auto !== undefined && cur && !values.token && !values.chat && !values.agenda && !values.forum) {
+      // only the auto switch: no need to message the chat again
+      const { autoNotify: _a, ...base } = cur;
+      saveServerConfig({ telegram: { ...base, ...(autoNotify ? { autoNotify: true } : {}) } });
+      console.log(`telegram auto notify ${autoNotify ? "on" : "off"}; restart 'gencouncil web' to apply`);
+      return 0;
+    }
     const botToken = values.token ?? cur?.botToken;
     const chatId = values.chat ?? cur?.chatId;
     if (!botToken || !chatId) {
@@ -57,7 +70,7 @@ export async function webMain(rest: string[]): Promise<number> {
     const forumChatId = values.forum ?? cur?.forumChatId;
     // topics belong to one group: keep them only while the forum group stays the same
     const topics = forumChatId && forumChatId === cur?.forumChatId ? cur?.topics : undefined;
-    const telegram = { botToken, chatId, agenda: values.agenda ?? cur?.agenda, ...(forumChatId ? { forumChatId } : {}), ...(topics ? { topics } : {}) };
+    const telegram = { botToken, chatId, agenda: values.agenda ?? cur?.agenda, ...(forumChatId ? { forumChatId } : {}), ...(topics ? { topics } : {}), ...(autoNotify ? { autoNotify: true } : {}) };
     const bridge = new TelegramBridge(telegram, { log: console.error, listAgendas: () => [], getRuntime: () => Promise.reject(new Error("n/a")), onBind: () => undefined });
     try {
       const user = await bridge.verify();

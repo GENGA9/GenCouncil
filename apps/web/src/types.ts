@@ -165,7 +165,7 @@ export interface Member {
 export interface RuntimeState {
   key: string;
   project: { id: string; name: string; repo: string; baseBranch: string };
-  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: WaitingForUser };
+  agenda: { slug: string; title: string; goals: string[]; branch: string; status: string; waitingForUser?: WaitingForUser; telegramAuto?: boolean };
   tasks: Task[];
   members: Member[];
   integrationWorktree: string;
@@ -222,4 +222,10 @@ export interface MemoryHit {
   snippet?: string;
   updated: string;
   source?: string;
+}
+
+/** Progress/failure callbacks for the files being uploaded with a chat message (index into the files array). */
+export interface UploadHooks {
+  onProgress: (index: number, pct: number) => void;
+  onFail: (index: number, message: string) => void;
 }
