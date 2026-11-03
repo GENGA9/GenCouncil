@@ -145,7 +145,7 @@ check("unsupported formats are refused", (() => { try { council.showFiles([path.
     const r = await tool.handler(args, {});
     return { isError: Boolean(r.isError), text: r.content[0].text };
   };
-  check("council_telegram is registered and says it is for explicit instructions only", Boolean(tool) && /ONLY when the user explicitly/.test(tool.description) && /only council_ask_user questions go to Telegram by themselves/.test(tool.description));
+  check("council_telegram is registered and says auto sending is the default and it is for explicit instructions only when off", Boolean(tool) && /ONLY when the user explicitly/.test(tool.description) && /ON by default/.test(tool.description) && /agenda.telegramAuto is false/.test(tool.description));
   const noHook = await call({ text: "안녕" });
   check("council_telegram without a Telegram hook returns an error", noHook.isError && noHook.text.includes("텔레그램이 연결되어 있지 않다"), noHook.text);
   const reqs = [];

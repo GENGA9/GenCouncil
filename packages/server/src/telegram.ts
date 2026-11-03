@@ -253,7 +253,7 @@ export class TelegramBridge {
     return `[${key.split("/")[1] ?? key}]`;
   }
 
-  /** automatic sending is on for this agenda: server-wide (autoNotify) or the agenda's own switch */
+  /** automatic sending is on for this agenda: server-wide force (autoNotify) or the agenda's own switch (default on; the server's isAuto reports it) */
   private isAuto(key: string): boolean {
     if (this.cfg.autoNotify) return true;
     try {
@@ -484,18 +484,18 @@ export class TelegramBridge {
     return all.length ? all.map((a) => `${a.key === this.cfg.agenda ? "▶ " : ""}${a.key} [${a.status}] ${a.title}`).join("\n") : "안건이 없습니다.";
   }
 
-  /** the chair's answers do not come here by themselves unless autoNotify is on */
+  /** the chair's answers come here by themselves while the agenda's auto sending is on (the default) */
   private autoHint(key?: string): string {
     if (this.cfg.autoNotify) return "";
-    if (key && this.isAuto(key)) return "\n이 안건은 자동 전송이 켜져 있어 의장 답과 진행 알림이 모두 옵니다. (/auto off 로 끔)";
-    return "\n결정을 묻는 질문만 자동으로 옵니다. 그 밖의 의장 답은 의장에게 '텔레그램으로 보내 줘'라고 하거나, /auto on 으로 이 안건의 자동 전송을 켜세요.";
+    if (key && this.isAuto(key)) return "\n이 안건은 자동 전송이 켜져 있어(기본) 의장 답과 진행 알림이 모두 옵니다. (/auto off 로 끔)";
+    return "\n이 안건은 자동 전송이 꺼져 있어 결정을 묻는 질문만 옵니다. 그 밖의 의장 답은 의장에게 '텔레그램으로 보내 줘'라고 하거나, /auto on 으로 자동 전송을 켜세요.";
   }
 
   /** `/auto`, `/auto on`, `/auto off`: show or switch the agenda's automatic sending */
   private async autoCommand(key: string, text: string, reply: (t: string) => Promise<string>): Promise<string> {
     const arg = text.slice(5).trim().toLowerCase();
-    if (this.cfg.autoNotify) return reply("서버 설정(--auto on)으로 모든 안건의 자동 전송이 켜져 있습니다.");
-    if (arg === "") return reply(`${this.isAuto(key) ? "자동 전송 켜짐: 이 안건의 모든 알림을 보냅니다." : "자동 전송 꺼짐: 결정 대기 질문만 보냅니다."}\n/auto on 또는 /auto off`);
+    if (this.cfg.autoNotify) return reply("서버 설정(--auto on)으로 모든 안건의 자동 전송이 강제로 켜져 있습니다. (끄려면 gencouncil web telegram --auto off 후 서버 재시작)");
+    if (arg === "") return reply(`${this.isAuto(key) ? "자동 전송 켜짐(기본): 이 안건의 모든 알림을 보냅니다." : "자동 전송 꺼짐: 결정 대기 질문만 보냅니다."}\n/auto on 또는 /auto off`);
     if (arg !== "on" && arg !== "off") return reply("/auto on 또는 /auto off 로 보내세요. (/auto 는 현재 상태)");
     if (!this.deps.setAuto) return reply("이 서버에서는 /auto 를 쓸 수 없습니다.");
     try {

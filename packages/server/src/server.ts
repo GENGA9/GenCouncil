@@ -878,7 +878,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         const [id, slug] = key.split("/");
         const project = registry.get(id);
         const store = project ? AgendaStore.find(project, slug) : undefined;
-        return Boolean(store?.agenda().telegramAuto);
+        return store?.agenda().telegramAuto !== false;
       },
       setAuto: async (key, on) => {
         const [id, slug] = key.split("/");
@@ -889,7 +889,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       telegramUser = await tg.verify();
       telegram = tg;
       tg.start();
-      log(`telegram bot @${telegramUser} connected (${config.telegram.autoNotify ? "auto notify on for all agendas" : "auto sending per agenda (web button, /auto); chair questions always"}; chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
+      log(`telegram bot @${telegramUser} connected (${config.telegram.autoNotify ? "auto notify forced on for all agendas" : "auto sending on by default per agenda (web button, /auto off); chair questions always"}; chat ${config.telegram.chatId}${config.telegram.agenda ? ", agenda " + config.telegram.agenda : ""}${config.telegram.forumChatId ? ", forum " + config.telegram.forumChatId : ""})`);
     } catch (e) {
       log(`telegram disabled: ${(e as Error).message}`);
     }

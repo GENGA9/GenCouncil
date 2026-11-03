@@ -99,7 +99,7 @@ export const api = {
   resume: (key: string) => call<{ resumed: Array<{ from: string; to: string }>; failed: Array<{ id: string; error: string }> }>("POST", `${a(key)}/resume`),
   dismissResume: (key: string) => call<{ ok: boolean }>("POST", `${a(key)}/resume/dismiss`),
   deleteAgenda: (key: string, force = false) => call<{ deleted: boolean; lost: string[]; movedTo?: string }>("DELETE", `${a(key)}${force ? "?force=1" : ""}`),
-  telegram: () => call<{ configured: boolean; autoNotify: boolean }>("GET", "/api/telegram"),
+  telegram: () => call<{ configured: boolean; user?: string; autoNotify: boolean }>("GET", "/api/telegram"),
   setTelegramAuto: (key: string, on: boolean) => call<{ ok: boolean; telegramAuto: boolean }>("POST", `${a(key)}/telegram-auto`, { on }),
   dismissFinish: (key: string) => call<{ ok: boolean }>("POST", `${a(key)}/finish/dismiss`),
   mergeBase: (key: string) => call<{ ok: boolean; output: string; notIncluded: string[] }>("POST", `${a(key)}/merge-base`),

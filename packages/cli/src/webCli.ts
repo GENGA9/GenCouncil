@@ -7,7 +7,7 @@ export const WEB_HELP = `web
   web telegram --token <bot token> --chat <chat id> [--agenda project/slug]   enable the Telegram bot
   web telegram --forum <group chat id>    connect a forum (topics) group: one topic per agenda (or send /forum in the group)
   web telegram --forum off                disconnect the forum group (back to the private chat)
-  web telegram --auto on|off              on: push every chair reply/draft/question to Telegram by itself; off (default): only questions waiting for your decision (with buttons) go by themselves, the rest only when the chair is told to
+  web telegram --auto on|off              on: force automatic sending for every agenda (overrides the per-agenda switch); off (default): no force, each agenda sends everything by itself unless turned off (web button, Telegram /auto off); questions waiting for your decision always go
   web telegram --off                      disable it
 `;
 
