@@ -5,7 +5,7 @@ import fs from "node:fs";
  * With a forum (topics) group connected, every agenda gets its own topic: its notifications
  * go there and what the owner writes in it goes to that agenda's chair.
  */
-import type { AgendaRuntime, RuntimeEvent } from "@gencouncil/council";
+import type { AgendaRuntime, Attachment, RuntimeEvent } from "@gencouncil/council";
 import { memberDisplayName } from "@gencouncil/council";
 
 export interface TelegramConfig {
@@ -56,9 +56,32 @@ interface TgChat {
   is_forum?: boolean;
 }
 
+interface TgFile {
+  file_id: string;
+  file_size?: number;
+  file_name?: string;
+  mime_type?: string;
+}
+
+interface TgPhotoSize extends TgFile {
+  width?: number;
+  height?: number;
+}
+
 interface TgMessage {
   message_id: number;
   text?: string;
+  /** the text of a message that carries a photo/video/file */
+  caption?: string;
+  photo?: TgPhotoSize[];
+  video?: TgFile;
+  document?: TgFile;
+  animation?: TgFile;
+  audio?: TgFile;
+  voice?: TgFile;
+  video_note?: TgFile;
+  /** messages of one album share this id */
+  media_group_id?: string;
   chat: TgChat;
   message_thread_id?: number;
   from?: { id?: number | string; username?: string; first_name?: string };
@@ -87,6 +110,39 @@ const MAX_LEN = 3900;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 
+/** Bot API getFile/download limit */
+const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+const TOO_BIG_NOTICE = "20MB 넘는 파일은 텔레그램 봇으로 받을 수 없습니다. 웹 화면으로 올려 주세요";
+/** quiet time before collected messages go to the chair as one, how often a busy chair is looked at, and how long it is waited for */
+const DEFAULT_BATCH_MS = 4000;
+const DEFAULT_BUSY_POLL_MS = 3000;
+const DEFAULT_BUSY_MAX_MS = 30 * 60 * 1000;
+
+export interface TelegramOptions {
+  batchMs?: number;
+  busyPollMs?: number;
+  busyMaxMs?: number;
+}
+
+/** the file of a Telegram message, before it is downloaded */
+interface MediaRef {
+  fileId: string;
+  size?: number;
+  name: string;
+  type: string;
+}
+
+/** messages (text and files) of one agenda collected until they go to the chair together */
+interface Batch {
+  key: string;
+  parts: string[];
+  files: Attachment[];
+  reply: (t: string) => Promise<string>;
+  timer?: ReturnType<typeof setTimeout>;
+  /** the quiet period is over: the batch is being delivered or waits for a busy chair */
+  flushing: boolean;
+}
+
 /** Telegram errors that mean the topic no longer exists (deleted by hand) */
 const TOPIC_GONE = /message thread not found|TOPIC_DELETED|TOPIC_ID_INVALID/i;
 
@@ -98,12 +154,21 @@ export class TelegramBridge {
   private readonly fetchImpl: typeof fetch;
   /** topic creations in flight, so two notifications for one agenda make one topic */
   private creating = new Map<string, Promise<number>>();
+  /** agenda key -> messages waiting to go to its chair together */
+  private batches = new Map<string, Batch>();
+  private readonly batchMs: number;
+  private readonly busyPollMs: number;
+  private readonly busyMaxMs: number;
 
   constructor(
     private cfg: TelegramConfig,
     private readonly deps: TelegramDeps,
+    opts: TelegramOptions = {},
   ) {
     this.fetchImpl = deps.fetch ?? fetch;
+    this.batchMs = opts.batchMs ?? DEFAULT_BATCH_MS;
+    this.busyPollMs = opts.busyPollMs ?? DEFAULT_BUSY_POLL_MS;
+    this.busyMaxMs = opts.busyMaxMs ?? DEFAULT_BUSY_MAX_MS;
   }
 
   private async call(method: string, body?: Record<string, unknown> | FormData): Promise<unknown> {
@@ -455,6 +520,8 @@ export class TelegramBridge {
 
   stop(): void {
     this.running = false;
+    for (const b of this.batches.values()) clearTimeout(b.timer);
+    this.batches.clear();
   }
 
   private async loop(): Promise<void> {
@@ -520,7 +587,128 @@ export class TelegramBridge {
     return reply("이 그룹을 GenCouncil 포럼으로 연결했습니다. 이제 안건마다 토픽이 만들어집니다.");
   }
 
-  private async relayToChair(key: string, text: string, reply: (t: string) => Promise<string>): Promise<string> {
+  /** The file of a message (one per message): the largest photo size, else the video/animation/... object. */
+  private static mediaOf(msg: TgMessage): MediaRef | undefined {
+    const pick = (f: TgFile | undefined, name: string, type: string): MediaRef | undefined =>
+      f?.file_id ? { fileId: f.file_id, size: f.file_size, name: f.file_name || name, type: f.mime_type || type } : undefined;
+    if (msg.photo?.length) {
+      const area = (p: TgPhotoSize) => (p.width ?? 0) * (p.height ?? 0) || p.file_size || 0;
+      const best = msg.photo.reduce((a, b) => (area(b) >= area(a) ? b : a));
+      return pick(best, "photo.jpg", "image/jpeg");
+    }
+    return (
+      pick(msg.video, "video.mp4", "video/mp4") ??
+      pick(msg.animation, "animation.mp4", "video/mp4") ??
+      pick(msg.video_note, "video_note.mp4", "video/mp4") ??
+      pick(msg.audio, "audio.mp3", "audio/mpeg") ??
+      pick(msg.voice, "voice.ogg", "audio/ogg") ??
+      pick(msg.document, "document", "application/octet-stream")
+    );
+  }
+
+  /** Download a file through the Bot API; "toobig" when it is over the 20MB limit. */
+  private async download(m: MediaRef): Promise<Buffer | "toobig"> {
+    if (m.size !== undefined && m.size > MAX_DOWNLOAD_BYTES) return "toobig";
+    let info: { file_path?: string; file_size?: number };
+    try {
+      info = (await this.api("getFile", { file_id: m.fileId })) as { file_path?: string; file_size?: number };
+    } catch (e) {
+      if (/too big/i.test((e as Error).message)) return "toobig";
+      throw e;
+    }
+    if (info.file_size !== undefined && info.file_size > MAX_DOWNLOAD_BYTES) return "toobig";
+    if (!info.file_path) throw new Error("telegram getFile: no file_path");
+    const r = await this.fetchImpl(`https://api.telegram.org/file/bot${this.cfg.botToken}/${info.file_path}`);
+    if (r.ok === false) throw new Error(`telegram file download: ${r.status}`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    return buf.length > MAX_DOWNLOAD_BYTES ? "toobig" : buf;
+  }
+
+  /** A message with a file: download it, save it to the agenda and collect it (with its caption) into the agenda's batch. */
+  private async relayMedia(key: string, caption: string, media: MediaRef, reply: (t: string) => Promise<string>): Promise<string | undefined> {
+    let rt: AgendaRuntime;
+    try {
+      rt = await this.deps.getRuntime(key);
+    } catch (e) {
+      return reply(`안건을 열 수 없습니다: ${(e as Error).message}`);
+    }
+    let file: Attachment | undefined;
+    let notice: string | undefined;
+    try {
+      const data = await this.download(media);
+      if (data === "toobig") notice = `${media.name}: ${TOO_BIG_NOTICE}`;
+      else file = rt.saveAttachment(media.name, media.type, data);
+    } catch (e) {
+      this.deps.log(`telegram file failed: ${(e as Error).message}`);
+      notice = `${media.name}: 파일을 받지 못했습니다 (${(e as Error).message})`;
+    }
+    if (notice) await reply(notice);
+    if (!file && !caption) return notice;
+    const existing = this.batches.get(key);
+    this.addToBatch(existing ?? this.openBatch(key, reply), caption, file ? [file] : []);
+    if (existing) return notice;
+    return reply(`받았습니다${file ? "(파일 1개)" : ""}. 잠시 뒤 의장에게 함께 전달합니다.`);
+  }
+
+  private openBatch(key: string, reply: (t: string) => Promise<string>): Batch {
+    const b: Batch = { key, parts: [], files: [], reply, flushing: false };
+    this.batches.set(key, b);
+    return b;
+  }
+
+  private addToBatch(b: Batch, text: string, files: Attachment[]): void {
+    if (text) b.parts.push(text);
+    b.files.push(...files);
+    if (b.flushing) return;
+    clearTimeout(b.timer);
+    b.timer = setTimeout(() => void this.flush(b), this.batchMs);
+  }
+
+  /** The quiet period is over: hand the batch to the chair, or wait (up to busyMaxMs) until it is free. */
+  private async flush(b: Batch): Promise<void> {
+    b.flushing = true;
+    b.timer = undefined;
+    let rt: AgendaRuntime;
+    try {
+      rt = await this.deps.getRuntime(b.key);
+    } catch (e) {
+      this.batches.delete(b.key);
+      await b.reply(`안건을 열 수 없어 전달하지 못했습니다: ${(e as Error).message}`);
+      return;
+    }
+    if (this.batches.get(b.key) !== b) return;
+    if (!rt.chair.isBusy()) return this.deliver(b, rt);
+    await b.reply("의장이 처리 중이라 끝나면 전달합니다.");
+    const deadline = Date.now() + this.busyMaxMs;
+    const poll = () => {
+      b.timer = undefined;
+      if (this.batches.get(b.key) !== b) return;
+      if (!rt.chair.isBusy()) return void this.deliver(b, rt);
+      if (Date.now() >= deadline) {
+        this.batches.delete(b.key);
+        void b.reply("의장이 30분 넘게 처리 중이라 전달하지 못했습니다. 다시 보내 주세요.");
+        return;
+      }
+      b.timer = setTimeout(poll, this.busyPollMs);
+    };
+    b.timer = setTimeout(poll, this.busyPollMs);
+  }
+
+  private async deliver(b: Batch, rt: AgendaRuntime): Promise<void> {
+    this.batches.delete(b.key);
+    const n = b.files.length;
+    const text = TG_MARK + (b.parts.join("\n") || `첨부 파일 ${n}개`);
+    void rt.send(text, "user", b.files).catch((e) => this.deps.log(`telegram → chair failed: ${(e as Error).message}`));
+    await b.reply(`의장에게 전달했습니다${n ? `(파일 ${n}개)` : ""}.`);
+  }
+
+  private async relayToChair(key: string, text: string, reply: (t: string) => Promise<string>): Promise<string | undefined> {
+    // a batch is collecting (or waits for a busy chair): plain text joins it so the order is kept
+    const open = this.batches.get(key);
+    if (open && !text.startsWith("/")) {
+      this.addToBatch(open, text, []);
+      return undefined;
+    }
     let rt: AgendaRuntime;
     try {
       rt = await this.deps.getRuntime(key);
@@ -537,17 +725,33 @@ export class TelegramBridge {
   async handleUpdate(u: TgUpdate): Promise<string | undefined> {
     if (u.callback_query) return this.handleCallback(u.callback_query);
     const msg = u.message;
-    if (!msg?.text) return undefined;
+    const media = msg ? TelegramBridge.mediaOf(msg) : undefined;
+    if (!msg || (!msg.text && !media)) return undefined;
     const chat = String(msg.chat.id);
     const inDm = chat === String(this.cfg.chatId);
     const inForum = !inDm && chat === this.forumChat();
     // in groups commands arrive as /cmd@botname
-    const text = msg.text.trim().replace(/^(\/\w+)@\w+/, "$1");
+    const text = (msg.text ?? "").trim().replace(/^(\/\w+)@\w+/, "$1");
     const thread = inForum ? msg.message_thread_id : undefined;
     const reply = async (t: string) => {
       await this.say(chat, thread, t);
       return t;
     };
+
+    if (media) {
+      // a file with its caption: same owner/chat rules as text, but never a command
+      if (!inDm && !inForum) {
+        this.deps.log(`telegram: ignored file from chat ${msg.chat.id}`);
+        return undefined;
+      }
+      if (inForum && String(msg.from?.id) !== String(this.cfg.chatId)) {
+        this.deps.log(`telegram: ignored forum file from user ${msg.from?.id}`);
+        return undefined;
+      }
+      const key = inForum ? this.keyForThread(thread) : this.cfg.agenda;
+      if (!key) return reply(inForum ? "안건 토픽 안에 쓰세요. 일반 토픽의 글과 파일은 의장에게 전달되지 않습니다." : "먼저 /agenda <project/slug> 로 안건을 고르세요. /list 로 목록을 봅니다.");
+      return this.relayMedia(key, (msg.caption ?? "").trim(), media, reply);
+    }
 
     if (!inDm && !inForum) {
       // the only thing a not-yet-connected group may say is /forum
