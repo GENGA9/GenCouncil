@@ -87,7 +87,7 @@ export interface AgendaConfig {
   cleanupPending?: string[];
   /** the chair asked the user something and is waiting (council_ask_user); cleared by the user's next message */
   waitingForUser?: { question: string; options?: string[]; at: string; kind?: "finish" };
-  /** send every notification of this agenda to Telegram by itself (the web button / Telegram /auto); the chair's pending questions go out regardless */
+  /** unset = on (default), false = the user turned it off; send every notification of this agenda to Telegram by itself (the web button / Telegram /auto); the chair's pending questions go out regardless */
   telegramAuto?: boolean;
   /** when the chair's retrospective ran; every finish runs one first unless this is set */
   retrospected?: string;

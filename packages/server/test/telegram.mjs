@@ -463,7 +463,7 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   const FORUM = -1009998887775;
   const settle = (ms = 40) => new Promise((r) => setTimeout(r, ms));
   const msgs = [];
-  const autoOn = new Set(["proj/on"]);
+  const autoOff = new Set(["proj/off"]); // explicit off; any other agenda (unset) is on by default
   const rtFor = (title) => ({
     chair: { isBusy: () => false },
     council: { clearWaiting: () => {} },
@@ -474,8 +474,8 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
     fetch: fakeFetch, log: () => {},
     listAgendas: () => [{ key: "proj/on", title: "켜진 안건", status: "open" }, { key: "proj/off", title: "꺼진 안건", status: "open" }],
     getRuntime: async (key) => rtFor(key === "proj/on" ? "켜진 안건" : "꺼진 안건"), onBind: () => {}, onConfig: () => {},
-    isAuto: (key) => autoOn.has(key),
-    setAuto: async (key, on) => { if (on) autoOn.add(key); else autoOn.delete(key); },
+    isAuto: (key) => !autoOff.has(key),
+    setAuto: async (key, on) => { if (on) autoOff.delete(key); else autoOff.add(key); },
   });
   const png = pathm.join(osm.tmpdir(), "gc-peragenda.png");
   fsm.writeFileSync(png, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
@@ -487,7 +487,7 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   await dm.sendShown("proj/on", "시안", [{ name: "a.png", type: "image/png", path: png }]);
   await dm.finishFor("proj/on", "[proj/on] 안건 종료");
   await settle();
-  check("isAuto agenda: chair:done, sendShown photo and finish message are sent", sent.some((m) => m.text?.includes("켜진 답")) && sent.some((m) => m.method === "sendPhoto") && sent.some((m) => m.text?.includes("안건 종료")), JSON.stringify(sent));
+  check("agenda with auto unset (default on): chair:done, sendShown photo and finish message are sent", sent.some((m) => m.text?.includes("켜진 답")) && sent.some((m) => m.method === "sendPhoto") && sent.some((m) => m.text?.includes("안건 종료")), JSON.stringify(sent));
 
   sent.length = 0;
   dm.notify("proj/off", doneEv);
@@ -495,10 +495,16 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   await dm.sendShown("proj/off", "시안", [{ name: "a.png", type: "image/png", path: png }]);
   await dm.finishFor("proj/off", "[proj/off] 안건 종료");
   await settle();
-  check("agenda with auto off: nothing is sent while another agenda has it on", sent.length === 0, JSON.stringify(sent));
+  check("agenda explicitly off: nothing is sent while another agenda has it on", sent.length === 0, JSON.stringify(sent));
   dm.notify("proj/off", { type: "chair:ask", question: "꺼진 질문?", options: ["A", "B"] });
   await settle();
   check("agenda with auto off: chair:ask still goes out with buttons", sent.length === 1 && sent[0].reply_markup?.inline_keyboard.length === 2, JSON.stringify(sent));
+
+  // an agenda that was never touched (no explicit off) still sends by default
+  sent.length = 0;
+  dm.notify("proj/fresh", doneEv);
+  await settle();
+  check("never-configured agenda sends chair:done by default", sent.some((m) => m.text?.includes("켜진 답")), JSON.stringify(sent));
 
   // server-wide autoNotify forces it on even for an agenda that is off
   const forced = mk({ autoNotify: true });
@@ -518,13 +524,14 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   const u = (text) => ({ update_id: 1, message: { message_id: 1, text, chat: { id: 123 } } });
   msgs.length = 0;
   check("/auto shows the off state", (await dm.handleUpdate(u("/auto"))).includes("꺼짐"));
-  check("/auto on turns the bound agenda on", (await dm.handleUpdate(u("/auto on"))).includes("켰습니다") && autoOn.has("proj/off"));
+  check("/help on an off agenda says auto is off", (await dm.handleUpdate(u("/help"))).includes("자동 전송이 꺼져"));
+  check("/auto on turns the bound agenda on", (await dm.handleUpdate(u("/auto on"))).includes("켰습니다") && !autoOff.has("proj/off"));
   check("/auto shows the on state", (await dm.handleUpdate(u("/auto"))).includes("켜짐"));
   sent.length = 0;
   dm.notify("proj/off", doneEv);
   await settle();
   check("after /auto on the agenda's notifications go out", sent.some((m) => m.text?.includes("켜진 답")), JSON.stringify(sent));
-  check("/auto off turns it off again", (await dm.handleUpdate(u("/auto off"))).includes("껐습니다") && !autoOn.has("proj/off"));
+  check("/auto off turns it off again", (await dm.handleUpdate(u("/auto off"))).includes("껐습니다") && autoOff.has("proj/off"));
   check("/auto with a bad argument explains", (await dm.handleUpdate(u("/auto maybe"))).includes("/auto on"));
   check("/auto is not relayed to the chair", msgs.length === 0, JSON.stringify(msgs));
   check("/help mentions /auto and the off hint", (await dm.handleUpdate(u("/help"))).includes("/auto on|off") );
@@ -534,7 +541,7 @@ check("busy chair rejects", (await bridge.handleUpdate(upd("또"))).includes("�
   const fm = mk({ forumChatId: String(FORUM), topics: { "proj/on": 701, "proj/off": 702 } });
   const fu = (text, thread) => ({ update_id: 2, message: { message_id: 2, text, chat: { id: FORUM, type: "supergroup", is_forum: true }, message_thread_id: thread, from: { id: 123 } } });
   check("forum /auto in the topic of an agenda that is on shows on", (await fm.handleUpdate(fu("/auto", 701))).includes("켜짐"));
-  check("forum /auto off in that topic switches it off", (await fm.handleUpdate(fu("/auto off", 701))).includes("껐습니다") && !autoOn.has("proj/on"));
+  check("forum /auto off in that topic switches it off", (await fm.handleUpdate(fu("/auto off", 701))).includes("껐습니다") && autoOff.has("proj/on"));
   check("forum /auto outside an agenda topic is refused", (await fm.handleUpdate(fu("/auto on", 999))).includes("토픽"));
   check("forum /help shows the on hint for the topic's agenda", (await fm.handleUpdate(fu("/help", 702))).includes("/auto on"));
 

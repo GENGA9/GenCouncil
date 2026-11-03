@@ -33,22 +33,27 @@ function TelegramIcon({ on }: { on: boolean }) {
 }
 
 /** whether Telegram is set up on the server; asked once per page load */
-let telegramInfo: Promise<{ configured: boolean; autoNotify: boolean }> | undefined;
-const loadTelegramInfo = () => (telegramInfo ??= api.telegram().catch(() => ({ configured: false, autoNotify: false })));
+type TelegramInfo = { configured: boolean; user?: string; autoNotify: boolean };
+let telegramInfo: Promise<TelegramInfo> | undefined;
+const loadTelegramInfo = () => (telegramInfo ??= api.telegram().catch((): TelegramInfo => ({ configured: false, autoNotify: false })));
 
-/** Per-agenda switch for sending every notification to Telegram automatically (pending questions always go). */
+/** Per-agenda switch for sending every notification to Telegram automatically (on by default; pending questions always go). Disabled and shown off while Telegram is not connected. */
 function TelegramAutoButton({ agendaKey, on, closed, onError }: { agendaKey: string; on: boolean; closed: boolean; onError: (msg: string) => void }) {
-  const [info, setInfo] = useState<{ configured: boolean; autoNotify: boolean } | null>(null);
+  const [info, setInfo] = useState<TelegramInfo | null>(null);
   const [pending, setPending] = useState<boolean | null>(null);
   useEffect(() => {
     void loadTelegramInfo().then(setInfo);
   }, []);
   // the real state arrived (or the agenda changed): drop the optimistic value
   useEffect(() => setPending(null), [on, agendaKey]);
-  if (!info?.configured) return null;
-  const forced = info.autoNotify;
-  const shown = forced || (pending ?? on);
-  const title = forced
+  if (!info) return null;
+  // connected = configured and the bot answered (the server reports its user name only after verify)
+  const connected = info.configured && Boolean(info.user);
+  const forced = connected && info.autoNotify;
+  const shown = connected && (forced || (pending ?? on));
+  const title = !connected
+    ? "텔레그램이 연결되어 있지 않습니다"
+    : forced
     ? "텔레그램 자동 전송 켜짐(서버 설정 --auto on): 모든 안건의 알림을 보냅니다"
     : shown
       ? "텔레그램 자동 전송 켜짐: 이 안건의 모든 알림을 보냅니다"
@@ -59,7 +64,7 @@ function TelegramAutoButton({ agendaKey, on, closed, onError }: { agendaKey: str
       title={title}
       aria-label={title}
       aria-pressed={shown}
-      disabled={closed || forced}
+      disabled={closed || forced || !connected}
       onClick={() => {
         const next = !shown;
         setPending(next);
@@ -228,7 +233,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           <button className="ghost small" onClick={onReset} title="의장 세션을 새로 시작 (state.md 유지)">세션 초기화</button>
           <button className="ghost small" onClick={onRetrospect} disabled={busy || firstTurn} title="의장이 교훈·모델 성향을 공유 기억에 기록하고 제안을 검토">회고</button>
           <button className="ghost small" onClick={() => void onMergeBase()} disabled={state.agenda.status === "closed"} title="안건을 닫지 않고 지금까지의 결과를 메인(베이스 브랜치)에 합칩니다">메인 반영</button>
-          <TelegramAutoButton agendaKey={state.key} on={Boolean(state.agenda.telegramAuto)} closed={state.agenda.status === "closed"} onError={(m) => window.alert(m)} />
+          <TelegramAutoButton agendaKey={state.key} on={state.agenda.telegramAuto !== false} closed={state.agenda.status === "closed"} onError={(m) => window.alert(m)} />
           <button className={`small ${allDone ? "primary" : "ghost"}`} onClick={onFinish} disabled={state.agenda.status === "closed"}>안건 종료</button>
           <button className="ghost small danger" onClick={onDelete} disabled={busy} title="이 안건을 지웁니다. 대화 기록은 프로젝트의 deleted 폴더로 옮겨집니다">삭제</button>
         </div>

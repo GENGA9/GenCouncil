@@ -117,14 +117,14 @@ await setRes.text();
 const after = await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`);
 check("chair set title and goals", after.json.state.agenda.title === "로그인 개선" && after.json.state.agenda.goals.length === 2, JSON.stringify(after.json.state.agenda));
 
-// per-agenda Telegram auto sending: off by default, the API switches it, it lands in the state and agenda.json
-check("telegramAuto is off by default", after.json.state.agenda.telegramAuto === false, JSON.stringify(after.json.state.agenda));
+// per-agenda Telegram auto sending: on by default (unset), the API switches it, it lands in the state and agenda.json
+check("telegramAuto is on by default", after.json.state.agenda.telegramAuto === true, JSON.stringify(after.json.state.agenda));
 const taPath = `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/telegram-auto`;
 check("telegram-auto rejects a non-boolean", (await api("POST", taPath, { on: "yes" })).status === 400);
+check("telegram-auto off", (await api("POST", taPath, { on: false })).status === 200 && (await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`)).json.state.agenda.telegramAuto === false);
 check("telegram-auto on", (await api("POST", taPath, { on: true })).json.telegramAuto === true);
 const taOn = await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`);
 check("telegramAuto shows in the agenda state", taOn.json.state.agenda.telegramAuto === true, JSON.stringify(taOn.json.state.agenda));
-check("telegram-auto off", (await api("POST", taPath, { on: false })).status === 200 && (await api("GET", `/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}`)).json.state.agenda.telegramAuto === false);
 
 // attachments: upload then read back
 const upRes = await fetch(`http://127.0.0.1:${srv.config.port}/api/a/${encodeURIComponent(bid)}/${encodeURIComponent(bslug)}/attachments?name=${encodeURIComponent("사진 1.png")}`, {
