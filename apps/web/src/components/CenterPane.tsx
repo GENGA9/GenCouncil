@@ -196,7 +196,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
     <div className="center-inner">
       <div className="chair-head">
         <div className="chair-title">
-          의장 · {PROVIDER_LABEL[chairProvider] ?? chairProvider}
+          <span className="chair-label">의장 · {PROVIDER_LABEL[chairProvider] ?? chairProvider}</span>
           <select value={MODELS.includes(model) ? model : "custom"} onChange={(e) => e.target.value !== "custom" && onSetChair(e.target.value, effort)} title="의장 모델">
             {MODELS.map((m) => (
               <option key={m} value={m}>{m || "기본 모델"}</option>
@@ -229,26 +229,26 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
               ) : null;
             })}
           </select>
-          {busy && <GridSpinner color={`var(--c-${chairProvider})`} size={16} title="의장이 생각 중" />}
-        </div>
-        <div className="chair-actions">
           {project && (
             <select
               className="autonomy-select"
               value={project.members.autonomy}
-              title="위원 자율성: 위원이 명령 실행 등 권한이 필요한 일을 할 때 누가 허락하는지 (제미나이 위원은 의장에게 승인을 넘길 수 없어 '의장이 승인'에서도 권한 확인 없이 실행)"
+              title="위원 권한(자율성): 위원이 명령 실행 등 권한이 필요한 일을 할 때 누가 허락하는지 (제미나이 위원은 의장에게 승인을 넘길 수 없어 '의장이 승인'에서도 권한 확인 없이 실행)"
               onChange={(e) => onSetAutonomy(e.target.value)}
             >
-              <option value="full">위원: 권한 확인 없음</option>
-              <option value="chair">위원: 의장이 승인</option>
-              <option value="edits">위원: 편집만 자동</option>
+              <option value="full">권한: 확인 없음</option>
+              <option value="chair">권한: 의장 승인</option>
+              <option value="edits">권한: 편집만 자동</option>
             </select>
           )}
+          <TelegramAutoButton agendaKey={state.key} on={state.agenda.telegramAuto !== false} closed={state.agenda.status === "closed"} onError={(m) => window.alert(m)} />
+          {busy && <GridSpinner color={`var(--c-${chairProvider})`} size={16} title="의장이 생각 중" />}
+        </div>
+        <div className="chair-actions">
           <button className="ghost small" onClick={() => setShowState((v) => !v)}>{showState ? "대화" : "의장 상태"}</button>
           <button className="ghost small" onClick={onReset} title="의장 세션을 새로 시작 (state.md 유지)">세션 초기화</button>
           <button className="ghost small" onClick={onRetrospect} disabled={busy || firstTurn} title="의장이 교훈·모델 성향을 공유 기억에 기록하고 제안을 검토">회고</button>
           <button className="ghost small" onClick={() => void onMergeBase()} disabled={state.agenda.status === "closed"} title="안건을 닫지 않고 지금까지의 결과를 메인(베이스 브랜치)에 합칩니다">메인 반영</button>
-          <TelegramAutoButton agendaKey={state.key} on={state.agenda.telegramAuto !== false} closed={state.agenda.status === "closed"} onError={(m) => window.alert(m)} />
           <button className={`small ${allDone ? "primary" : "ghost"}`} onClick={onFinish} disabled={state.agenda.status === "closed"}>안건 종료</button>
           <button className="ghost small danger" onClick={onDelete} disabled={busy} title="이 안건을 지웁니다. 대화 기록은 프로젝트의 deleted 폴더로 옮겨집니다">삭제</button>
         </div>
