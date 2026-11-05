@@ -172,6 +172,8 @@ export interface MemberRecord {
   commits?: string[];
   diffstat?: string;
   merged?: boolean;
+  /** when the folder left this member after its work was merged: removed, or reused by a new member (the branch stays) */
+  worktreeReleased?: string;
   error?: string;
   /** cut off by an app shutdown / agenda close; can be resumed */
   interrupted?: boolean;

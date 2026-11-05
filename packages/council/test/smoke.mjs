@@ -66,9 +66,12 @@ const simulate = async (id, file, content, msg) => {
 };
 await simulate("claude-1", "a.txt", "two\n", "a: two");
 await simulate("gemini-1", "a.txt", "three\n", "a: three");
+const shot = path.join(store.memberWorktree("claude-1"), ".council", "shots", "s.png");
+fs.mkdirSync(path.dirname(shot), { recursive: true });
+fs.writeFileSync(shot, "png");
 // register them as finished members so merge() can find them
 const members = [
-  { ...member, status: "done", commits: ["x"], toolCalls: 0 },
+  { ...member, status: "done", commits: ["x"], toolCalls: 0, shots: [shot] },
   { ...member, id: "gemini-1", provider: "gemini", taskId: t2.id, branch: store.memberBranch("gemini-1"), worktree: store.memberWorktree("gemini-1"), status: "done", toolCalls: 0 },
 ];
 store.saveMembers(members);
@@ -83,6 +86,41 @@ const m2 = await council2.merge("gemini-1");
 check("conflict detected", !m2.ok && m2.conflicts.includes("a.txt"), JSON.stringify(m2.conflicts));
 check("merge aborted cleanly", (await git(store.integrationWorktree(), ["status", "--porcelain"])).trim() === "");
 check("task blocked after conflict", council2.store.tasks().find((t) => t.id === t2.id).status === "blocked");
+
+// a merged member's folder is kept for reuse (the merge runs a prune in the background)
+await new Promise((r) => setTimeout(r, 500));
+await council2.pruneMergedWorktrees();
+check("merged folder kept for reuse", fs.existsSync(store.memberWorktree("claude-1")));
+check("unmerged member folder kept", fs.existsSync(store.memberWorktree("gemini-1")));
+
+// the next member takes that folder over instead of a fresh checkout
+const t3 = council2.addTask({ title: "d.txt", goal: 1 });
+const r1 = await council2.assign({ taskId: t3.id, provider: "relay", instructions: "d.txt 를 만들어라. 충분히 긴 지시문." });
+const c1 = council2.members().find((m) => m.id === "claude-1");
+check("new member reuses the merged folder", !fs.existsSync(store.memberWorktree("claude-1")) && fs.existsSync(r1.worktree) && !!c1.worktreeReleased);
+check("reused folder is on the new member's branch", (await git(r1.worktree, ["rev-parse", "--abbrev-ref", "HEAD"])).trim() === r1.branch);
+check("reused folder starts from the agenda branch", fs.readFileSync(path.join(r1.worktree, "a.txt"), "utf8").replace(/\r/g, "") === "two\n");
+check("reused folder has only the new task notes", fs.existsSync(path.join(r1.worktree, ".council", "TASK.md")) && !fs.existsSync(path.join(r1.worktree, ".council", "STATE.md")));
+check("merged member branch kept", (await git(repo, ["branch", "--list", store.memberBranch("claude-1")])).trim() !== "");
+check("notes archived on reuse", fs.existsSync(path.join(store.dir, "archive", "claude-1", "RESULT.md")));
+check("shots archived and repointed", c1.shots?.[0] && fs.existsSync(c1.shots[0]) && c1.shots[0].includes(path.join("archive", "claude-1", "shots")), JSON.stringify(c1.shots));
+check("released member cannot be handed over", await council2.handover("claude-1").then(() => false, (e) => /합쳐져/.test(e.message)));
+const info1 = await council2.memberInfo("claude-1");
+check("released member's STATE.md read from archive", info1.stateMd === "한 일: a: two\n", JSON.stringify(info1.stateMd));
+
+// a merged folder with uncommitted work stays; a clean one beyond the kept count is removed
+await simulate("claude-2", "c.txt", "c\n", "c");
+fs.writeFileSync(path.join(store.memberWorktree("claude-2"), "left.txt"), "not committed");
+await simulate("claude-3", "e.txt", "e\n", "e");
+for (const id of ["claude-2", "claude-3"]) council2.members().push({ ...member, id, branch: store.memberBranch(id), worktree: store.memberWorktree(id), status: "done", toolCalls: 0 });
+council2.persistMembers();
+check("more merges ok", (await council2.merge("claude-2")).ok && (await council2.merge("claude-3")).ok);
+await new Promise((r) => setTimeout(r, 500));
+await council2.pruneMergedWorktrees(0);
+check("merged folder with uncommitted files kept", fs.existsSync(path.join(store.memberWorktree("claude-2"), "left.txt")));
+check("free folder beyond the kept count removed", !fs.existsSync(store.memberWorktree("claude-3")) && !!council2.members().find((m) => m.id === "claude-3").worktreeReleased);
+check("removed folder's notes archived", fs.existsSync(path.join(store.dir, "archive", "claude-3", "RESULT.md")));
+council2.stopMember(r1.id);
 
 // finish: base checkout must be clean & on main
 const out = await council2.finish();

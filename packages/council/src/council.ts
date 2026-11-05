@@ -127,6 +127,9 @@ export interface CouncilState {
   localGit: boolean;
 }
 
+/** merged member folders kept per agenda for new members to reuse; the rest are removed */
+export const PARKED_FOLDERS = 4;
+
 const RELAY_PROMPT_HEAD = `# 릴레이 작업 패킷
 
 당신은 제작위원회의 위원이다. 저장소에 직접 접근할 수 없으므로 필요한 파일은 아래에 포함되어 있다. 아래 지시를 수행하고, 반드시 '답변 양식'대로만 답하라. 사람이 당신의 답변을 그대로 저장소에 적용한다.`;
@@ -269,6 +272,8 @@ export class Council extends EventEmitter {
       }
     }
     if (changed) this.saveMembers(members);
+    // folders merged before this feature existed, or left while the app was down; in the background, it can take minutes
+    void this.pruneMergedWorktrees().catch((e) => this.log(`prune failed: ${(e as Error).message}`));
   }
 
   /** stop every running member; they are marked interrupted so the work can be resumed later */
@@ -521,7 +526,7 @@ ${rows.join("\n")}`;
     const id = this.nextMemberId(provider);
     const branch = this.store.memberBranch(id);
     const worktree = this.store.memberWorktree(id);
-    await ensureWorktree(this.project.repo, worktree, branch, agenda.branch);
+    if (!(await this.reuseFolder(worktree, branch))) await ensureWorktree(this.project.repo, worktree, branch, agenda.branch);
 
     const member: MemberRecord = {
       id,
@@ -814,8 +819,9 @@ ${rows.join("\n")}`;
     if (prev.provider === "relay" && !opts.provider) throw new Error("relay member: specify provider claude|gemini|gpt to hand over to a CLI member");
     if (prev.handoverTo) throw new Error(`member ${memberId} was already handed over to ${prev.handoverTo}`);
     // check before changing any record, so a failed handover leaves nothing half-done
+    if (prev.worktreeReleased) throw new Error(`member ${memberId}: 결과가 이미 안건 브랜치에 합쳐져 작업 폴더를 정리했거나 다른 위원에게 넘겼습니다. 이어서 할 일은 새로 배정하세요.`);
     if (!fs.existsSync(path.join(prev.worktree, ".council"))) throw new Error(`member ${memberId}: 작업 폴더가 없습니다 (${prev.worktree})`);
-    const max = this.project.members.maxHandovers ?? 2;
+    const max =this.project.members.maxHandovers ?? 2;
     if (!opts.resume && this.handoverCount(prev) >= max) throw new Error(`task ${prev.taskId} already handed over ${max} times`);
 
     const wantProvider = (opts.provider ?? (prev.provider === "relay" ? this.project.members.defaultProvider : prev.provider)) as CliProvider;
@@ -921,6 +927,7 @@ ${rows.join("\n")}`;
     if (this.running.has(memberId)) throw new Error(`member ${memberId} is still running`);
     if (prev.verifiedBy) throw new Error(`member ${memberId} is already being checked by ${prev.verifiedBy}`);
     if (prev.status !== "done") throw new Error(`member ${memberId} is ${prev.status}; only finished work can be checked`);
+    if (prev.worktreeReleased) throw new Error(`member ${memberId}: 결과가 이미 안건 브랜치에 합쳐져 작업 폴더를 정리했거나 다른 위원에게 넘겼습니다. 검증은 합친 결과를 새로 배정해 하세요.`);
     if (!fs.existsSync(path.join(prev.worktree, ".council"))) throw new Error(`member ${memberId}: 작업 폴더가 없습니다 (${prev.worktree})`);
     const limits = this.limits();
     const pick = this.chooseAccount("claude", undefined, []);
@@ -1094,6 +1101,8 @@ ${rows.join("\n")}`;
     }
     this.saveMembers(members);
     this.log(`merge ${memberId}: ${res.ok ? "ok" : "CONFLICT " + res.conflicts.join(",")}`);
+    // merged work no longer needs its folder; a big repo checkout per member adds up fast
+    if (res.ok) void this.pruneMergedWorktrees().catch((e) => this.log(`prune failed: ${(e as Error).message}`));
     return { ...res, member: m.id, branch: m.branch };
   }
 
@@ -1128,7 +1137,8 @@ ${rows.join("\n")}`;
   private checkShowFiles(paths: string[]): Array<{ abs: string; name: string; type: string; size: number }> {
     if (!paths.length) throw new Error("no files to show");
     if (paths.length > 8) throw new Error("show at most 8 files at once");
-    const roots = [this.store.worktreeRoot(), this.project.repo].map((r) => path.resolve(r));
+    // archive: shots of merged members whose folders were removed
+    const roots = [this.store.worktreeRoot(), this.project.repo, path.join(this.store.dir, "archive")].map((r) => path.resolve(r));
     const base = this.store.integrationWorktree();
     return paths.map((p) => {
       const abs = path.resolve(path.isAbsolute(p) ? p : path.join(base, p));
@@ -1356,6 +1366,132 @@ ${rows.join("\n")}`;
       copied.push(f);
     }
     return copied;
+  }
+
+  /** folders a prune or an assign is working on; checked and set without an await in between */
+  private claimed = new Set<string>();
+
+  /** member folders with members, newest work first; the integration folder and gone folders are left out */
+  private folderGroups(): Array<{ worktree: string; members: MemberRecord[]; ended: string }> {
+    const groups = new Map<string, MemberRecord[]>();
+    for (const m of this.members()) groups.set(m.worktree, [...(groups.get(m.worktree) ?? []), m]);
+    const integration = path.resolve(this.store.integrationWorktree());
+    return [...groups]
+      .filter(([w, ms]) => path.resolve(w) !== integration && !ms.some((m) => m.worktreeReleased) && fs.existsSync(w))
+      .map(([worktree, members]) => ({ worktree, members, ended: members.map((m) => m.endedAt ?? m.startedAt).sort().pop() ?? "" }))
+      .sort((a, b) => b.ended.localeCompare(a.ended));
+  }
+
+  /**
+   * The folder's work is all on the agenda branch and nobody needs it: nobody sharing it is
+   * running, one of them was merged, the branch has no commits past the agenda branch, and no
+   * uncommitted or untracked file is left (that would leak into the next member's work).
+   */
+  private async isFree(worktree: string, ms: MemberRecord[]): Promise<boolean> {
+    if (ms.some((m) => this.running.has(m.id) || m.status === "starting" || m.status === "running" || m.status === "waiting")) return false;
+    if (!ms.some((m) => m.merged)) return false;
+    try {
+      if ((await logRange(this.project.repo, this.store.agenda().branch, ms[0].branch)).length) return false;
+      return await isClean(worktree);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Archive a free folder's notes and shots and mark its members as no longer owning it. */
+  private releaseFolder(worktree: string): void {
+    this.archiveCouncilFiles(worktree);
+    const shots = this.archiveShots(worktree);
+    const members = this.members();
+    for (const m of members) {
+      if (m.worktree !== worktree) continue;
+      m.worktreeReleased = new Date().toISOString();
+      if (m.shots) m.shots = m.shots.map((s) => shots.get(s) ?? s);
+    }
+    this.saveMembers(members);
+  }
+
+  /**
+   * Hand a free folder to a new member instead of checking the repository out again: the folder is
+   * renamed to the new member's path (no file is rewritten) and switched to its new branch, so git
+   * only rewrites the files that differ. Returns false when no folder could be reused.
+   */
+  private async reuseFolder(worktree: string, branch: string): Promise<boolean> {
+    const repo = this.project.repo;
+    const from = this.store.agenda().branch;
+    for (const g of this.folderGroups()) {
+      if (this.claimed.has(g.worktree)) continue;
+      this.claimed.add(g.worktree);
+      try {
+        if (!(await this.isFree(g.worktree, g.members))) continue;
+        this.releaseFolder(g.worktree);
+        fs.rmSync(path.join(g.worktree, ".council"), { recursive: true, force: true });
+        try {
+          await git(repo, ["worktree", "move", g.worktree, worktree]);
+        } catch (e) {
+          // a process still holds the folder: leave it for a later prune
+          this.log(`could not reuse ${path.basename(g.worktree)}: ${(e as Error).message.split("\n")[0]}`);
+          continue;
+        }
+        try {
+          await git(worktree, ["checkout", "-q", "-b", branch, from]);
+        } catch (e) {
+          this.log(`reused folder would not switch branch, checking out fresh: ${(e as Error).message.split("\n")[0]}`);
+          await removeWorktree(repo, worktree);
+          return false;
+        }
+        this.log(`reused ${path.basename(g.worktree)}'s folder for ${path.basename(worktree)}`);
+        return true;
+      } finally {
+        this.claimed.delete(g.worktree);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Free folders beyond the few kept for reuse are removed (notes and shots archived first, the
+   * branch stays). Runs after merges and when the agenda opens. Returns how many were removed.
+   */
+  async pruneMergedWorktrees(keep = PARKED_FOLDERS): Promise<number> {
+    if (this.store.agenda().status === "closed") return 0;
+    let kept = 0;
+    let removed = 0;
+    for (const g of this.folderGroups()) {
+      if (this.claimed.has(g.worktree)) continue;
+      this.claimed.add(g.worktree);
+      try {
+        if (!(await this.isFree(g.worktree, g.members))) continue;
+        if (kept < keep) {
+          kept++;
+          continue;
+        }
+        this.releaseFolder(g.worktree);
+        await removeWorktree(this.project.repo, g.worktree);
+        if (fs.existsSync(g.worktree)) this.log(`could not remove merged worktree ${path.basename(g.worktree)} (in use)`);
+        else removed++;
+      } finally {
+        this.claimed.delete(g.worktree);
+      }
+    }
+    if (removed) this.log(`removed ${removed} merged member worktree(s), kept ${kept} for reuse`);
+    return removed;
+  }
+
+  /** Copy .council/shots/ next to the archived notes. Returns old path -> archived path. */
+  private archiveShots(worktree: string): Map<string, string> {
+    const out = new Map<string, string>();
+    const src = path.join(worktree, ".council", "shots");
+    if (!fs.existsSync(src)) return out;
+    const dest = path.join(this.archiveDir(worktree), "shots");
+    fs.mkdirSync(dest, { recursive: true });
+    for (const f of fs.readdirSync(src)) {
+      const from = path.join(src, f);
+      if (!fs.statSync(from).isFile()) continue;
+      fs.copyFileSync(from, path.join(dest, f));
+      out.set(from, path.join(dest, f));
+    }
+    return out;
   }
 
   /** Remove the agenda's worktrees (notes archived first). Returns folders that stayed locked. */
