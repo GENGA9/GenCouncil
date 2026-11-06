@@ -54,6 +54,7 @@ export function App() {
   const uploaded = useRef(new WeakMap<File, Attachment>());
   const mobile = useMedia("(max-width: 900px)");
   const selectedRef = useRef(selected);
+  const creatingAgenda = useRef(false);
   selectedRef.current = selected;
 
   const notify = useCallback((msg: string) => {
@@ -316,13 +317,18 @@ export function App() {
       }}
       onNewProject={() => setModal({ kind: "project" })}
       onNewAgenda={async (pid) => {
+        // a second click while the first is still on its way would make a second agenda
+        if (creatingAgenda.current) return;
+        creatingAgenda.current = true;
         try {
           const r = await api.createAgenda(pid);
-          await refreshOverview();
           setSelected(r.key);
           if (mobile) setTab("center");
+          void refreshOverview();
         } catch (e) {
           notify((e as Error).message);
+        } finally {
+          creatingAgenda.current = false;
         }
       }}
       onGuidelines={(pid) => setModal({ kind: "guidelines", projectId: pid })}

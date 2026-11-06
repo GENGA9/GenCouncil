@@ -269,7 +269,7 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
       title: "Retire a verified entry (owner)",
       description:
         "Take a verified entry out of use because it was merged into another entry (merged_into), is outdated/wrong, " +
-        "or is a one-off record (reason starts with 일회성). It is kept with the rejected records and memory_approve restores it. owner/chair only.",
+        "is a one-off record (reason starts with 일회성), or is an old solution replaced by a newer entry (reason starts with 대체됨, merged_into the newer entry). It is kept with the rejected records and memory_approve restores it. owner/chair only.",
       inputSchema: { id: z.string().min(1), reason: z.string().min(3), merged_into: z.string().optional() },
     },
     async ({ id, reason, merged_into }) => {
@@ -277,11 +277,14 @@ export async function createServer(store: MemoryStore): Promise<McpServer> {
       // a split retires the bundle only after writing its parts: no knowledge leaves, so it is not budgeted
       const isSplit = /^분할/.test(reason.trim()) && !merged_into && session.writes >= 2;
       const budget = Number(process.env.GENCOUNCIL_RETIRE_BUDGET ?? "");
-      // one-off records are cut on their own larger budget, so merges stay capped
+      // one-off records, and old solutions folded into the entry that replaced them, are cut on their
+      // own larger budget, so merges of live knowledge stay capped
       const pruneBudget = Number(process.env.GENCOUNCIL_PRUNE_BUDGET ?? "");
-      const isPrune = /^일회성/.test(reason.trim()) && !merged_into && Number.isFinite(pruneBudget) && pruneBudget > 0;
+      const r = reason.trim();
+      const isPrune =
+        ((/^일회성/.test(r) && !merged_into) || (/^대체됨/.test(r) && !!merged_into)) && Number.isFinite(pruneBudget) && pruneBudget > 0;
       if (isPrune && session.prunes >= pruneBudget)
-        return err(`이번 정리에서 일회성 쳐내기는 ${pruneBudget}개까지만 된다. 나머지는 다음 정리에 맡긴다.`);
+        return err(`이번 정리에서 일회성·대체된 항목 정리는 ${pruneBudget}개까지만 된다. 나머지는 다음 정리에 맡긴다.`);
       if (!isSplit && !isPrune && Number.isFinite(budget) && budget > 0 && session.retires >= budget)
         return err(`이번 정리에서 합치기·삭제는 ${budget}개까지만 된다(이미 ${session.retires}개). 더 합치지 말고 나누기·줄이기만 한다.`);
       try {

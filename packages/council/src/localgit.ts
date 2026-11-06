@@ -163,7 +163,18 @@ export function describeScan(s: ScanStats): string {
   );
 }
 
-/** Drop from the index whatever the exclude list now covers (files stay on disk). */
+/**
+ * Leave files git already tracks out of the per-file exclude list. A big file a member
+ * committed on purpose (rendered media, audio) is part of the project now; listing it would
+ * only invite untracking it, which the next commit records as a deletion.
+ */
+async function dropTracked(root: string, stats: ScanStats): Promise<void> {
+  if (!stats.skippedPaths.length || !(await hasHead(root))) return;
+  const tracked = new Set((await git(root, ["ls-files", "-z"])).split("\0").filter(Boolean));
+  stats.skippedPaths = stats.skippedPaths.filter((p) => !tracked.has(p));
+}
+
+/** Drop from the index whatever the exclude list now covers (files stay on disk). Only at setup. */
 async function untrackExcluded(root: string, stats: ScanStats): Promise<void> {
   for (const d of stats.nestedRepos) await git(root, ["rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", d]);
   const ignored = (await git(root, ["ls-files", "-ci", "--exclude-standard", "-z"])).split("\0").filter(Boolean);
@@ -182,6 +193,7 @@ export async function initLocalGit(root: string, extraDirs: string[] = []): Prom
     await git(root, ["config", "user.email", "gencouncil@local"]);
   }
   const stats = await scanFolder(root, extraDirs);
+  await dropTracked(root, stats);
   await writeExclude(root, stats, extraDirs);
   if (await hasHead(root)) await untrackExcluded(root, stats);
   await git(root, ["add", "-A"]);
@@ -191,7 +203,9 @@ export async function initLocalGit(root: string, extraDirs: string[] = []): Prom
 
 /**
  * Local-git projects: commit whatever the user changed in the folder (new big files are
- * re-scanned into the exclude list first). Returns the commit or null.
+ * re-scanned into the exclude list first). Files git already tracks stay tracked: this
+ * never removes anything from git, it only keeps new big files from being added.
+ * Returns the commit or null.
  */
 export async function commitUserEdits(project: ProjectConfig): Promise<string | null> {
   if (!project.localGit) return null;
@@ -200,8 +214,8 @@ export async function commitUserEdits(project: ProjectConfig): Promise<string | 
   if (cur !== project.baseBranch) throw new Error(`folder is on branch '${cur}', expected '${project.baseBranch}'`);
   if (await isClean(root)) return null;
   const stats = await scanFolder(root, project.ignore ?? []);
+  await dropTracked(root, stats);
   await writeExclude(root, stats, project.ignore ?? []);
-  await untrackExcluded(root, stats);
   await git(root, ["add", "-A"]);
   if (await isClean(root)) return null;
   await git(root, ["commit", "-q", "-m", "gencouncil: 사용자 변경 반영"]);

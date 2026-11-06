@@ -58,6 +58,8 @@ const prompt = tidyPrompt([{ key: "demo", name: "Demo" }], sel.candidates, 3);
 check("prompt lists only the candidates", sel.candidates.every((c) => prompt.includes(c.id)) && !prompt.includes(long.meta.id));
 
 check("every memory pass applies the one-off test", [prompt, reorganizePrompt([], undefined, 5, 8), curatorPrompt()].every((p) => p.includes("남길 가치 기준") && p.includes("일회성")));
+check("full check and tidy fold old solutions into the newer entry", [reorganizePrompt([], undefined, 5, 8), prompt].every((p) => p.includes('"대체됨: <무엇이 바뀌었나 한 줄>"') && p.includes("updated 날짜") && p.includes("확인 필요")));
+check("full check shrinks the total every run", reorganizePrompt([], undefined, 5, 8).includes("전체 글자 수가 정리 전보다 줄어야"));
 check("full check says how to cut and its cap", reorganizePrompt([], undefined, 5, 8).includes('"일회성: <한 줄 이유>"') && reorganizePrompt([], undefined, 5, 8).includes("최대 8개"));
 
 // full check marks everything

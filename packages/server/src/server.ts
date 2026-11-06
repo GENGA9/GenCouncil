@@ -151,6 +151,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
 
   // ---------- runtimes ----------
   const runtimes = new Map<string, Promise<AgendaRuntime>>();
+  /** runtimes whose open has finished, keyed by their promise in `runtimes` */
+  const opened = new WeakMap<Promise<AgendaRuntime>, AgendaRuntime>();
   const clients = new Set<WebSocket>();
   const broadcast = (msg: Record<string, unknown>) => {
     const data = JSON.stringify(msg);
@@ -185,6 +187,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const key = `${project.id}/${store.slug}`;
     let p = runtimes.get(key);
     if (!p) {
+      const started = Date.now();
       p = AgendaRuntime.open(store, memory, {
         councilUrl: `http://127.0.0.1:${config.port}/mcp/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}`,
         councilHeaders: { Authorization: `Bearer ${config.token}` },
@@ -207,7 +210,9 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
             void telegram?.finishFor(key, `[${key}] 의장이 안건을 종료했습니다: ${e.reason}`);
           }
         });
-        log(`opened ${key}`);
+        const took = Date.now() - started;
+        log(`opened ${key}${took > 3000 ? ` (slow: ${took} ms; ${rt.council.openSteps.join(", ")})` : ""}`);
+        opened.set(p!, rt);
         return rt;
       });
       p.catch(() => runtimes.delete(key));
@@ -238,8 +243,10 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
             const key = `${p.id}/${a.slug}`;
             const store = new AgendaStore(p, a.slug);
             const tasks = store.tasks();
+            // never wait for an agenda that is still opening: one slow open would stall every overview
+            // (and the new agenda button, which refreshes it); it shows as not open until it is ready
             const rtp = runtimes.get(key);
-            const rt = rtp ? await rtp.catch(() => undefined) : undefined;
+            const rt = rtp ? opened.get(rtp) : undefined;
             const members = rt ? rt.council.members() : store.members();
             const running = members.filter((m) => m.status === "running" || m.status === "waiting");
             return {

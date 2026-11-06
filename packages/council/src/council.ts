@@ -234,11 +234,21 @@ export class Council extends EventEmitter {
 
   // ---------- lifecycle ----------
 
+  /** how long each step of the last open() took, for the server's slow-open log */
+  openSteps: string[] = [];
+
   async open(): Promise<void> {
     const repo = this.project.repo;
+    this.openSteps = [];
+    let t = Date.now();
+    const step = (name: string) => {
+      this.openSteps.push(`${name} ${Date.now() - t}ms`);
+      t = Date.now();
+    };
     if (!(await isRepo(repo))) throw new Error(`not a git repository: ${repo}`);
     if (!(await hasCommits(repo))) throw new Error(`repository has no commits yet: ${repo}`);
     await ensureExclude(repo, [".worktrees/", ".council/", ".gemini/"]);
+    step("repo check");
     // a closed agenda is history: show it, but never commit, recreate its branch or worktrees
     if (this.store.agenda().status === "closed") {
       const still = await this.retryPendingCleanup();
@@ -249,10 +259,12 @@ export class Council extends EventEmitter {
       // the user edits this folder directly; record their changes so agendas start from them
       const c = await commitUserEdits(this.project);
       if (c) this.log(`사용자 변경을 커밋했습니다 (${c.slice(0, 7)})`);
+      step("user edits");
     }
     const agenda = this.store.agenda();
     await ensureBranch(repo, agenda.branch, agenda.baseBranch);
     await ensureWorktree(repo, this.store.integrationWorktree(), agenda.branch, agenda.baseBranch);
+    step("integration worktree");
     const members = this.members();
     let changed = false;
     for (const m of members) {
@@ -272,6 +284,7 @@ export class Council extends EventEmitter {
       }
     }
     if (changed) this.saveMembers(members);
+    step("leftover members");
     // folders merged before this feature existed, or left while the app was down; in the background, it can take minutes
     void this.pruneMergedWorktrees().catch((e) => this.log(`prune failed: ${(e as Error).message}`));
   }

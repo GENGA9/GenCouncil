@@ -9,6 +9,7 @@ import {
   Council,
   ProjectRegistry,
   createProject,
+  commitUserEdits,
   drivers,
   ensureWorktree,
   git,
@@ -158,7 +159,11 @@ check("member worktree has no venv or big files", !fs.existsSync(path.join(wt, "
 fs.writeFileSync(path.join(wt, "keep.txt"), "keep\nchanged by member\n");
 fs.writeFileSync(path.join(wt, "new.txt"), "new\n");
 fs.rmSync(path.join(wt, "sub", "old.txt"));
+// a rendered video the member commits on purpose (bigger than the media limit)
+fs.mkdirSync(path.join(wt, "renders"), { recursive: true });
+fs.writeFileSync(path.join(wt, "renders", "ep01.mp4"), Buffer.alloc(200 * 1024));
 await git(wt, ["add", "-A"]);
+await git(wt, ["add", "-f", "renders/ep01.mp4"]);
 await git(wt, ["commit", "-q", "-m", "member work"]);
 fstore.saveMembers([{ id: "claude-1", provider: "claude", taskId: "T1", branch: fstore.memberBranch("claude-1"), worktree: wt, status: "done", startedAt: "", toolCalls: 0 }]);
 fstore.saveTasks([{ id: "T1", title: "t", description: "", status: "review", created: "", updated: "" }]);
@@ -177,6 +182,18 @@ check("user edit kept and committed", fs.readFileSync(path.join(src, "user.txt")
 check("new big file stays out of git but on disk", fs.existsSync(path.join(src, "output", "clip.mp4")) && !after.includes("output/clip.mp4"));
 check("excluded things untouched", fs.existsSync(path.join(src, "node_modules", "x", "big.js")) && fs.existsSync(path.join(src, "tools", "py-env", "Lib", "mod.py")) && fs.existsSync(path.join(src, "output", "big.png")));
 check("worktrees cleaned", !fs.existsSync(path.join(src, ".worktrees", "폴더-안건")));
+check("member's big file merged into the folder", after.includes("renders/ep01.mp4") && fs.existsSync(path.join(src, "renders", "ep01.mp4")));
+
+// the next user edit rescans the folder: the tracked big file must not be listed or untracked
+fs.writeFileSync(path.join(src, "user2.txt"), "again\n");
+const fp2 = { ...fp, localGit: true };
+const c2 = await commitUserEdits(fp2);
+const after2 = await lsFiles();
+const deleted = (await git(src, ["show", "--name-status", "--format=", "HEAD"])).split("\n").filter((l) => l.startsWith("D"));
+check("user edit commit deletes nothing", !!c2 && after2.includes("user2.txt") && deleted.length === 0, deleted.join(","));
+check("tracked big file stays tracked", after2.includes("renders/ep01.mp4") && after2.includes("icon.png"));
+const excl = fs.readFileSync(path.join(src, ".git", "info", "exclude"), "utf8");
+check("tracked file not in the exclude list", !excl.includes("/renders/ep01.mp4") && excl.includes("/output/clip.mp4"));
 
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });

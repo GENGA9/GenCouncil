@@ -136,6 +136,20 @@ await session("owner", async (c) => {
   const merge = await call(c, "memory_retire", { id: d, reason: "중복: 둘", merged_into: b });
   check("[prune] cuts do not spend the merge budget", !merge.isError, merge.content[0].text);
 });
+await session("owner", async (c) => {
+  const w = async (title) => (await call(c, "memory_write", { title, type: "solution", body: "본문 열 글자 이상입니다" })).content[0].text.match(/written (\S+)/)[1];
+  const oldA = await w("대체 시험 옛 방법");
+  const newA = await w("대체 시험 새 방법");
+  const oldB = await w("대체 시험 옛 방법 둘");
+  const x = await w("대체 시험 중복");
+  const y = await w("대체 시험 중복 남김");
+  const sup = await call(c, "memory_retire", { id: oldA, reason: "대체됨: 옵션 이름이 바뀜", merged_into: newA });
+  check("[supersede] old solution folded into the new one", !sup.isError, sup.content[0].text);
+  const merge = await call(c, "memory_retire", { id: x, reason: "중복: 남김", merged_into: y });
+  check("[supersede] does not spend the merge budget", !merge.isError, merge.content[0].text);
+  const over = await call(c, "memory_retire", { id: oldB, reason: "대체됨: 또 바뀜", merged_into: newA });
+  check("[supersede] shares the one-off cap", over.isError && /대체/.test(over.content[0].text), over.content[0].text);
+});
 delete process.env.GENCOUNCIL_PRUNE_BUDGET;
 delete process.env.GENCOUNCIL_RETIRE_BUDGET;
 

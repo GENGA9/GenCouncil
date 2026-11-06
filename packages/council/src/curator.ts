@@ -72,6 +72,13 @@ export interface MemoryStats {
 /** compression targets for the reorganize run */
 export const COMPRESS_TARGETS = { title: 45, commonBody: 600, projectBody: 350, personaBody: 500 };
 
+/** an old solution and the newer one that replaced it: keep one entry, the old way as a single line */
+const SUPERSEDE_STEP = `2-1. 같은 주제의 낡은 해결법: 같은 문제·도구·절차를 다루는데 해결법·값·경로가 서로 다른 항목들이 있으면 memory_read로 모두 읽고 updated 날짜를 비교한다.
+   - 새 쪽이 옛 쪽을 대신하는 것이 분명하면(새 쪽이 "이제는"·"바뀌었다"고 하거나, 같은 단계의 값만 다르고 새 쪽이 더 최근): 새 항목을 기준으로 memory_update 하고, 옛 항목에만 있던 아직 유효한 사실은 옮긴다. 옛 방법은 "예전 방식(이제 안 됨): <한 줄>"로만 남긴다(옛 방법을 다시 시도하지 않게).
+   - 그다음 옛 항목을 memory_retire(id, reason: "대체됨: <무엇이 바뀌었나 한 줄>", merged_into: 새 id)로 정리한다.
+   - 둘이 환경(OS·계정·프로젝트·모델)에 따라 각각 맞는 것이면 대체가 아니다: 한 항목에 "A일 때 / B일 때"로 정리하거나 그대로 둔다.
+   - 어느 쪽이 맞는지 본문과 날짜로 판단이 안 서면 지우지 않고 보고서에 "확인 필요: <id들>"로 남긴다.`;
+
 export function reorganizePrompt(projects: MemoryProjectInfo[], stats?: MemoryStats, retireBudget?: number, pruneBudget?: number): string {
   const list = projects.length ? projects.map((p) => `- ${p.key} (${p.name})`).join("\n") : "- (등록된 프로젝트 없음)";
   const t = COMPRESS_TARGETS;
@@ -84,7 +91,7 @@ ${now}
 ${KEEP_TEST}
 
 원칙
-- 항목 수 목표는 없다. 위 기준으로 쳐낼 것만 쳐내고, 다시 쓸 지식(서로 다른 사실·절차)은 그대로 지킨다. 그 밖에 줄이는 것은 반복된 말과 경위뿐이다.
+- 항목 수 목표는 없다. 위 기준으로 쳐낼 것만 쳐내고, 다시 쓸 지식(서로 다른 사실·절차)은 그대로 지킨다. 그 밖에 줄이는 것은 새 해결법에 밀린 옛 해결법, 반복된 말과 경위뿐이다.
 - 한 항목 = 한 주제(한 도구, 한 절차, 한 시스템·루틴, 한 모델). 제목에 서로 다른 주제가 "·"로 3개 넘게 나열되어 있거나, 본문이 여러 주제를 다루면 그 항목은 주제별로 **나눈다**.
 - 합치는 것은 **같은 절차·같은 사실이 실제로 겹칠 때만**이다. 비슷한 분야라는 이유로 다른 주제를 한 항목에 묶지 않는다.
 - 제목: ${t.title}자 이내, 나중에 검색할 핵심어 문장.
@@ -97,6 +104,7 @@ ${list}
 순서
 1. 한 번에 200개까지만 나오므로 나눠서 전부 본다: memory_list(status: verified, scope: common, limit: 200), 그리고 위 프로젝트 키마다 memory_list(status: verified, project: <키>, limit: 200). 일회성으로 보이는 항목, 기준을 넘는 항목(여러 주제를 묶은 것, 너무 긴 것, 제목이 긴 것), 진짜 중복을 고른다. 일회성은 제목만으로 정하지 말고 memory_read로 본문을 읽고 정한다.
 2. 일회성 항목: 일반 교훈이 있으면 memory_update로 교훈만 남기고, 없으면 memory_retire(id, reason: "일회성: <한 줄 이유>")로 쳐낸다.
+${SUPERSEDE_STEP}
 3. 여러 주제를 묶은 항목을 나눌 때:
    - memory_read로 본문을 읽는다. 예전에 이 항목으로 합쳐진 원본들도 찾아 읽는다: memory_list(status: rejected, limit: 200)에서 mergedInto가 이 항목 id인 것. 합치면서 빠졌던 세부 사실(명령·주소·값)을 거기서 되살린다.
    - 주제마다 memory_write로 새 항목을 만든다(type, scope, project, tags를 원래대로 맞추고, 제목·본문은 위 기준).
@@ -104,11 +112,12 @@ ${list}
 4. 진짜 중복을 합칠 때: 남길 항목에 memory_update(body)로 두 쪽의 고유한 사실을 모두 담고, 나머지는 memory_retire(id, reason: "중복: <남긴 id>", merged_into: 남긴 id).
 5. 혼자 너무 긴 항목은 memory_update로 경위·반복만 지워 줄인다. 사실은 지우지 않는다.
 6. scope: common(다른 프로젝트에서도 그대로 쓰는 것: 공통 도구 사용법, 외부 서비스 절차, OS·셸·git·Node·테스트 도구 문제, NAS·계정·GenCouncil 사용법, 모델 성향) / project(한 프로젝트의 코드·데이터·도메인 사실). project 값은 위 키 중 하나로.
-7. 일회성이 아닌 항목은 틀린 것이 확실할 때만 이유를 적어 memory_retire 한다. "오래돼 보인다"는 이유로는 지우지 않는다.${retireBudget ? `
+7. 일회성·대체된 항목이 아니면 틀린 것이 확실할 때만 이유를 적어 memory_retire 한다. "오래돼 보인다"는 이유만으로는 지우지 않는다(같은 주제의 더 새 항목이 있을 때만 2-1로 대체한다).${retireBudget ? `
 8. 이번 정리에서 분할·일회성 외의 정리(합치기·삭제)는 최대 ${retireBudget}개까지만 된다. 그 이상은 도구가 거절한다. 거절되면 더 합치지 말고 나누기·줄이기만 한다.` : ""}${pruneBudget ? `
-9. 일회성 쳐내기는 이번에 최대 ${pruneBudget}개까지만 된다. 나머지는 다음 정리에 맡긴다.` : ""}
+9. 일회성 쳐내기와 대체된 항목 정리는 합쳐서 이번에 최대 ${pruneBudget}개까지만 된다. 나머지는 다음 정리에 맡긴다.` : ""}
 10. 새 사실을 지어내지 않는다. 뜻을 바꾸지 않는다.
-11. 끝나면 한국어로 보고한다: 전과 후의 항목 수, 쳐낸 항목(id와 제목 전부), 교훈만 남긴 항목, 나눈 항목(원래 → 새 항목들), 합친 항목, 줄이기만 한 항목, 되살린 세부 사실이 있으면 그 내용.`;
+11. 매번 분량을 줄인다: 대체된 옛 해결법, 일회성 기록, 경위·날짜별 기록·반복 문장을 걷어내 정리 뒤 전체 글자 수가 정리 전보다 줄어야 한다. 단, 다시 쓸 사실(명령·경로·값·하지 말 것)은 글자 수를 위해 빼지 않는다.
+12. 끝나면 한국어로 보고한다: 전과 후의 항목 수와 전체 글자 수(memory_list 결과로 어림), 쳐낸 항목(id와 제목 전부), 대체한 항목(옛 id → 남긴 id, 무엇이 바뀌었나 한 줄), 확인 필요로 남긴 충돌, 교훈만 남긴 항목, 나눈 항목(원래 → 새 항목들), 합친 항목, 줄이기만 한 항목, 되살린 세부 사실이 있으면 그 내용.`;
 }
 
 // ---------- incremental tidy: code picks the entries, the model only sees those ----------
@@ -256,10 +265,12 @@ ${lines}
 1. 항목마다 memory_read로 읽는다. "비슷한 항목"은 제목만 봐서 같은 내용일 것 같을 때만 memory_read 한다.
 2. 일회성: 일반 교훈이 있으면 memory_update로 교훈만 남기고, 없으면 memory_retire(id, reason: "일회성: <한 줄 이유>"). 최대 ${pruneBudget}개.
 3. 진짜 중복: 남길 항목에 memory_update(body)로 두 쪽의 고유한 사실을 모두 담고, 나머지는 memory_retire(id, reason: "중복: <남긴 id>", merged_into: 남긴 id).
+${SUPERSEDE_STEP.replace(/^2-1\./, "3-1.")}
+   - 점검할 항목이 목록 밖의 옛 항목을 대신하는 경우에는 그 옛 항목도 이렇게 정리해도 된다(목록 밖에서 고칠 수 있는 유일한 경우). 일회성과 합쳐 최대 ${pruneBudget}개.
 4. 여러 주제를 묶은 항목: 주제마다 memory_write로 새 항목을 만든 뒤(type, scope, project, tags는 원래대로), 원래 항목을 memory_retire(id, reason: "분할: <새 id들>").
 5. 너무 긴 항목·긴 제목: memory_update로 경위·반복만 줄인다. scope가 틀렸으면 고친다.
-6. 합치기·삭제는 이번에 최대 ${retireBudget}개까지만 된다. 일회성이 아니면 틀린 것이 확실할 때만 지운다. 새 사실을 지어내지 않는다.
-7. 끝나면 한국어로 짧게 보고한다: 고친 항목(무엇을), 쳐낸 항목, 합친 항목, 나눈 항목, 그대로 둔 항목 수.`;
+6. 합치기·삭제는 이번에 최대 ${retireBudget}개까지만 된다. 일회성·대체된 항목이 아니면 틀린 것이 확실할 때만 지운다. 새 사실을 지어내지 않는다.
+7. 끝나면 한국어로 짧게 보고한다: 고친 항목(무엇을), 쳐낸 항목, 대체한 항목(옛 id → 남긴 id), 확인 필요로 남긴 충돌, 합친 항목, 나눈 항목, 그대로 둔 항목 수.`;
 }
 
 export interface CuratorResult {
