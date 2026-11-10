@@ -74,7 +74,9 @@ export const api = {
   createAgenda: (id: string, title?: string, goals?: string[]) =>
     call<{ key: string }>("POST", `/api/projects/${encodeURIComponent(id)}/agendas`, { title, goals }),
   agenda: (key: string) => call<{ state: RuntimeState; transcript: TranscriptEntry[]; firstTurn: boolean }>("GET", a(key)),
-  chat: (key: string, message: string, attachments: Attachment[] = []) => call<{ started: boolean }>("POST", `${a(key)}/chat`, { message, attachments }),
+  chat: (key: string, message: string, attachments: Attachment[] = []) => call<{ started: boolean; queued?: boolean }>("POST", `${a(key)}/chat`, { message, attachments }),
+  stopChair: (key: string) => call<{ stopped: boolean }>("POST", `${a(key)}/chair/stop`),
+  clearQueue: (key: string) => call<{ cleared: number }>("POST", `${a(key)}/chat/queue/clear`),
   upload: (key: string, file: File, onProgress?: (pct: number) => void) =>
     new Promise<Attachment>((resolve, reject) => {
       const xhr = new XMLHttpRequest();

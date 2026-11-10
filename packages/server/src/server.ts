@@ -463,11 +463,20 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   on("POST", "/api/a/:id/:slug/chat", async ({ params, body }) => {
     const rt = await getRuntime(params.id, params.slug);
     const b = await body();
-    if (rt.chair.isBusy()) throw new HttpError(409, "chair is busy");
     const message = String(b.message ?? "");
     const attachments = (Array.isArray(b.attachments) ? (b.attachments as Attachment[]) : []).filter((a) => a && typeof a.id === "string" && rt.attachmentPath(a.id));
-    void rt.send(message, "user", attachments).catch((e) => log(`turn failed: ${(e as Error).message}`));
-    return { started: true };
+    if (!message.trim() && !attachments.length && rt.chair.isBusy()) throw new HttpError(409, "chair is busy");
+    // while the chair works the message waits and goes out when its turn ends
+    const { queued } = rt.sendOrQueue(message, attachments);
+    return { started: !queued, queued };
+  });
+  on("POST", "/api/a/:id/:slug/chair/stop", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    return { stopped: rt.stopChairTurn() };
+  });
+  on("POST", "/api/a/:id/:slug/chat/queue/clear", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    return { cleared: rt.clearQueued() };
   });
   on("POST", "/api/a/:id/:slug/attachments", async ({ params, req, url }) => {
     const rt = await getRuntime(params.id, params.slug);

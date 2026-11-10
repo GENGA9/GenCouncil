@@ -81,7 +81,9 @@ export const CHAIR_EDIT_TOOLS = [
   "Bash(git add:*)",
   "Bash(git restore:*)",
 ];
-const CHAIR_ALWAYS_DENIED = ["NotebookEdit", "Task"];
+// Monitor keeps the turn open while it watches a log, which locks the user out of the chat;
+// members report back through [council event] messages instead
+const CHAIR_ALWAYS_DENIED = ["NotebookEdit", "Task", "Monitor"];
 
 export function chairToolArgs(directEdit: boolean): { allowed: string[]; disallowed: string[] } {
   const allowed = [...CHAIR_READ_TOOLS, ...CHAIR_READONLY_BASH, ...(directEdit ? CHAIR_EDIT_TOOLS : [])];

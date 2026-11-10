@@ -163,7 +163,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
 
   const submit = async () => {
     const t = text.trim();
-    if ((!t && files.length === 0) || busy || sending) return;
+    if ((!t && files.length === 0) || sending) return;
     setSending(true);
     setUpProgress({});
     setUpFailed({});
@@ -353,7 +353,25 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           )}
           {busy && (
             <div className="msg thinking muted">
-              <GridSpinner color={`var(--c-${chairProvider})`} size={12} /> 의장이 작업 중…
+              <GridSpinner color={`var(--c-${chairProvider})`} size={12} /> 의장이 작업 중…{" "}
+              <button
+                className="ghost small"
+                title="의장의 이번 작업을 멈춥니다. 위원은 계속 일하고, 기다리던 메시지가 바로 전달됩니다"
+                onClick={() => {
+                  if (confirm("의장의 이번 작업을 멈출까요? (위원은 계속 작업합니다)")) void api.stopChair(state.key);
+                }}
+              >
+                의장 멈추기
+              </button>
+            </div>
+          )}
+          {(state.chair.queued?.length ?? 0) > 0 && (
+            <div className="msg queued">
+              <div className="small muted">의장 작업이 끝나면 전달할 메시지 {state.chair.queued!.length}개</div>
+              {state.chair.queued!.map((q, i) => (
+                <div key={i} className="queued-text">{q}</div>
+              ))}
+              <button className="ghost small" onClick={() => void api.clearQueue(state.key)}>대기 취소</button>
             </div>
           )}
         </div>
@@ -428,7 +446,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           addFiles(e.dataTransfer.files);
         }}
       >
-        <button className="ghost attach-btn" title="파일·사진 첨부" onClick={() => fileInput.current?.click()} disabled={busy || sending}>📎</button>
+        <button className="ghost attach-btn" title="파일·사진 첨부" onClick={() => fileInput.current?.click()} disabled={sending}>📎</button>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
         <textarea
           value={text}
@@ -440,7 +458,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
               addFiles(pasted);
             }
           }}
-          placeholder={busy ? "의장이 응답 중입니다…" : "의장에게 말하기 (Enter 전송, Shift+Enter 줄바꿈, 사진은 붙여넣기·끌어놓기)"}
+          placeholder={busy ? "의장이 작업 중입니다. 지금 보내면 작업이 끝나는 대로 전달됩니다" :"의장에게 말하기 (Enter 전송, Shift+Enter 줄바꿈, 사진은 붙여넣기·끌어놓기)"}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -449,7 +467,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           }}
           rows={2}
         />
-        <button className="primary" onClick={submit} disabled={busy || sending || (!text.trim() && files.length === 0)}>{sending ? "올리는 중…" : "전송"}</button>
+        <button className="primary" onClick={submit} disabled={sending || (!text.trim() && files.length === 0)}>{sending ? "올리는 중…" : busy ? "대기 전송" : "전송"}</button>
       </div>
       {project && (
         <div className="small muted center-foot">

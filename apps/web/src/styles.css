@@ -212,6 +212,8 @@ button.tg-auto:disabled.on { opacity: 1; }
 .msg.system .msg-text { font-size: 11px; color: var(--muted); background: transparent; padding: 0 12px; }
 .msg.error .msg-text { background: var(--warn-soft); color: var(--warn); }
 .msg.thinking { font-size: 12px; }
+.msg.queued { align-self: flex-end; border: 1px dashed var(--border); border-radius: 10px; padding: 6px 10px; opacity: .8; }
+.msg.queued .queued-text { white-space: pre-wrap; margin: 4px 0; }
 .chair-state { flex: 1; overflow: auto; margin: 12px 14px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: 13px; }
 .composer { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
 .composer textarea { flex: 1; }

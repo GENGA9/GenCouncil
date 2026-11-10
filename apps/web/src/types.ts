@@ -170,7 +170,7 @@ export interface RuntimeState {
   members: Member[];
   integrationWorktree: string;
   chairState: string;
-  chair: { provider?: "claude" | "gpt" | "gemini"; model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean };
+  chair: { provider?: "claude" | "gpt" | "gemini"; model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean; queued?: string[] };
   activity: Record<string, number[]>;
   accounts: Account[];
   limits: Limits;

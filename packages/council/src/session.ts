@@ -68,7 +68,7 @@ export interface ResumeInfo {
 export interface RuntimeState extends CouncilState {
   key: string;
   resume?: ResumeInfo;
-  chair: { provider: "claude" | "gpt" | "gemini"; model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean };
+  chair: { provider: "claude" | "gpt" | "gemini"; model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean; queued: string[] };
   /** tool/text events per minute for the last ACTIVITY_MINUTES minutes, per member */
   activity: Record<string, number[]>;
 }
@@ -133,6 +133,8 @@ export class AttachmentTooLargeError extends Error {
 export class AgendaRuntime extends EventEmitter {
   readonly key: string;
   private queue: string[] = [];
+  /** user messages sent while the chair was busy; they go out first when the turn ends */
+  private userQueue: Array<{ message: string; attachments: Attachment[] }> = [];
   private activityLog = new Map<string, number[]>();
   private closed = false;
 
@@ -282,6 +284,7 @@ export class AgendaRuntime extends EventEmitter {
         account: this.chair.account(),
         sessionId: session.sessionId,
         busy: this.chair.isBusy(),
+        queued: this.userQueue.map((q) => q.message || `(첨부 ${q.attachments.length}개)`),
       },
       activity: this.activity(),
       resume: this.resumeInfo(),
@@ -485,8 +488,49 @@ export class AgendaRuntime extends EventEmitter {
     void this.flush();
   }
 
+  /**
+   * A user message sent while the chair is busy waits here and goes out as soon as the turn
+   * ends (before queued council events). Sends right away when the chair is free.
+   */
+  sendOrQueue(message: string, attachments: Attachment[] = []): { queued: boolean } {
+    if (!this.chair.isBusy()) {
+      void this.send(message, "user", attachments).catch(() => undefined);
+      return { queued: false };
+    }
+    this.userQueue.push({ message, attachments });
+    this.emitEvent({ type: "state" });
+    return { queued: true };
+  }
+
+  /** drop the messages still waiting for the chair (the user changed their mind) */
+  clearQueued(): number {
+    const n = this.userQueue.length;
+    this.userQueue = [];
+    if (n) this.emitEvent({ type: "state" });
+    return n;
+  }
+
+  /** stop the chair's running turn; queued user messages then go out */
+  stopChairTurn(): boolean {
+    if (!this.chair.isBusy()) return false;
+    this.council.store.appendTranscript({ role: "event", text: "[council event] 사용자가 의장의 작업을 중간에 멈췄다. 위원은 계속 작업 중일 수 있다." });
+    this.chair.stop();
+    return true;
+  }
+
   private async flush(): Promise<void> {
-    if (this.closed || this.chair.isBusy() || this.queue.length === 0) return;
+    if (this.closed || this.chair.isBusy()) return;
+    if (this.userQueue.length) {
+      const batch = this.userQueue.splice(0);
+      const message = batch.map((b) => b.message).filter(Boolean).join("\n\n");
+      try {
+        await this.send(message, "user", batch.flatMap((b) => b.attachments));
+      } catch (e) {
+        this.emitEvent({ type: "chair:done", text: `대기 중이던 메시지를 보내지 못했습니다: ${(e as Error).message}`, isError: true });
+      }
+      return;
+    }
+    if (this.queue.length === 0) return;
     const batch = this.queue.splice(0).join("\n\n");
     await this.send(batch, "event");
   }
