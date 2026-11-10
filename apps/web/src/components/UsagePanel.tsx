@@ -75,23 +75,23 @@ export function UsagePanel({ pushed }: { pushed?: UsageSnapshot | null }) {
           return (
             <div key={p.id} className="usage-acct">
               <div className="usage-name" style={{ color: p.color }}>{p.label}</div>
-              <div className="small muted">{snap ? "계정 없음" : "확인 중…"}</div>
+              <div className="muted usage-err">{snap ? "계정 없음" : "확인 중…"}</div>
             </div>
           );
         }
         return rows.map((u) => (
           <div key={u.account} className="usage-acct">
-            <div className="usage-name" style={{ color: p.color }}>
-              {p.label}
-              {rows.length > 1 && <span className="muted small"> · {u.account}</span>}
+            <div className="usage-name" style={{ color: p.color }} title={rows.length > 1 ? `${p.label} · ${u.account}` : p.label}>
+              {rows.length > 1 ? `${p.label}·${u.account}` : p.label}
             </div>
             {u.error ? (
-              <div className="small muted usage-err" title={u.error}>{u.error}</div>
+              <div className="muted usage-err" title={u.error}>{u.error}</div>
             ) : (
-              <>
-                {!u.noFiveHour && <Bar label="5h" w={u.fiveHour} color={p.color} />}
-                <Bar label="주간" w={u.weekly} color={p.color} />
-              </>
+              <div className="usage-bars">
+                {/* Claude's 5-hour number is not reported reliably; its weekly bar is enough */}
+                {!u.noFiveHour && p.id !== "claude" && <Bar label="5h" w={u.fiveHour} color={p.color} />}
+                <Bar label="주" w={u.weekly} color={p.color} />
+              </div>
             )}
           </div>
         ));

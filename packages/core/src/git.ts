@@ -27,6 +27,20 @@ export async function ensureRepo(dir: string): Promise<boolean> {
   return true;
 }
 
+/** Commits that touched one file, newest first. Empty when there is no repo. */
+export async function gitLog(dir: string, file: string, limit = 20): Promise<Array<{ commit: string; date: string; subject: string }>> {
+  if (!fs.existsSync(path.join(dir, ".git"))) return [];
+  const r = await run(dir, ["log", `-${limit}`, "--format=%h%x09%cI%x09%s", "--", file.replace(/\\/g, "/")]);
+  if (!r.ok) return [];
+  return r.out
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => {
+      const [commit, date, ...rest] = l.split("\t");
+      return { commit, date, subject: rest.join("\t") };
+    });
+}
+
 let chain: Promise<void> = Promise.resolve();
 
 /** Stage everything and commit, serialised so concurrent writers don't race. Best effort. */

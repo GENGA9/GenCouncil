@@ -9,6 +9,7 @@ interface Props {
   overview: Overview | null;
   selected: string;
   memoryKey: string;
+  wikiKey: string;
   accountsKey: string;
   wsUp: boolean;
   onSelect: (key: string) => void;
@@ -56,7 +57,7 @@ function readOpenArchives(): string[] {
   }
 }
 
-export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live, usage }: Props) {
+export function LeftPane({ overview, selected, memoryKey, wikiKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live, usage }: Props) {
   const ts = overview?.server.tailscale;
   const [theme, cycleTheme] = useTheme();
   const [openArchives, setOpenArchives] = useState<string[]>(readOpenArchives);
@@ -117,12 +118,19 @@ export function LeftPane({ overview, selected, memoryKey, accountsKey, wsUp, onS
         <button className="add-project" onClick={onNewProject}>＋ 제작위원회 추가</button>
       </div>
 
+      <button className={`memory-link ${selected === wikiKey ? "on" : ""}`} onClick={() => onSelect(wikiKey)}>
+        Gen Wiki
+        {overview && overview.memory.proposed > 0 && (
+          <span className="agenda-meta">
+            <span className="badge warn">{overview.memory.proposed} 제안</span>
+          </span>
+        )}
+      </button>
       <button className={`memory-link ${selected === memoryKey ? "on" : ""}`} onClick={() => onSelect(memoryKey)}>
-        공유 기억
+        기억 원본
         {overview && (
           <span className="agenda-meta">
-            {overview.memory.proposed > 0 && <span className="badge warn">{overview.memory.proposed} 제안</span>}
-            <span className="badge">{overview.memory.verified}</span>
+            <span className="badge" title="아직 위키로 옮기지 않은 기억">{overview.memory.verified}</span>
           </span>
         )}
       </button>

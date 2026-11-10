@@ -1,4 +1,4 @@
-import type { Account, Attachment, CurateStatus, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot } from "./types";
+import type { Account, Attachment, CurateStatus, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -57,6 +57,12 @@ export const api = {
   tidy: () => call<CurateStatus>("POST", "/api/memory/tidy"),
   clearMemory: () => call<{ removed: number; backup: string }>("POST", "/api/memory/clear", { confirm: "전체 삭제" }),
   memoryStats: () => call<{ verified: number; common: number; byProject: Record<string, number> }>("GET", "/api/memory/stats"),
+  wikiStatus: () => call<WikiStatus>("GET", "/api/wiki/status"),
+  wikiList: () => call<WikiPageMeta[]>("GET", "/api/wiki"),
+  wikiSearch: (q: string) => call<WikiHit[]>("GET", `/api/wiki/search?q=${encodeURIComponent(q)}`),
+  wikiPage: (p: string) => call<WikiPage>("GET", `/api/wiki/page?path=${encodeURIComponent(p)}`),
+  wikiSave: (b: { path: string; title: string; summary: string; body: string; reason?: string }) => call<WikiPage>("PUT", "/api/wiki/page", b),
+  wikiRemove: (p: string) => call<{ removed: boolean }>("DELETE", `/api/wiki/page?path=${encodeURIComponent(p)}`),
   curateStatus: () => call<CurateStatus>("GET", "/api/memory/curate"),
   openWeb: (key: string, id: string) => call("POST", `${a(key)}/members/${encodeURIComponent(id)}/open-web`),
   addAccount: (b: Record<string, unknown>) => call<Account>("POST", "/api/accounts", b),

@@ -11,7 +11,33 @@ export class GitError extends Error {
   }
 }
 
+/** commands that write commits and fail with "Committer identity unknown" when no name/email is set */
+const IDENTITY_COMMANDS = new Set(["commit", "merge"]);
+const identityCache = new Map<string, Promise<string[]>>();
+
+/**
+ * Fallback author for repos with no user.name/user.email anywhere (repo or global): council merges
+ * and auto-commits used to fail with "Committer identity unknown". A configured identity always wins.
+ */
+function identityArgs(cwd: string): Promise<string[]> {
+  let p = identityCache.get(cwd);
+  if (!p) {
+    const has = (key: string) => run(cwd, ["config", "--get", key]).then((v) => Boolean(v.trim()), () => false);
+    p = Promise.all([has("user.name"), has("user.email")]).then(([name, email]) => [
+      ...(name ? [] : ["-c", "user.name=GenCouncil"]),
+      ...(email ? [] : ["-c", "user.email=gencouncil@local"]),
+    ]);
+    identityCache.set(cwd, p);
+  }
+  return p;
+}
+
 export function git(cwd: string, args: string[]): Promise<string> {
+  if (IDENTITY_COMMANDS.has(args[0])) return identityArgs(cwd).then((pre) => run(cwd, [...pre, ...args]));
+  return run(cwd, args);
+}
+
+function run(cwd: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "git",
@@ -209,6 +235,35 @@ export interface MergeResult {
   ok: boolean;
   conflicts: string[];
   output: string;
+  /** files the merge brings in that usually should not be committed (temp output, secrets, huge files) */
+  warnings?: string[];
+}
+
+const SUSPECT_PATH = /(^|\/)(tmp|temp|\.tmp)\/|(^|\/)\.env($|\.)|\.(bak|orig|log)$|(^|\/)node_modules\//i;
+const HUGE_FILE = 50 * 1024 * 1024;
+
+/** What a branch would add that looks like a mistake; checked before every member merge. */
+export async function suspiciousFiles(dir: string, branch: string): Promise<string[]> {
+  let names: string[];
+  try {
+    names = (await git(dir, ["diff", "--name-only", "--diff-filter=AM", `HEAD...${branch}`])).split("\n").map((s) => s.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const n of names) {
+    if (SUSPECT_PATH.test(n)) out.push(`${n} (임시·비밀·로그 파일로 보임)`);
+    else {
+      try {
+        const size = Number((await git(dir, ["cat-file", "-s", `${branch}:${n}`])).trim());
+        if (size > HUGE_FILE) out.push(`${n} (${Math.round(size / 1024 / 1024)}MB)`);
+      } catch {
+        /* deleted or unreadable */
+      }
+    }
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 /** Merge `branch` into the branch checked out in `dir`. Aborts and reports conflicts on failure. */

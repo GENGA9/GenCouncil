@@ -96,11 +96,18 @@ await session("member", async (c) => {
   check("[member] write refused", w.isError === true);
   const pr = await call(c, "memory_propose", { type: "convention", title: "member proposal", body: "proposal body text" });
   check("[member] propose ok", !pr.isError && pr.content[0].text.startsWith("proposed "));
+  check("[member] wiki: read and propose only", ["wiki_toc", "wiki_search", "wiki_read", "wiki_propose"].every((t) => tools.includes(t)) && !tools.includes("wiki_write") && !tools.includes("wiki_remove"));
+  const wp = await call(c, "wiki_propose", { path: "Projects/Seisen/Build", change: "빌드 명령이 바뀜", body: "예전: npm run b\n이제: npm run build:all" });
+  check("[member] wiki_propose ok", !wp.isError && /projects\/seisen\/build/.test(wp.content[0].text), wp.content[0].text);
+  const bad = await call(c, "wiki_propose", { path: "../x", change: "경로 밖 제안", body: "0123456789 본문" });
+  check("[member] wiki path outside the layout refused", bad.isError === true);
 });
 
 await session("owner", async (c) => {
   const list = JSON.parse((await call(c, "memory_list", { status: "proposed" })).content[0].text);
   check("[owner] sees member proposal", list.some((m) => m.title === "member proposal"));
+  const wikiProp = list.find((m) => m.title.startsWith("위키 수정: projects/seisen/build"));
+  check("[owner] wiki edit proposal carries its page and project", Boolean(wikiProp) && wikiProp.tags.includes("wiki:projects/seisen/build") && wikiProp.project === "seisen", JSON.stringify(wikiProp));
   const ap = await call(c, "memory_approve", { id: list.find((m) => m.title === "member proposal").id });
   check("[owner] approve ok", !ap.isError);
   const idx = (await call(c, "memory_index", {})).content[0].text;

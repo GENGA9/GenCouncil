@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
-import { type EntryType, type MemoryStore } from "@gencouncil/core";
+import { WikiStore, type EntryType, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
 import { AccountRegistry, type Account } from "./accounts.js";
 import { ChairApprover, chairReview, type PermissionDecision, type Reviewer } from "./approval.js";
@@ -22,6 +22,7 @@ import {
   isRepo,
   logRange,
   mergeInto,
+  suspiciousFiles,
   removeWorktree,
   removeDir,
   type MergeResult,
@@ -570,7 +571,7 @@ ${rows.join("\n")}`;
       const p = path.join(councilDir, f);
       if (fs.existsSync(p)) fs.rmSync(p);
     }
-    let packet = buildPacket({ project: this.project, agenda, task, member, instructions: input.instructions, memoryIndex: this.memory.renderIndex({ project: projectMemoryKey(this.project) }) });
+    let packet = buildPacket({ project: this.project, agenda, task, member, instructions: input.instructions, memoryIndex: this.memory.renderIndex({ project: projectMemoryKey(this.project) }), wikiToc: new WikiStore().renderRoot({ project: projectMemoryKey(this.project) }) });
     if (provider === "relay") {
       const bundle = input.files?.length ? bundleFiles(worktree, input.files) : "(포함된 파일 없음)";
       packet = `${RELAY_PROMPT_HEAD}\n\n${packet}\n\n${RELAY_FORMAT}\n\n## 포함된 파일\n\n${bundle}\n`;
@@ -1103,7 +1104,10 @@ ${rows.join("\n")}`;
     const m = this.member(memberId);
     const task = this.task(m.taskId);
     if (this.running.has(memberId)) throw new Error(`member ${memberId} is still running`);
-    const res = await mergeInto(this.store.integrationWorktree(), m.branch, `merge ${m.id}: ${task.title}`);
+    // a member's report can miss what it committed: name temp files, secrets and huge files in the result
+    const warnings = await suspiciousFiles(this.store.integrationWorktree(), m.branch);
+    const res: MergeResult = { ...(await mergeInto(this.store.integrationWorktree(), m.branch, `merge ${m.id}: ${task.title}`)), ...(warnings.length ? { warnings } : {}) };
+    if (warnings.length) this.log(`merge ${memberId}: suspicious files ${warnings.join(", ")}`);
     const members = this.members();
     const mm = members.find((x) => x.id === memberId)!;
     if (res.ok) {

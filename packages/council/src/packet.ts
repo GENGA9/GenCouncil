@@ -7,6 +7,8 @@ export interface PacketInput {
   member: MemberRecord;
   instructions: string;
   memoryIndex: string;
+  /** Gen Wiki contents for this project */
+  wikiToc?: string;
 }
 
 export const MEMBER_PROMPT =
@@ -82,10 +84,15 @@ ${i.task.description.trim() || "(위 지시 참고)"}
 ${i.project.localGit ? `
 0. 이 작업 폴더에는 git이 관리하는 파일만 있다. 파이썬 가상환경, 실행 파일·라이브러리, 큰 이미지·영상·압축·모델 파일은 원본 폴더(${i.project.repo})에만 있다. 그런 파일이 필요하면 원본 경로에서 읽기만 하고, 원본 폴더에는 절대 쓰지 않는다.
 ` : ""}
-1. 현재 폴더 안에서만 작업한다. 상위 폴더, 다른 worktree, 다른 브랜치를 건드리지 않는다. \`git checkout\`, \`git switch\`, \`git merge\`, \`git rebase\`, \`git push\` 는 금지.
+1. 현재 폴더 안에서만 작업한다. 상위 폴더, 다른 worktree, 다른 브랜치를 건드리지 않는다. \`git checkout\`, \`git switch\`, \`git merge\`, \`git rebase\`, \`git push\` 는 금지. 단, 이 패킷의 지시가 특정 브랜치의 \`git merge\`를 하라고 명시하면 그 merge는 해도 된다(diff를 복사해 옮기지 말고 merge로 한다).
+1-1. 비밀값: \`.env\`·키 파일을 cat·grep·Read로 출력하지 않는다. 키가 있는지는 설정 객체로 읽어 참/거짓만 확인하고, 고칠 때는 키 이름만 다룬다. \`.env\` 백업 파일을 만들면 커밋되지 않게 하고 RESULT.md에 적는다.
+1-2. 확인용 개발 서버·브라우저는 이 작업 전용 포트로 띄우고(예: \`--strictPort\`), 사용자가 쓰는 공용 포트는 쓰지도 끄지도 않는다. 띄운 것은 끝나기 전에 닫는다.
+1-3. 라이선스 동의가 필요하거나 접근이 막힌(gated, 403) 모델·데이터는 미러·다른 토큰으로 우회하지 말고 멈춘 뒤 이름과 라이선스 링크를 RESULT.md에 적는다.
+1-4. 측정·생성 중간 파일은 \`.council/\` 아래에 두고 커밋하지 않는다(\`tmp/\` 등 저장소 안 임시 폴더를 커밋하지 않는다).
 2. 완료하면 \`git add -A && git commit -m "${i.task.title}: <요약>"\` 으로 전부 커밋한다. 중간 커밋을 여러 번 해도 된다. \`.council/\` 폴더는 커밋하지 않는다(이미 제외되어 있다).
 3. 마지막에 \`.council/RESULT.md\` 를 아래 양식으로 작성한다.
-4. 재사용 가치가 있는 발견(비자명한 해결책, 도구 위치, 규약)은 \`memory_propose\` 도구가 있으면 그걸로, 없으면 RESULT.md의 '기억 제안' 절에 적는다. 특정 버그 하나의 수정 기록, 이번 작업의 결과, 코드나 git 기록을 보면 아는 사실은 제안하지 않는다. 다른 작업에서도 다시 찾아 쓸 지식만 제안한다. 다른 프로젝트에서도 쓰는 지식(공통 도구 사용법, 외부 서비스 절차, 환경 문제)은 scope: common으로, 이 프로젝트 코드·데이터에만 맞는 사실은 scope: project로 제안한다. 작업을 시작할 때 쓸 도구·절차가 있으면 먼저 \`memory_search\`로 찾는다.
+4. 재사용 가치가 있는 발견(비자명한 해결책, 도구 위치, 규약)은 \`memory_propose\` 도구가 있으면 그걸로, 없으면 RESULT.md의 '기억 제안' 절에 적는다. 제안은 관리자가 Gen Wiki에 등록한다. 특정 버그 하나의 수정 기록, 이번 작업의 결과, 코드나 git 기록을 보면 아는 사실은 제안하지 않는다. 다른 작업에서도 다시 찾아 쓸 지식만 제안한다. 다른 프로젝트에서도 쓰는 지식(공통 도구 사용법, 외부 서비스 절차, 환경 문제)은 scope: common으로, 이 프로젝트 코드·데이터에만 맞는 사실은 scope: project로 제안한다. 작업을 시작할 때 쓸 도구·절차가 있으면 먼저 아래 Gen Wiki 맨 위 분류에서 \`wiki_toc\`로 필요한 갈래만 내려가 \`wiki_read\`로 읽거나, \`wiki_search\`·\`memory_search\`로 찾는다. 위키 전체를 훑지 않는다.
+4-0. Gen Wiki는 주제별로 정리된 문서다(위원·의장·사용자가 함께 본다). 위원은 위키를 직접 고치지 않는다. 위키 페이지의 절차가 틀렸거나 이번 작업으로 바뀌었으면 \`wiki_propose\`(path, change, body)로 수정을 제안한다: 먼저 \`wiki_read\`로 읽고, body에는 무엇이 틀렸나 / 이제 맞는 방법(명령·경로·값 그대로)만 쓴다. 관리자가 제안 처리 때 페이지에 반영한다. 한 번 쓰고 버릴 작업 기록이나 비밀값은 넣지 않는다.
 4-1. 화면·UI·디자인·이미지·영상을 만들거나 바꿨으면 결과를 \`.council/shots/\` 에 남긴다: 바뀐 화면의 스크린샷(png, 파일 이름에 무엇인지 적기, 예: title-screen-after.png), 또는 만든 이미지·HTML 시안 파일. 브라우저 테스트 도구(Playwright 등)가 있으면 그것으로 찍는다. 화면이 여러 개거나 전후 비교가 의미 있으면 여러 장 남긴다. RESULT.md에 무엇을 찍었는지 적는다. 이 폴더는 커밋하지 않는다.
 5. 막히면 억지로 진행하지 말고 RESULT.md의 '미완료·막힌 점'에 이유를 쓰고 종료한다.
 6. 사용자에게 질문할 수 없다. 모호하면 패킷의 완료 조건을 가장 보수적으로 해석해서 진행하고, 가정을 RESULT.md에 적는다.
@@ -111,6 +118,10 @@ type: solution
 tags: a, b
 (문제 / 해결 / 적용 방법)
 \`\`\`
+
+## Gen Wiki 맨 위 (wiki_toc(path)로 필요한 갈래만 한 단계씩 내려가고, 찾을 말이 분명하면 wiki_search. 긴 페이지는 wiki_read가 목차를 주니 필요한 절만 section으로 읽는다)
+
+${i.wikiToc?.trim() || "(아직 페이지 없음)"}
 
 ## 공유 기억 색인 (자세한 내용은 memory_search / memory_read)
 

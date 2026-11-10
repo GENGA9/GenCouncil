@@ -116,6 +116,10 @@ export function memberEventText(m: MemberRecord): string {
     m.shots?.length ? `스크린샷 ${m.shots.length}장 (council_show로 사용자에게 보여줄 수 있다): ${m.shots.slice(0, 8).join(", ")}` : "",
     r?.unfinished && r.unfinished !== "없음" ? `미완료/막힌 점: ${r.unfinished.slice(0, 400)}` : "",
     m.failure ? `실패 원인(${m.failure.kind}): ${m.failure.message}` : m.error ? `오류: ${m.error}` : "",
+    // a member that finished its work can still exit non-zero; its commits and RESULT.md are what count
+    m.status === "failed" && (m.commits?.length ?? 0) > 0 && r?.summary
+      ? "실패로 끝났지만 커밋과 RESULT.md가 있다. 일을 다 마치고 종료 단계에서만 실패했을 수 있으니, 재배정하기 전에 council_member(diff:true)로 완료 조건을 확인하고 맞으면 머지한다."
+      : "",
     m.status === "failed" && m.failure && m.failure.kind !== "other"
       ? "자동 핸드오버가 불가능했다(쓸 수 있는 계정 없음). 사용자에게 계정 추가/리셋 대기를 알리거나 council_handover로 다른 provider에 맡겨라."
       : "council_member(diff:true)로 검토하고 머지 여부를 정하라.",

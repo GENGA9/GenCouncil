@@ -2,7 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MemoryStore, entryScope, type EntryType } from "@gencouncil/core";
+import { MemoryStore, WikiStore, entryScope, type EntryType } from "@gencouncil/core";
 import {
   AccountRegistry,
   collectUsage,
@@ -23,10 +23,14 @@ import {
   updateProject,
   handleCouncilMcpRequest,
   handleMemberMcpRequest,
-  runCurator,
   deleteAgenda,
-  runReorganize,
   runTidy,
+  runWikiRegister,
+  runWikiReview,
+  selectWikiInbox,
+  wikiChanges,
+  loadWikiReviewed,
+  saveWikiReviewed,
   selectTidyCandidates,
   markReviewed,
   verifiedHashes,
@@ -147,6 +151,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       }));
   const memory = new MemoryStore({ watch: true });
   await memory.init();
+  const wiki = new WikiStore();
+  await wiki.init();
   const tailscale = await detectTailscale();
 
   // ---------- runtimes ----------
@@ -678,18 +684,32 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   on("GET", "/api/memory/curate", () => curate);
   on("POST", "/api/memory/curate", () => {
     if (curate.running) throw new HttpError(409, "already running");
-    const pending = memory.list({ status: "proposed" }).length;
-    curate = { kind: "proposals", running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
+    // proposal processing = wiki registration: proposals first, then memory from before the wiki
+    const inbox = selectWikiInbox(memory);
+    const pending = inbox.proposals.length + inbox.entries.length;
+    const startedAt = new Date().toISOString();
+    if (!pending) {
+      curate = { kind: "proposals", running: false, startedAt, finishedAt: startedAt, pending: 0, remaining: 0, steps: 0, text: "위키에 등록할 제안이나 기억이 없습니다." };
+      return curate;
+    }
+    const projects = registry.list().map((p) => ({ key: projectMemoryKey(p), name: p.name }));
+    curate = { kind: "proposals", running: true, startedAt, pending, remaining: inbox.remaining, steps: 0 };
     broadcast({ type: "curate", running: true });
-    void runCurator({ onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
+    void runWikiRegister(projects, inbox, { onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
       memory.load();
       memory.writeIndex();
-      curate = { kind: "proposals", running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
+      const left = selectWikiInbox(memory, Number.MAX_SAFE_INTEGER);
+      curate = { kind: "proposals", running: false, startedAt, finishedAt: new Date().toISOString(), pending, remaining: left.proposals.length + left.entries.length, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
       broadcast({ type: "curate", running: false, isError: r.isError });
       broadcast({ type: "overview" });
-      log(`curator finished (${r.isError ? "error" : "ok"})`);
+      log(`wiki register finished (${r.isError ? "error" : "ok"}, ${pending} entries, ${curate.remaining} left)`);
     });
     return curate;
+  });
+  on("GET", "/api/wiki/status", async () => {
+    const all = selectWikiInbox(memory, Number.MAX_SAFE_INTEGER);
+    const ch = await wikiChanges();
+    return { proposals: all.proposals.length, unmigrated: all.entries.length, pages: wiki.list().length, changed: ch.files.length, lastReview: loadWikiReviewed()?.at };
   });
   // routine tidy: code picks new/edited entries, Opus looks only at those
   on("POST", "/api/memory/tidy", () => {
@@ -715,35 +735,37 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     });
     return curate;
   });
-  // full check: Fable reads every verified entry
-  on("POST", "/api/memory/reorganize", () => {
+  // full check: Fable reviews what changed in the wiki since the last check
+  on("POST", "/api/memory/reorganize", async () => {
     if (curate.running) throw new HttpError(409, "already running");
-    const pending = memory.list({ status: "verified" }).length;
+    const startedAt = new Date().toISOString();
+    curate = { kind: "reorganize", running: true, startedAt, pending: 0, steps: 0 };
+    let changes;
+    try {
+      changes = await wikiChanges();
+    } catch (e) {
+      curate = { kind: "reorganize", running: false, startedAt, finishedAt: startedAt, pending: 0, steps: 0, text: `위키 변경 내역을 읽지 못했습니다: ${(e as Error).message}`, isError: true };
+      return curate;
+    }
+    // with no changes the check still runs its cleanup part (obsolete pages, long pages)
+    if (!wiki.list().length) {
+      curate = { kind: "reorganize", running: false, startedAt, finishedAt: startedAt, pending: 0, steps: 0, text: "위키에 페이지가 없습니다. 먼저 제안 처리로 위키에 등록하세요." };
+      return curate;
+    }
+    const pending = changes.files.length;
     const projects = registry.list().map((p) => ({ key: projectMemoryKey(p), name: p.name }));
-    curate = { kind: "reorganize", running: true, startedAt: new Date().toISOString(), pending, steps: 0 };
-    const before = verifiedHashes(memory);
+    curate = { kind: "reorganize", running: true, startedAt, pending, steps: 0 };
     broadcast({ type: "curate", running: true });
-    const verifiedList = memory.list({ status: "verified" });
-    const lens = verifiedList.map((m) => ({ title: m.title.length, body: memory.get(m.id)?.body.length ?? 0 }));
-    const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
-    const stats = {
-      entries: verifiedList.length,
-      common: verifiedList.filter((m) => entryScope(m) === "common").length,
-      project: verifiedList.filter((m) => entryScope(m) === "project").length,
-      avgTitle: avg(lens.map((l) => l.title)),
-      longTitles: lens.filter((l) => l.title > 60).length,
-      avgBody: avg(lens.map((l) => l.body)),
-      longBodies: lens.filter((l) => l.body > 1500).length,
-      totalChars: lens.reduce((a, l) => a + l.title + l.body, 0),
-    };
-    void runReorganize(projects, { stats, onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then((r) => {
-      memory.load();
-      memory.writeIndex();
-      if (!r.isError) markReviewed(memory, { before, all: true });
-      curate = { kind: "reorganize", running: false, startedAt: curate.startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
+    void runWikiReview(projects, changes, { onEvent: (e) => { if (e.kind === "tool") curate.steps = (curate.steps ?? 0) + 1; } }).then(async (r) => {
+      // the review's own edits count as reviewed: the next check starts after them
+      if (!r.isError) {
+        const after = await wikiChanges().catch(() => undefined);
+        if (after?.head) saveWikiReviewed(after.head);
+      }
+      curate = { kind: "reorganize", running: false, startedAt, finishedAt: new Date().toISOString(), pending, steps: curate.steps, text: r.text, isError: r.isError, costUsd: r.costUsd };
       broadcast({ type: "curate", running: false, isError: r.isError });
       broadcast({ type: "overview" });
-      log(`memory reorganize finished (${r.isError ? "error" : "ok"})`);
+      log(`wiki review finished (${r.isError ? "error" : "ok"}, ${pending} pages)`);
     });
     return curate;
   });
@@ -773,6 +795,39 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   });
   on("POST", "/api/memory/entry/:id/approve", ({ params }) => memory.approve(params.id, { source: "web" }).meta);
   on("POST", "/api/memory/entry/:id/reject", async ({ params, body }) => memory.reject(params.id, String((await body()).reason ?? "")).meta);
+
+  // ---------- Gen Wiki ----------
+  on("GET", "/api/wiki", () => wiki.list());
+  on("GET", "/api/wiki/search", ({ url }) => {
+    const q = url.searchParams.get("q") ?? "";
+    return q.trim() ? wiki.search(q, { limit: 30 }) : [];
+  });
+  on("GET", "/api/wiki/page", async ({ url }) => {
+    const p = url.searchParams.get("path") ?? "";
+    let page;
+    try {
+      page = wiki.read(p);
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
+    if (!page) throw new HttpError(404, "페이지가 없습니다");
+    return { ...page, history: await wiki.history(page.path, 15) };
+  });
+  on("PUT", "/api/wiki/page", async ({ body }) => {
+    const b = await body();
+    try {
+      return await wiki.write(String(b.path ?? ""), { title: String(b.title ?? ""), summary: String(b.summary ?? ""), body: String(b.body ?? "") }, "user", String(b.reason ?? "사용자 수정"));
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
+  });
+  on("DELETE", "/api/wiki/page", async ({ url }) => {
+    try {
+      return { removed: await wiki.remove(url.searchParams.get("path") ?? "", "user", "사용자가 삭제") };
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
+  });
 
   // ---------- http server ----------
   const server = http.createServer(async (req, res) => {

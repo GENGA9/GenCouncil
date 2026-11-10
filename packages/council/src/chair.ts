@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { WikiStore } from "@gencouncil/core";
 import { ensureAgyCouncil, serverEntry } from "@gencouncil/mcp/install";
 import type { Account } from "./accounts.js";
 import type { Council } from "./council.js";
@@ -230,6 +231,7 @@ export class Chair {
       guidelines: this.council.registry.guidelines(this.council.project),
       chairState: store.chairState(),
       memoryIndex: this.council.memory.renderIndex({ project: projectMemoryKey(this.council.project) }),
+      wikiToc: new WikiStore().renderRoot({ project: projectMemoryKey(this.council.project) }),
       integrationWorktree: store.integrationWorktree(),
       limits: this.council.limitsMarkdown(),
     });

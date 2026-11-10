@@ -315,7 +315,7 @@ export function runTidy(
 }
 
 export function runCurator(
-  opts: { account?: string; model?: string; effort?: string; prompt?: string; label?: string; retireBudget?: number; pruneBudget?: number; onEvent?: (e: ClaudeEvent) => void } = {},
+  opts: { account?: string; model?: string; effort?: string; prompt?: string; label?: string; retireBudget?: number; pruneBudget?: number; wikiRemoveBudget?: number; onEvent?: (e: ClaudeEvent) => void } = {},
 ): Promise<CuratorResult> {
   const accounts = new AccountRegistry();
   const account = opts.account ? accounts.get(opts.account) : accounts.pick("claude");
@@ -325,6 +325,7 @@ export function runCurator(
   if (process.env.GENCOUNCIL_HOME) mcpEnv.GENCOUNCIL_HOME = process.env.GENCOUNCIL_HOME;
   if (opts.retireBudget) mcpEnv.GENCOUNCIL_RETIRE_BUDGET = String(opts.retireBudget);
   if (opts.pruneBudget) mcpEnv.GENCOUNCIL_PRUNE_BUDGET = String(opts.pruneBudget);
+  if (opts.wikiRemoveBudget) mcpEnv.GENCOUNCIL_WIKI_REMOVE_BUDGET = String(opts.wikiRemoveBudget);
   const mcpFile = path.join(dir, "mcp.json");
   fs.writeFileSync(
     mcpFile,

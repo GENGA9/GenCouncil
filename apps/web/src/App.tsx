@@ -5,13 +5,15 @@ import { AccountsView } from "./components/AccountsView";
 import { CenterPane } from "./components/CenterPane";
 import { LeftPane } from "./components/LeftPane";
 import { MemoryView } from "./components/MemoryView";
+import { WikiView } from "./components/WikiView";
 import { RightPane } from "./components/RightPane";
 import { GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
 import type { Attachment, ChatItem, Overview, RuntimeState, TranscriptEntry, UploadHooks, UsageSnapshot } from "./types";
 
 const MEMORY_KEY = "__memory__";
 const ACCOUNTS_KEY = "__accounts__";
-const isSpecial = (k: string) => k === MEMORY_KEY || k === ACCOUNTS_KEY;
+const WIKI_KEY = "__wiki__";
+const isSpecial = (k: string) => k === MEMORY_KEY || k === ACCOUNTS_KEY || k === WIKI_KEY;
 type Tab = "left" | "center" | "right";
 
 function useMedia(query: string): boolean {
@@ -343,6 +345,7 @@ export function App() {
           : undefined
       }
       memoryKey={MEMORY_KEY}
+      wikiKey={WIKI_KEY}
       accountsKey={ACCOUNTS_KEY}
       wsUp={wsUp}
     />
@@ -350,6 +353,8 @@ export function App() {
   const center =
     selected === MEMORY_KEY ? (
       <MemoryView notify={notify} />
+    ) : selected === WIKI_KEY ? (
+      <WikiView notify={notify} onOpenMemory={() => setSelected(MEMORY_KEY)} />
     ) : selected === ACCOUNTS_KEY ? (
       <AccountsView notify={notify} />
     ) : (

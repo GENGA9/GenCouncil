@@ -229,3 +229,29 @@ export interface UploadHooks {
   onProgress: (index: number, pct: number) => void;
   onFail: (index: number, message: string) => void;
 }
+
+export interface WikiPageMeta {
+  path: string;
+  title: string;
+  summary: string;
+  updated: string;
+  by: string;
+  sources: string[];
+  section: string;
+  chars: number;
+}
+export interface WikiPage extends WikiPageMeta {
+  body: string;
+  history?: Array<{ commit: string; date: string; subject: string }>;
+}
+export interface WikiHit extends WikiPageMeta {
+  score: number;
+  snippet: string;
+}
+export interface WikiStatus {
+  proposals: number;
+  unmigrated: number;
+  pages: number;
+  changed: number;
+  lastReview?: string;
+}
