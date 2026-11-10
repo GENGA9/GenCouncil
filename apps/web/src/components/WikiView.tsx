@@ -232,11 +232,25 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
     }
   };
 
+  /** one group per folder; the folder's index page names the group and is opened from its title */
   const sections = useMemo(() => {
-    const m = new Map<string, WikiPageMeta[]>();
-    for (const p of pages) m.set(p.section, [...(m.get(p.section) ?? []), p]);
+    const m = new Map<string, { index?: WikiPageMeta; pages: WikiPageMeta[] }>();
+    for (const p of pages) {
+      const g = m.get(p.section) ?? { pages: [] };
+      if (p.path.endsWith("/index")) g.index = p;
+      else g.pages.push(p);
+      m.set(p.section, g);
+    }
     return [...m.entries()];
   }, [pages]);
+  const [openSecs, setOpenSecs] = useState<Set<string>>(new Set());
+  const toggleSec = (s: string) =>
+    setOpenSecs((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
 
   const save = async () => {
     if (!edit) return;
@@ -292,16 +306,34 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
               <div className="small muted">찾은 페이지가 없습니다.</div>
             )
           ) : sections.length ? (
-            sections.map(([s, ps]) => (
-              <div key={s} className="wiki-section">
-                <div className="wiki-section-title">{SECTION_LABEL(s)}</div>
-                {ps.map((p) => (
-                  <button key={p.path} className={`wiki-item ${page?.path === p.path ? "on" : ""}`} title={p.summary} onClick={() => void open(p.path)}>
-                    {p.title}
+            sections.map(([s, g]) => {
+              const isOpen = openSecs.has(s) || page?.section === s;
+              return (
+                <div key={s} className="wiki-section">
+                  <button className="wiki-section-title" title={g.index?.summary} onClick={() => toggleSec(s)}>
+                    <span className="wiki-caret">{isOpen ? "▾" : "▸"}</span>
+                    <span className="wiki-section-name">
+                      {g.index ? `${SECTION_LABEL(s.split("/").slice(0, -1).join("/") || s)} · ${g.index.title}` : SECTION_LABEL(s)}
+                    </span>
+                    <span className="wiki-count">{g.pages.length}</span>
                   </button>
-                ))}
-              </div>
-            ))
+                  {isOpen && (
+                    <>
+                      {g.index && (
+                        <button className={`wiki-item wiki-index ${page?.path === g.index.path ? "on" : ""}`} onClick={() => void open(g.index!.path)}>
+                          이 폴더 소개
+                        </button>
+                      )}
+                      {g.pages.map((p) => (
+                        <button key={p.path} className={`wiki-item ${page?.path === p.path ? "on" : ""}`} title={p.summary} onClick={() => void open(p.path)}>
+                          {p.title}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <div className="small muted wiki-empty">
               아직 페이지가 없습니다. 위원·의장이 wiki_write로 만들거나, "새 페이지"로 직접 쓸 수 있습니다.

@@ -21,7 +21,7 @@ export const WIKI_REGISTER_BATCH = 40;
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const MAX_DIFF_CHARS = 60_000;
 /** to-do list for GenCouncil code: workarounds and per-instruction rules the program should take over */
-export const INTERNALIZE_PAGE = "common/gencouncil-internalize";
+export const INTERNALIZE_PAGE = "common/council/gencouncil-internalize";
 
 const WORTH = `위키에 올릴 가치 기준: "앞으로 다른 일을 하다가도 다시 찾아 쓸 지식인가?"
 - 올린다: 도구·외부 서비스 사용법, 여러 번 실행하는 절차(실행·측정·생성·배포), 환경·OS·라이브러리의 함정, 코드에 없는 지식(사용자 결정, 하지 말 것, 계정·배포), 여러 파일에 걸친 작업 순서, 모델 성향.

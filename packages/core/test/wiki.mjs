@@ -72,6 +72,21 @@ check("one section read alone", pageSection(long, "방법") === "## 방법\n- 81
 check("remove", (await wiki.remove("projects/reinforce_project/balance", "user")) && !wiki.read("projects/reinforce_project/balance"));
 check("list after remove", wiki.list().length === 6, JSON.stringify(wiki.list().map((p) => p.path)));
 
+// a lock left by a killed git must not block every later commit
+const { commitAll, clearStaleLock } = await import("@gencouncil/core");
+const { execFileSync } = await import("node:child_process");
+const repo = path.dirname(wiki.dir);
+const lock = path.join(repo, ".git", "index.lock");
+const headCount = () => Number(execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: repo }).toString().trim());
+fs.writeFileSync(lock, "");
+check("a fresh lock is left alone", !clearStaleLock(repo) && fs.existsSync(lock));
+const old = new Date(Date.now() - 10 * 60 * 1000);
+fs.utimesSync(lock, old, old);
+const before = headCount();
+fs.writeFileSync(path.join(wiki.dir, "common", "after-lock.md"), "---\ntitle: t\nsummary: s\n---\nbody\n");
+await commitAll(repo, "after stale lock");
+check("an old lock is cleared and the commit goes through", !fs.existsSync(lock) && headCount() === before + 1, `${before} -> ${headCount()}`);
+
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall wiki checks passed");
 process.exitCode = failed ? 1 : 0;

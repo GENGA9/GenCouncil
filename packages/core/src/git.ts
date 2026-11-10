@@ -43,12 +43,36 @@ export async function gitLog(dir: string, file: string, limit = 20): Promise<Arr
 
 let chain: Promise<void> = Promise.resolve();
 
+/** A lock older than this was left by a git that died; a live git holds it for seconds. */
+export const STALE_LOCK_MS = Number(process.env.GENCOUNCIL_STALE_LOCK_MS ?? 2 * 60 * 1000);
+
+/**
+ * Removes .git/index.lock when it is old enough that no running git can own it.
+ * Several processes (server, each member's MCP server) commit to the same repo, and a
+ * killed one can leave the lock behind, which silently blocks every later commit.
+ */
+export function clearStaleLock(dir: string): boolean {
+  const lock = path.join(dir, ".git", "index.lock");
+  try {
+    const age = Date.now() - fs.statSync(lock).mtimeMs;
+    if (age < STALE_LOCK_MS) return false;
+    fs.rmSync(lock, { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Stage everything and commit, serialised so concurrent writers don't race. Best effort. */
 export function commitAll(dir: string, message: string): Promise<void> {
   chain = chain.then(async () => {
     if (!fs.existsSync(path.join(dir, ".git"))) return;
-    await run(dir, ["add", "-A"]);
-    await run(dir, ["commit", "-q", "-m", message]);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const add = await run(dir, ["add", "-A"]);
+      const commit = add.ok ? await run(dir, ["commit", "-q", "-m", message]) : add;
+      if (commit.ok || !/index\.lock/.test(commit.out)) return;
+      if (!clearStaleLock(dir)) return;
+    }
   });
   return chain;
 }
