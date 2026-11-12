@@ -52,6 +52,7 @@ export async function resolveFolder(input: { path: string; mode?: "auto" | "git"
   const gitRoot = await isRepoRoot(folder);
   if (gitRoot && input.mode !== "folder") return { repo: folder, localGit: false, baseBranch: input.baseBranch ?? (await currentBranch(folder)) };
   if (input.mode === "git") throw new Error(`not the top of a git repository with commits: ${folder}`);
+  // initLocalGit also sets up the shared render folder (_shared/) and the pre-commit media guard
   const scan = await initLocalGit(folder);
   return { repo: folder, localGit: true, baseBranch: "main", scan: { ...scan, skippedPaths: [] }, scanSummary: describeScan(scan) };
 }

@@ -1,4 +1,12 @@
 import type { AgendaConfig, MemberRecord, MemberResult, MemoryProposal, ProjectConfig, Task } from "./model.js";
+import { sharedDirs } from "./shared.js";
+
+/** member/chair rule for the shared render folders (empty when the project has none) */
+export function sharedRule(project: Pick<ProjectConfig, "repo" | "localGit">): string {
+  const dirs = sharedDirs(project);
+  if (!dirs.length) return "";
+  return `공유 폴더: ${dirs.map((d) => "`" + d + "/`").join(", ")} 는 git에 넣지 않고, 모든 안건·위원·메인 폴더가 같은 실제 폴더를 본다(작업 폴더 안에 연결돼 있다). 영상·음성·큰 이미지 같은 렌더 결과물과 큰 생성물은 여기에 저장하고, 커밋되지 않으니 경로를 RESULT.md에 적는다. 다른 안건의 파일을 덮어쓰지 않게 화·안건별 하위 폴더나 파일 이름으로 구분하고, 남의 파일은 지우지 않는다. 그 밖의 자리에 새로 만든 큰 미디어는 커밋 때 자동으로 빠지고 작업 폴더를 정리할 때 사라진다.`;
+}
 
 export interface PacketInput {
   project: ProjectConfig;
@@ -83,6 +91,7 @@ ${i.task.description.trim() || "(위 지시 참고)"}
 ## 규칙
 ${i.project.localGit ? `
 0. 이 작업 폴더에는 git이 관리하는 파일만 있다. 파이썬 가상환경, 실행 파일·라이브러리, 큰 이미지·영상·압축·모델 파일은 원본 폴더(${i.project.repo})에만 있다. 그런 파일이 필요하면 원본 경로에서 읽기만 하고, 원본 폴더에는 절대 쓰지 않는다.
+` : ""}${sharedRule(i.project) ? `0-1. ${sharedRule(i.project)}
 ` : ""}
 1. 현재 폴더 안에서만 작업한다. 상위 폴더, 다른 worktree, 다른 브랜치를 건드리지 않는다. \`git checkout\`, \`git switch\`, \`git merge\`, \`git rebase\`, \`git push\` 는 금지. 단, 이 패킷의 지시가 특정 브랜치의 \`git merge\`를 하라고 명시하면 그 merge는 해도 된다(diff를 복사해 옮기지 말고 merge로 한다).
 1-1. 비밀값: \`.env\`·키 파일을 cat·grep·Read로 출력하지 않는다. 키가 있는지는 설정 객체로 읽어 참/거짓만 확인하고, 고칠 때는 키 이름만 다룬다. \`.env\` 백업 파일을 만들면 커밋되지 않게 하고 RESULT.md에 적는다.

@@ -173,7 +173,9 @@ export function resolveEffort(provider: CliProvider, requested: string | undefin
 
 /**
  * Claude advisor: must rank at or above the main model and within the limit.
- * Fable mains accept only Fable advisors (Claude Code exits on a bad pairing).
+ * A Fable main runs without an advisor: Fable 5.2 neither takes nor serves as one (Claude Code
+ * exits at launch). An advisor named "fable" keeps the CLI alias (the older Fable), which works
+ * for lower mains.
  */
 export function resolveAdvisor(main: string, advisor: string | undefined, limit: ProviderLimit): string | undefined {
   const a = advisor?.trim();
@@ -184,7 +186,7 @@ export function resolveAdvisor(main: string, advisor: string | undefined, limit:
   if (ta < 0) throw new LimitError(`unknown advisor "${a}"`);
   if (max >= 0 && ta > max) throw new LimitError(`advisor "${a}" is above the user's limit (${limit.maxModel})`);
   if (ta < tm) throw new LimitError(`advisor "${a}" ranks below the main model "${main}"; pick an equal or stronger advisor or none`);
-  if (/fable|mythos/i.test(main) && !/fable/i.test(a)) throw new LimitError("a Fable main model only accepts a Fable advisor");
+  if (/fable|mythos/i.test(main)) throw new LimitError("a Fable main model runs without an advisor (Fable 5.2 does not support one); pass advisor: none");
   return a;
 }
 

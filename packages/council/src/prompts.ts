@@ -1,4 +1,5 @@
 import type { AgendaConfig, ProjectConfig } from "./model.js";
+import { sharedRule } from "./packet.js";
 
 export interface ChairPromptInput {
   project: ProjectConfig;
@@ -18,7 +19,9 @@ function chairToolsText(i: ChairPromptInput): string {
     `읽기(Read/Grep/Glob)는 통합 worktree ${i.integrationWorktree} 와 위원 worktree에서 할 수 있다. 웹 검색·웹 페이지 읽기(WebSearch/WebFetch)로 자료를 직접 찾아도 된다. ` +
     "명령은 읽기 전용만 된다: git status/log/diff/show/branch/rev-parse/ls-tree/worktree list, 읽기 도구(ls, cat, head, tail, grep, wc, sort, uniq, cut, echo, du), 테스트·타입 검사(npm test, npx vitest, npx tsc --noEmit, pytest 등). 위원 결과를 검증할 때 통합 worktree에서 직접 돌려 본다.\n" +
     `메인 폴더 ${i.project.repo} 의 파일도 Read/Grep/Glob으로 읽을 수 있다. git 명령은 cd 없이 지금 폴더(통합 worktree)에서 바로 쓴다: 같은 저장소라 git log main, git branch, git diff main...<브랜치>로 모든 브랜치가 보인다(메인 폴더에 커밋 안 한 변경은 council_finish가 알려 준다). cd 다른폴더 && git …, git -C, for/while 반복문, $(...) 치환, PowerShell은 거부되니 쓰지 않는다. 한 번에 허용된 명령 하나나 && · | 로 이은 허용 명령만 쓴다. 파일 내용은 명령보다 Read/Grep/Glob으로 본다.\n` +
-    "Artifact 게시 같은 다른 도구는 없다. 결과물을 사용자에게 보여 줄 때는 council_show를 쓴다.";
+    "Artifact 게시 같은 다른 도구는 없다. 결과물을 사용자에게 보여 줄 때는 council_show를 쓴다." +
+    (sharedRule(i.project) ? `
+${sharedRule(i.project)} 위원에게 렌더를 맡길 때 저장할 공유 폴더 경로를 지시에 적는다.` : "");
   if (!i.project.chair.directEdit) return base + "\n코드는 직접 수정하지 않는다(편집 도구가 없다). 수정은 위원에게 맡긴다.";
   return (
     base +
@@ -67,7 +70,7 @@ ${i.limits}
 - 중간(gpt-6.1-terra): Sol보다 사용량이 2배 넉넉한 균형형. GPT 주간 사용량이 빠듯할 때 범위가 분명한 일반 작업에 sol 대신 쓴다.
 - 주력(sonnet / gpt-6.1-sol): 범위가 분명한 일반 코딩. 여러 단계에 걸친 긴 작업이면 sonnet + advisor opus(계획 확정 전·같은 오류 2회·완료 선언 전에만 상담). 짧은 작업엔 advisor를 붙이지 않는다.
 - 상위(opus / gpt-6-astra / gemini-4-argon): **어려운 작업은 opus를 위원 본인으로 직접 쓴다.** 해당하는 일: 여러 모듈에 걸친 설계·구조 변경, 원인을 모르는 버그와 재현이 어려운 오류, 이전 위원(sonnet 등)이 실패하거나 같은 문제로 두 번 막힌 작업의 재시도, 정확성이 핵심인 번역·알고리즘·데이터 해석, 다른 위원의 결과를 통합·정리하는 일. opus 위원에게는 advisor를 붙이지 않아도 된다.
-- 최상위(fable, 한도가 허용할 때만): **가장 어려운 작업**에 쓴다. opus도 실패했거나 실패 비용이 큰 작업, 프로젝트 전체에 걸친 큰 설계·대규모 통합, 최종 품질 검토. fable은 비싸므로 한 안건에 꼭 필요한 한두 작업에만 쓰고, 왜 fable인지 배정 보고에 한 줄로 적는다. fable 위원의 advisor는 fable만 된다(보통 붙이지 않는다).
+- 최상위(fable, 한도가 허용할 때만): **가장 어려운 작업**에 쓴다. opus도 실패했거나 실패 비용이 큰 작업, 프로젝트 전체에 걸친 큰 설계·대규모 통합, 최종 품질 검토. fable은 비싸므로 한 안건에 꼭 필요한 한두 작업에만 쓰고, 왜 fable인지 배정 보고에 한 줄로 적는다. fable(5.2) 위원에는 advisor를 붙이지 않는다(지원하지 않는다).
 - 위원 한도 표 아래의 "남은 사용량"을 보고 고른다. Claude 주간이 30% 미만이면 fable은 쓰지 않고 opus도 꼭 필요한 작업에만 쓴다. GPT는 한도가 더 빡빡하다: GPT 주간이 50% 미만이면 gpt-6-astra는 쓰지 않고 sol 이하로 한다. (이 두 조건은 council_assign이 직접 막는다.) 5시간 한도가 20% 미만이면 그 provider 대신 남은 사용량이 많은 다른 provider를 쓰거나 한도 초기화를 기다린다.
 - 어느 단계인지 애매하면 한 단계 아래로 시작하되, 실패하면 같은 작업을 한 단계 올려 다시 맡긴다(같은 모델로 세 번째 시도는 하지 않는다).
 - advisor는 메인보다 같거나 높은 모델이어야 한다.

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { rescueShared } from "./shared.js";
 
 export class GitError extends Error {
   constructor(
@@ -171,6 +172,12 @@ export async function removeDir(dir: string, attempts = 4): Promise<string | und
 }
 
 export async function removeWorktree(repo: string, dir: string): Promise<void> {
+  // renders left in a shared folder that was still a real folder here are copied to the main checkout first
+  try {
+    rescueShared(repo, dir);
+  } catch {
+    /* never blocks a cleanup */
+  }
   unlinkLinks(dir);
   try {
     await git(repo, ["worktree", "remove", "--force", dir]);

@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { git, isClean } from "./git.js";
 import type { ProjectConfig } from "./model.js";
+import { prepareShared, sharedDirs } from "./shared.js";
 
 /** folder names skipped at any depth */
 export const DEFAULT_IGNORE_DIRS = [
@@ -34,7 +35,7 @@ export const DEFAULT_IGNORE_DIRS = [
 /** compiled/binary files and logs: never tracked */
 export const BINARY_EXT = [".log", ".pyc", ".pyo", ".pyd", ".dll", ".exe", ".lib", ".so", ".dylib", ".o", ".obj", ".a", ".class", ".pdb", ".msi", ".node"];
 /** media, archives, model weights: tracked only when small (icons, sample data) */
-const HEAVY_EXT = new Set([
+export const HEAVY_EXT = new Set([
   ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".psd", ".ico", ".exr", ".hdr",
   ".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac",
   ".zip", ".7z", ".rar", ".gz", ".tgz", ".tar", ".bz2", ".xz", ".iso", ".bin", ".dat",
@@ -76,6 +77,8 @@ const slash = (p: string) => p.split(path.sep).join("/");
 
 /** Walk the folder and decide what stays out of git. */
 export async function scanFolder(root: string, extraDirs: string[] = []): Promise<ScanStats> {
+  // shared folders are excluded as a whole (shared.ts) and never listed file by file
+  const sharedPaths = new Set(sharedDirs({ repo: root, localGit: true }));
   const stats: ScanStats = { files: 0, bytes: 0, skippedFiles: 0, skippedBytes: 0, skippedDirs: [], skippedPaths: [], nestedRepos: [] };
   const ignoreDirs = new Set([...DEFAULT_IGNORE_DIRS, ...extraDirs]);
   async function walk(rel: string): Promise<void> {
@@ -101,6 +104,7 @@ export async function scanFolder(root: string, extraDirs: string[] = []): Promis
       const r = rel ? path.join(rel, e.name) : e.name;
       if (e.isDirectory()) {
         if (ignoreDirs.has(e.name)) continue; // covered by a name pattern
+        if (sharedPaths.has(slash(r))) continue;
         await walk(r);
       } else if (e.isFile()) {
         let size = 0;
@@ -192,6 +196,9 @@ export async function initLocalGit(root: string, extraDirs: string[] = []): Prom
     await git(root, ["config", "user.name", "gencouncil"]);
     await git(root, ["config", "user.email", "gencouncil@local"]);
   }
+  // shared render folders are excluded before anything is added; this runs when a project is
+  // registered, so the media guard comes with it from the start
+  await prepareShared({ repo: root, localGit: true }, { newProject: true });
   const stats = await scanFolder(root, extraDirs);
   await dropTracked(root, stats);
   await writeExclude(root, stats, extraDirs);
@@ -212,6 +219,7 @@ export async function commitUserEdits(project: ProjectConfig): Promise<string | 
   const root = project.repo;
   const cur = (await git(root, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
   if (cur !== project.baseBranch) throw new Error(`folder is on branch '${cur}', expected '${project.baseBranch}'`);
+  await prepareShared(project);
   if (await isClean(root)) return null;
   const stats = await scanFolder(root, project.ignore ?? []);
   await dropTracked(root, stats);

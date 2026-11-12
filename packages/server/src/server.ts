@@ -615,7 +615,13 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       const r = await rt.retrospectOnce();
       retro = r?.text;
     }
-    const out = await rt.council.finish();
+    let out: string;
+    try {
+      out = await rt.council.finish();
+    } catch (e) {
+      rt.reportFinishFailure((e as Error).message);
+      throw new HttpError(409, `안건 종료 실패: ${(e as Error).message}`);
+    }
     rt.close({ closeMemory: false });
     runtimes.delete(rt.key);
     broadcast({ type: "overview" });

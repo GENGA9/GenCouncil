@@ -5,7 +5,7 @@
  * have to sit at the PC.
  */
 import type { Account } from "./accounts.js";
-import { spawnCli, wireProcess } from "./drivers.js";
+import { claudeModelId, spawnCli, wireProcess } from "./drivers.js";
 
 export interface PermissionRequest {
   memberId: string;
@@ -73,7 +73,7 @@ JSON 한 줄로만 답하라: {"behavior":"allow"|"deny","reason":"한 문장"}`
 export function chairReview(req: PermissionRequest, opts: { model?: string; env: Record<string, string>; timeoutMs?: number }): Promise<PermissionDecision> {
   return new Promise((resolve) => {
     const args = ["-p", reviewerPrompt(req), "--output-format", "json", "--tools", "", "--strict-mcp-config", "--permission-prompts", "none", "--effort", "low"];
-    if (opts.model) args.push("--model", opts.model);
+    if (opts.model) args.push("--model", claudeModelId(opts.model));
     const env: NodeJS.ProcessEnv = { ...process.env, ...opts.env };
     delete env.CLAUDECODE;
     let out = "";

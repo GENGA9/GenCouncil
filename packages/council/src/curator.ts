@@ -10,7 +10,7 @@ import path from "node:path";
 import { entryScope, memoryDir, spaceDir, type Entry, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
 import { AccountRegistry } from "./accounts.js";
-import { parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent } from "./drivers.js";
+import { claudeModelId, parseClaudeLine, spawnCli, wireProcess, type ClaudeEvent } from "./drivers.js";
 
 /** routine runs: proposals and the incremental tidy */
 export const CURATOR_MODEL = "opus";
@@ -341,7 +341,7 @@ export function runCurator(
     "stream-json",
     "--verbose",
     "--model",
-    model,
+    claudeModelId(model),
     "--effort",
     effort,
     "--mcp-config",

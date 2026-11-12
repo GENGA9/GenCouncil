@@ -53,6 +53,9 @@ check("advisor below main rejected", throws(() => resolveAdvisor("sonnet", "haik
 check("advisor above limit rejected", throws(() => resolveAdvisor("haiku", "opus", lim.claude), /above the user's limit/));
 check("advisor ok", resolveAdvisor("haiku", "sonnet", lim.claude) === "sonnet");
 check("fable main needs fable advisor", throws(() => resolveAdvisor("fable", "opus", normalizeLimits({ claude: { maxMembers: 1, maxModel: "fable" } }).claude), /ranks below|Fable/));
+const fableLim = normalizeLimits({ claude: { maxMembers: 1, maxModel: "fable" } }).claude;
+check("fable main takes no advisor", throws(() => resolveAdvisor("fable", "fable", fableLim), /without an advisor/) && resolveAdvisor("fable", "none", fableLim) === undefined);
+check("opus main may take fable advisor", resolveAdvisor("opus", "fable", fableLim) === "fable");
 check("gpt display name", memberDisplayName({ id: "gpt-1", provider: "gpt", model: "gpt-6.1-sol" }) === "GPT-6.1 Sol");
 check("terra display name", memberDisplayName({ id: "gpt-2", provider: "gpt", model: "gpt-6.1-terra" }) === "GPT-6.1 Terra");
 
@@ -159,12 +162,12 @@ check("member worktree has no venv or big files", !fs.existsSync(path.join(wt, "
 fs.writeFileSync(path.join(wt, "keep.txt"), "keep\nchanged by member\n");
 fs.writeFileSync(path.join(wt, "new.txt"), "new\n");
 fs.rmSync(path.join(wt, "sub", "old.txt"));
-// a rendered video the member commits on purpose (bigger than the media limit)
+// a rendered video committed on purpose past the media guard (--no-verify; renders normally go to _shared/)
 fs.mkdirSync(path.join(wt, "renders"), { recursive: true });
 fs.writeFileSync(path.join(wt, "renders", "ep01.mp4"), Buffer.alloc(200 * 1024));
 await git(wt, ["add", "-A"]);
 await git(wt, ["add", "-f", "renders/ep01.mp4"]);
-await git(wt, ["commit", "-q", "-m", "member work"]);
+await git(wt, ["commit", "-q", "--no-verify", "-m", "member work"]);
 fstore.saveMembers([{ id: "claude-1", provider: "claude", taskId: "T1", branch: fstore.memberBranch("claude-1"), worktree: wt, status: "done", startedAt: "", toolCalls: 0 }]);
 fstore.saveTasks([{ id: "T1", title: "t", description: "", status: "review", created: "", updated: "" }]);
 const fc2 = new Council(fstore, memory);

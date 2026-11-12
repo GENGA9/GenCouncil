@@ -458,6 +458,14 @@ export class AgendaRuntime extends EventEmitter {
     }
   }
 
+  /** a finish the user started from the web failed: record it and hand the problem to the chair */
+  reportFinishFailure(message: string): void {
+    this.council.store.appendTranscript({ role: "event", text: `[council event] 안건 종료 실패: ${message}` });
+    this.enqueue(`[council event] 사용자가 누른 안건 종료가 실패했다: ${message}
+사용자에게 무엇이 막혔는지 짧게 알리고, 풀 수 있는 문제면 위원에게 맡겨 해결한 뒤 사용자에게 다시 종료를 누르라고 하거나 council_finish를 호출하라.`);
+    this.emitEvent({ type: "state" });
+  }
+
   /** true while the retrospective turn runs; a council_finish inside it does not finish again */
   private retrospecting = false;
 

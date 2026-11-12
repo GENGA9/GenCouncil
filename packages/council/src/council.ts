@@ -48,6 +48,7 @@ import {
   type WebSite,
 } from "./models.js";
 import { commitUserEdits } from "./localgit.js";
+import { linkShared, prepareShared } from "./shared.js";
 import {
   AgendaStore,
   ProjectRegistry,
@@ -252,6 +253,12 @@ export class Council extends EventEmitter {
     step("repo check");
     // a closed agenda is history: show it, but never commit, recreate its branch or worktrees
     if (this.store.agenda().status === "closed") {
+      const closed = this.store.agenda();
+      if (closed.waitingForUser) {
+        closed.waitingForUser = undefined;
+        this.store.saveAgenda(closed);
+      }
+      fs.rmSync(path.join(this.store.chairDir(), "running.json"), { force: true });
       const still = await this.retryPendingCleanup();
       if (still.length) this.log(`still locked: ${still.join(", ")}`);
       return;
@@ -266,6 +273,8 @@ export class Council extends EventEmitter {
     await ensureBranch(repo, agenda.branch, agenda.baseBranch);
     await ensureWorktree(repo, this.store.integrationWorktree(), agenda.branch, agenda.baseBranch);
     step("integration worktree");
+    await prepareShared(this.project).catch((e) => this.log(`shared folders: ${(e as Error).message.split("\n")[0]}`));
+    this.linkSharedInto(this.store.integrationWorktree());
     const members = this.members();
     let changed = false;
     for (const m of members) {
@@ -541,6 +550,7 @@ ${rows.join("\n")}`;
     const branch = this.store.memberBranch(id);
     const worktree = this.store.memberWorktree(id);
     if (!(await this.reuseFolder(worktree, branch))) await ensureWorktree(this.project.repo, worktree, branch, agenda.branch);
+    this.linkSharedInto(worktree);
 
     const member: MemberRecord = {
       id,
@@ -1312,7 +1322,12 @@ ${rows.join("\n")}`;
     const changed = await trackedChanges(repo);
     if (changed.length) throw new Error(`main checkout has uncommitted changes (${changed.slice(0, 10).join(", ")}); commit or stash them first`);
     const res = await mergeInto(repo, agenda.branch, message);
-    if (!res.ok) throw new Error(`merge conflict in main checkout: ${res.conflicts.join(", ")}`);
+    if (!res.ok && !res.conflicts.length) throw new Error(`메인 폴더 머지가 실패했다(충돌은 아님): ${res.output.trim().split(/\s*\n\s*/).slice(-3).join(" ").slice(0, 400)}`);
+    if (!res.ok)
+      throw new Error(
+        `메인(${agenda.baseBranch})이 이 안건 뒤에 따로 바뀌어 머지 충돌이 난다: ${res.conflicts.slice(0, 12).join(", ")}${res.conflicts.length > 12 ? ` 외 ${res.conflicts.length - 12}개` : ""}. ` +
+          `메인 폴더는 그대로다. 위원 한 명에게 안건 브랜치(${agenda.branch})에서 'git merge ${agenda.baseBranch}'로 이 파일들을 합치게 하고(생성물은 생성기를 다시 돌려 만든다) council_merge한 뒤 다시 종료한다.`,
+      );
     return { output: res.output, agenda };
   }
 
@@ -1331,19 +1346,36 @@ ${rows.join("\n")}`;
     return output;
   }
 
+  /** set while a finish merges; a second finish (double tap, chair and user at once) is refused */
+  private finishing = false;
+
   async finish(): Promise<string> {
     if (this.running.size) throw new Error("members still running");
-    const { output, agenda } = await this.mergeAgendaIntoBase(`agenda: ${this.store.agenda().title}`);
+    if (this.finishing) throw new Error("이미 안건을 종료하는 중이다. 머지가 끝날 때까지 기다린다.");
+    if (this.store.agenda().status === "closed") throw new Error("이 안건은 이미 종료되었습니다.");
+    this.finishing = true;
+    let output: string;
+    let agenda: AgendaConfig;
+    try {
+      ({ output, agenda } = await this.mergeAgendaIntoBase(`agenda: ${this.store.agenda().title}`));
+    } finally {
+      this.finishing = false;
+    }
     const res = { output };
-    // the merge is the finish; from here on the agenda is closed even if a folder stays locked
+    // the merge is the finish; from here on the agenda is closed even if a folder stays locked.
+    // cleanup is recorded as pending first, so a server that dies mid-cleanup finishes it on the next open
     agenda.status = "closed";
     agenda.closed = new Date().toISOString();
+    agenda.waitingForUser = undefined;
+    agenda.cleanupPending = [this.store.worktreeRoot()];
     this.store.saveAgenda(agenda);
     const leftovers = await this.clean();
-    if (leftovers.length) {
+    {
       const a = this.store.agenda();
-      a.cleanupPending = leftovers;
+      a.cleanupPending = leftovers.length ? leftovers : undefined;
       this.store.saveAgenda(a);
+    }
+    if (leftovers.length) {
       this.log(`finish: could not delete ${leftovers.join(", ")}; will retry when the agenda is opened`);
       return `${res.output}\n(머지는 끝났지만 지우지 못한 폴더가 있어 나중에 다시 지웁니다: ${leftovers.join(", ")})`;
     }
@@ -1357,7 +1389,10 @@ ${rows.join("\n")}`;
     const still: string[] = [];
     for (const dir of a.cleanupPending) {
       const p = dir.replace(/ \(.*\)$/, "");
-      if (await removeDir(p)) still.push(dir);
+      // the whole worktree folder is pending when the finish died before its cleanup: do the full
+      // cleanup (archive notes, remove each worktree through git, unlink node_modules junctions)
+      if (path.resolve(p) === path.resolve(this.store.worktreeRoot())) still.push(...(await this.clean()));
+      else if (await removeDir(p)) still.push(dir);
     }
     await git(this.project.repo, ["worktree", "prune"]).catch(() => "");
     a.cleanupPending = still.length ? still : undefined;
@@ -1433,6 +1468,16 @@ ${rows.join("\n")}`;
    * renamed to the new member's path (no file is rewritten) and switched to its new branch, so git
    * only rewrites the files that differ. Returns false when no folder could be reused.
    */
+  /** link the shared render folders (shared.ts) into a worktree; a failure never blocks the work */
+  private linkSharedInto(worktree: string): void {
+    try {
+      const { skipped } = linkShared(this.project, worktree);
+      if (skipped.length) this.log(`shared folders not linked into ${path.basename(worktree)} (this branch still has files there): ${skipped.join(", ")}`);
+    } catch (e) {
+      this.log(`shared folders: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+
   private async reuseFolder(worktree: string, branch: string): Promise<boolean> {
     const repo = this.project.repo;
     const from = this.store.agenda().branch;

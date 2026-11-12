@@ -127,6 +127,39 @@ rt2.close({ closeMemory: false });
   r3.close({ closeMemory: false });
 }
 
+// ---- 4b-2. a double tap starts two finishes: the second is refused, not reported as a conflict ----
+{
+  const s5 = AgendaStore.create(project, "두 번 누름", ["x"]);
+  const r5 = await AgendaRuntime.open(s5, memory, chairOpts);
+  const integ5 = s5.integrationWorktree();
+  fs.writeFileSync(path.join(integ5, "d.txt"), "d\n");
+  sh(["add", "d.txt"], integ5);
+  sh(["commit", "-q", "-m", "add d"], integ5);
+  const [a, b] = await Promise.allSettled([r5.council.finish(), r5.council.finish()]);
+  check("double finish: one merges, the other is refused as already finishing", a.status === "fulfilled" && b.status === "rejected" && /이미 안건을 종료하는 중/.test(String(b.reason?.message)), String(b.reason?.message));
+  check("double finish leaves one closed agenda", s5.agenda().status === "closed" && !s5.agenda().waitingForUser && !s5.agenda().cleanupPending);
+  r5.close({ closeMemory: false });
+}
+
+// ---- 4b-3. the server died after the merge but before the cleanup: the next open finishes it ----
+{
+  const s6 = AgendaStore.create(project, "정리 전 꺼짐", ["x"]);
+  const r6 = await AgendaRuntime.open(s6, memory, chairOpts);
+  r6.close({ closeMemory: false });
+  const a = s6.agenda();
+  a.status = "closed";
+  a.cleanupPending = [s6.worktreeRoot()];
+  a.waitingForUser = { question: "안건을 종료할까요?", options: ["안건 종료"], at: new Date().toISOString(), kind: "finish" };
+  s6.saveAgenda(a);
+  fs.mkdirSync(s6.chairDir(), { recursive: true });
+  fs.writeFileSync(path.join(s6.chairDir(), "running.json"), "{}");
+  check("setup: worktree still there", fs.existsSync(s6.integrationWorktree()));
+  const r6b = await AgendaRuntime.open(s6, memory, chairOpts);
+  check("reopening a closed agenda finishes the cleanup", !fs.existsSync(s6.worktreeRoot()) && !s6.agenda().cleanupPending && !sh(["worktree", "list"]).includes("정리 전 꺼짐"));
+  check("reopening drops the stale finish card and chair marker", !s6.agenda().waitingForUser && !fs.existsSync(path.join(s6.chairDir(), "running.json")));
+  r6b.close({ closeMemory: false });
+}
+
 // ---- 4c. the chair waiting for the user's decision ----
 {
   const { trailingQuestion } = await import("@gencouncil/council");

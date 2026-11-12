@@ -130,11 +130,30 @@ export function wireProcess(child: ChildProcess, spec: SpawnSpec, onLine: LineHa
 
 // ---------- Claude Code ----------
 
+/**
+ * Claude Code's tier aliases can lag behind released models (the "fable" alias still meant
+ * Fable 5.1 when 5.2 was out), so a bare tier is sent as the full id. GENCOUNCIL_<TIER>_MODEL
+ * overrides one; tiers without an entry keep the alias.
+ */
+export const CLAUDE_MODEL_IDS: Record<string, string> = {
+  fable: process.env.GENCOUNCIL_FABLE_MODEL ?? "claude-fable-5-2",
+  ...(process.env.GENCOUNCIL_OPUS_MODEL ? { opus: process.env.GENCOUNCIL_OPUS_MODEL } : {}),
+  ...(process.env.GENCOUNCIL_SONNET_MODEL ? { sonnet: process.env.GENCOUNCIL_SONNET_MODEL } : {}),
+  ...(process.env.GENCOUNCIL_HAIKU_MODEL ? { haiku: process.env.GENCOUNCIL_HAIKU_MODEL } : {}),
+};
+
+export function claudeModelId(model: string): string;
+export function claudeModelId(model: string | undefined): string | undefined;
+export function claudeModelId(model: string | undefined): string | undefined {
+  if (!model) return model;
+  return CLAUDE_MODEL_IDS[model.toLowerCase()] ?? model;
+}
+
 export const claudeDriver: Driver = {
   provider: "claude",
   spawn(spec, onLine) {
     const args = ["-p", spec.prompt, "--output-format", "stream-json", "--verbose"];
-    if (spec.model) args.push("--model", spec.model);
+    if (spec.model) args.push("--model", claudeModelId(spec.model));
     if (spec.effort) args.push("--effort", spec.effort);
     if (spec.autonomy === "full") args.push("--dangerously-skip-permissions");
     else args.push("--permission-mode", "acceptEdits"); // "chair" adds --permission-prompt-tool via extraArgs

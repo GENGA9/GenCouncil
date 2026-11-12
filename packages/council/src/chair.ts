@@ -5,7 +5,7 @@ import { WikiStore } from "@gencouncil/core";
 import { ensureAgyCouncil, serverEntry } from "@gencouncil/mcp/install";
 import type { Account } from "./accounts.js";
 import type { Council } from "./council.js";
-import { agyModelId, codexMcpArgs, makeAgyParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
+import { agyModelId, claudeModelId, codexMcpArgs, makeAgyParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
 import { tierOf, type CliProvider } from "./models.js";
 import { advisorFor, projectMemoryKey } from "./model.js";
 import { chairSystemPrompt } from "./prompts.js";
@@ -370,7 +370,7 @@ export class Chair {
     args.push("--add-dir", this.council.project.repo);
     const model = this.model();
     const effort = this.effort();
-    if (model) args.push("--model", model);
+    if (model) args.push("--model", claudeModelId(model));
     if (effort) args.push("--effort", effort);
     const advisor = this.advisor();
     if (advisor) args.push("--advisor", advisor);
