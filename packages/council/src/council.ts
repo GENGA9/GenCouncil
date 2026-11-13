@@ -40,6 +40,7 @@ import {
   resolveModel,
   checkTopModelUsage,
   allowedEfforts,
+  effortIndex,
   allowedModels,
   tierOf,
   type CliProvider,
@@ -539,7 +540,7 @@ ${rows.join("\n")}`;
       // a fallback provider cannot use the other provider's model name
       model = this.fitModel(account, resolveModel(p, p === requested ? input.model : undefined, limits[p]));
       checkTopModelUsage(p, model, this.weeklyLeft(p), input.overrideUsage, limits[p].topModelMinWeeklyLeft);
-      effort = resolveEffort(p, input.effort, limits[p]);
+      effort = resolveEffort(p, input.effort, limits[p], model);
       if (p === "claude") advisor = resolveAdvisor(model, input.advisor, limits.claude);
     } else {
       site = input.site && (WEB_SITES as readonly string[]).includes(input.site) ? input.site : undefined;
@@ -870,7 +871,10 @@ ${rows.join("\n")}`;
     this.checkSlot(provider);
     const sameProvider = provider === prev.provider;
     const model = this.fitModel(pick.account, resolveModel(provider, opts.model ?? (sameProvider ? prev.model : undefined), limits[provider]));
-    const effort = resolveEffort(provider, opts.effort ?? (sameProvider ? prev.effort : undefined), limits[provider]);
+    const inheritedEffort = sameProvider && prev.effort
+      ? allowedEfforts(provider, limits[provider], model).filter((e) => effortIndex(e) <= effortIndex(prev.effort)).at(-1)
+      : undefined;
+    const effort = resolveEffort(provider, opts.effort ?? inheritedEffort, limits[provider], model);
     let advisor: string | undefined;
     if (provider === "claude" && sameProvider && prev.advisor) {
       try {

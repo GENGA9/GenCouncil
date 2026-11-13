@@ -141,7 +141,7 @@ check("task follows handover", store.tasks().find((t) => t.id === tHo.id).member
 check("events order: failed then done", events.map((e) => e.id).join() === "claude-1,claude-2", events.map((e) => e.id).join());
 check("no second handover allowed", await council.handover("claude-1").then(() => false, (e) => /already handed over/.test(e.message)));
 
-// ---- Antigravity quota is per model: a spent Argon goes on with Flash on the same login ----
+// ---- Antigravity quota is per model: a spent Argon goes on with Hydrogen on the same login ----
 const agyQuota = "error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59h36m39s.";
 const q3 = classifyFailure("gemini", agyQuota, 1);
 check("agy per-model quota parsed with its reset", q3.kind === "quota" && Math.abs(Date.parse(q3.resetAt) - (Date.now() + (59 * 3600 + 36 * 60 + 39) * 1000)) < 60_000, JSON.stringify(q3));
@@ -162,11 +162,13 @@ const g1 = await council.assign({ taskId: tGem.id, provider: "gemini", model: "g
 const g2 = await gemDone;
 const gAcc = reg.get("gemini");
 check("argon blocked, account still usable", gAcc.status === "ok" && Boolean(gAcc.modelBlocks?.["gemini-4-argon"]), JSON.stringify(gAcc));
-check("handover stays on the same login with flash", g1.model === "gemini-4-argon" && g2.account === "gemini" && g2.model === "gemini-3.8-flash" && g2.status === "done", JSON.stringify([g2.account, g2.model, g2.status, geminiSpawns]));
+check("handover stays on the same login with hydrogen", g1.model === "gemini-4-argon" && g2.account === "gemini" && g2.model === "gemini-4-hydrogen" && g2.status === "done", JSON.stringify([g2.account, g2.model, g2.status, geminiSpawns]));
 const tGem2 = council.addTask({ title: "또 조사", goal: 2 });
 const g3 = await council.assign({ taskId: tGem2.id, provider: "gemini", model: "gemini-4-argon", instructions: "조사하라." });
-check("new argon assignment steps down while blocked", g3.model === "gemini-3.8-flash", g3.model);
+check("new argon assignment steps down while blocked", g3.model === "gemini-4-hydrogen", g3.model);
 await new Promise((r) => council.on("member:done", (m) => m.id === g3.id && r()));
+reg.blockModel("gemini", "gemini-4-hydrogen", agyQuota);
+check("argon and hydrogen spent: steps down to flash", reg.fitModel("gemini", "gemini-4-argon") === "gemini-3.8-flash");
 reg.blockModel("gemini", "gemini-3.8-flash", agyQuota);
 check("all models spent: no lower model left", reg.fitModel("gemini", "gemini-4-argon") === undefined);
 reg.markOk("gemini");
