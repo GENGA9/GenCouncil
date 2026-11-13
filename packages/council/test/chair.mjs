@@ -162,7 +162,7 @@ const agyMcp = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "config
 const agySet = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "antigravity-cli", "settings.json"), "utf8"));
 check("council bridge and memory registered for agy", agyMcp.mcpServers.gencouncil_council?.args?.[0]?.endsWith("bridge.js") && agyMcp.mcpServers.gencouncil?.args?.[0]?.endsWith("server.js"));
 check("their tools allowed without prompts", agySet.permissions.allow.includes("mcp(gencouncil_council/*)") && agySet.permissions.allow.includes("mcp(gencouncil/*)"));
-// Antigravity spends Argon on its own: the chair goes on with Flash on the same login
+// Antigravity spends Argon on its own: the chair goes on with Hydrogen on the same login
 process.env.GC_ARGON_SPENT = "1";
 process.env.USERPROFILE = fakeHome;
 const shown = [];
@@ -170,9 +170,9 @@ const m2 = await chairTok.turn("아르곤 한도 소진", (e) => e.kind === "tex
 process.env.USERPROFILE = realProfile;
 delete process.env.GC_ARGON_SPENT;
 const aArgs2 = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8");
-check("argon quota: same gemini login retried with flash", !m2.isError && aArgs2.includes("--model gemini-3.8-flash") && council.accounts.get("gemini").status === "ok", JSON.stringify([m2, aArgs2]));
-check("the user is told about the step down", shown.some((t) => /gemini-4-argon 한도 소진 → gemini-3\.8-flash/.test(t)), JSON.stringify(shown));
-check("chair model now reports flash", chairTok.model() === "gemini-3.8-flash");
+check("argon quota: same gemini login retried with hydrogen", !m2.isError && aArgs2.includes("--model gemini-4-hydrogen") && council.accounts.get("gemini").status === "ok", JSON.stringify([m2, aArgs2]));
+check("the user is told about the step down", shown.some((t) => /gemini-4-argon 한도 소진 → gemini-4-hydrogen/.test(t)), JSON.stringify(shown));
+check("chair model now reports hydrogen", chairTok.model() === "gemini-4-hydrogen");
 council.accounts.markOk("gemini");
 council.project.chair.account = "claude";
 await chairTok.turn("클로드 의장", () => {});
