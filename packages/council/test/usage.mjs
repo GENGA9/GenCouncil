@@ -30,6 +30,11 @@ check("codex 5h + weekly", both.fiveHour?.usedPct === 12 && both.weekly?.usedPct
 check("agy model + effort", agyModelId("gemini-4-argon", "high") === "gemini-4-argon-high" && agyModelId("gemini-3.8-flash", "max") === "gemini-3.8-flash-high" && agyModelId("gemini-3.8-flash", undefined) === "gemini-3.8-flash-medium");
 check("agy model keeps explicit suffix", agyModelId("gemini-4-argon-low", "high") === "gemini-4-argon-low");
 
+check("hydrogen high suffix", agyModelId("gemini-4-hydrogen", "high") === "gemini-4-hydrogen-high");
+check("hydrogen xhigh and max clamp", agyModelId("gemini-4-hydrogen", "xhigh") === "gemini-4-hydrogen-xhigh" && agyModelId("gemini-4-hydrogen", "max") === "gemini-4-hydrogen-xhigh");
+check("hydrogen explicit xhigh suffix kept once", agyModelId("gemini-4-hydrogen-xhigh", "low") === "gemini-4-hydrogen-xhigh");
+check("other gemini models clamp xhigh", agyModelId("gemini-4-argon", "xhigh") === "gemini-4-argon-high" && agyModelId("gemini-3.8-flash-xhigh", "low") === "gemini-3.8-flash-high");
+
 // stream-json from a real `agy -p ... --output-format stream-json` run
 const parse = makeAgyParser();
 const lines = [

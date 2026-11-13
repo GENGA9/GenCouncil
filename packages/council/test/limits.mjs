@@ -42,7 +42,7 @@ const rejects = (p, re) => p.then(() => false, (e) => re.test(e.message));
 
 // ---- ladders ----
 const lim = normalizeLimits({ claude: { maxMembers: 1, maxModel: "sonnet", maxEffort: "medium" }, gpt: { maxMembers: 0 }, "gemini-web": { maxMembers: 1 } });
-check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 2 && tierOf("gpt", "gpt-6.1-terra") === 1 && tierOf("gemini", "gemini-3.8-flash-high") === 0 && tierOf("gemini", "gemini-2.5-pro") === 1);
+check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 2 && tierOf("gpt", "gpt-6.1-terra") === 1 && tierOf("gemini", "gemini-3.8-flash-high") === 0 && tierOf("gemini", "gemini-2.5-pro") === 2);
 check("default model is the workhorse within limit", resolveModel("claude", undefined, lim.claude) === "sonnet" && resolveModel("gpt", undefined, normalizeLimits({}).gpt) === "gpt-6.1-sol");
 check("model above limit rejected", throws(() => resolveModel("claude", "opus", lim.claude), /above the user's limit/));
 check("unknown model rejected", throws(() => resolveModel("claude", "gpt-6", lim.claude), /unknown claude model/));
@@ -58,6 +58,20 @@ check("fable main takes no advisor", throws(() => resolveAdvisor("fable", "fable
 check("opus main may take fable advisor", resolveAdvisor("opus", "fable", fableLim) === "fable");
 check("gpt display name", memberDisplayName({ id: "gpt-1", provider: "gpt", model: "gpt-6.1-sol" }) === "GPT-6.1 Sol");
 check("terra display name", memberDisplayName({ id: "gpt-2", provider: "gpt", model: "gpt-6.1-terra" }) === "GPT-6.1 Terra");
+
+// Hydrogen is the middle workhorse; old Flash/Pro limits keep their meaning.
+check("hydrogen tier and suffix do not match argon", tierOf("gemini", "gemini-4-hydrogen") === 1 && tierOf("gemini", "gemini-4-hydrogen-xhigh") === 1);
+check("gemini workhorse is hydrogen", resolveModel("gemini", undefined, lim.gemini) === "gemini-4-hydrogen");
+check("flash limit clamps the workhorse", resolveModel("gemini", undefined, { maxMembers: 1, maxModel: "gemini-3.8-flash" }) === "gemini-3.8-flash");
+const hydrogenLimit = { ...lim.gemini, maxEffort: "xhigh" };
+check("hydrogen permits xhigh within user limit", resolveEffort("gemini", "xhigh", hydrogenLimit, "gemini-4-hydrogen") === "xhigh");
+check("default gemini effort limit still rejects xhigh", throws(() => resolveEffort("gemini", "xhigh", lim.gemini, "gemini-4-hydrogen"), /above the user's limit/));
+for (const model of ["gemini-4-argon", "gemini-3.8-flash"]) {
+  check(model + " rejects xhigh", throws(() => resolveEffort("gemini", "xhigh", hydrogenLimit, model), /above the user's limit/));
+}
+check("explicit xhigh suffix cannot bypass user effort limit", throws(() => resolveEffort("gemini", "low", lim.gemini, "gemini-4-hydrogen-xhigh"), /above the user's limit/));
+check("explicit xhigh suffix is validated and retained", resolveEffort("gemini", "low", hydrogenLimit, "gemini-4-hydrogen-xhigh") === "xhigh");
+check("hydrogen rejects max effort", throws(() => resolveEffort("gemini", "max", { ...hydrogenLimit, maxEffort: "max" }, "gemini-4-hydrogen"), /above the user's limit/));
 
 // ---- codex json ----
 const ev = [

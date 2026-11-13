@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Autonomy, Provider } from "./model.js";
 import type { CliProvider } from "./models.js";
+import { effortIndex, modelEffortCap } from "./models.js";
 
 export interface SpawnSpec {
   cwd: string;
@@ -169,12 +170,15 @@ export const claudeDriver: Driver = {
 // ---------- Gemini via Antigravity CLI (agy) ----------
 // Google stopped serving Gemini CLI personal logins; Antigravity CLI is the replacement.
 
-/** "gemini-4-argon" + "high" -> "gemini-4-argon-high" (xhigh/max clamp to high) */
+/** Append agy's effort suffix, clamped to each model's supported ceiling. */
 export function agyModelId(model: string | undefined, effort: string | undefined): string | undefined {
   if (!model) return undefined;
-  if (/-(low|medium|high)$/.test(model)) return model;
-  const e = effort === "low" || effort === "medium" ? effort : effort ? "high" : "medium";
-  return `${model}-${e}`;
+  const explicit = model.match(/-(low|medium|high|xhigh)$/);
+  const base = explicit ? model.slice(0, -explicit[0].length) : model;
+  const requested = explicit?.[1] ?? effort ?? "medium";
+  const cap = modelEffortCap("gemini", base);
+  const e = effortIndex(requested) >= 0 && effortIndex(requested) <= effortIndex(cap) ? requested : cap;
+  return `${base}-${e}`;
 }
 
 /** packets up to this size go in the prompt itself; bigger ones are read from .council/TASK.md */

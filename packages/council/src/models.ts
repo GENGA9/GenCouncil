@@ -23,6 +23,8 @@ export interface ModelInfo {
   note: string;
   /** matches full ids / older versions of the same tier */
   match: RegExp;
+  /** optional model-specific reasoning ceiling */
+  maxEffort?: Effort;
 }
 
 /** lowest to highest */
@@ -33,9 +35,10 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
     { id: "opus", label: "Opus", note: "어려운 설계·디버깅, advisor", match: /opus/i },
     { id: "fable", label: "Fable", note: "최상위. 가장 어려운 장기 작업", match: /fable|mythos/i },
   ],
-  // Antigravity CLI (agy). The CLI takes "<model>-<low|medium|high>"; the driver adds the effort suffix.
+  // Antigravity CLI (agy). The driver adds the effort suffix (Hydrogen also supports xhigh).
   gemini: [
     { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", note: "빠른 범용. 단순 수정·반복", match: /flash/i },
+    { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", note: "주력. 빠른 코딩·에이전트 작업, Argon급 지능", match: /hydrogen/i, maxEffort: "xhigh" },
     { id: "gemini-4-argon", label: "Gemini 4 Argon", note: "최상위. 긴 맥락 분석·리서치·설계", match: /argon|pro/i },
   ],
   gpt: [
@@ -49,8 +52,12 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
 /** CLI accepts an effort setting */
 export const SUPPORTS_EFFORT: Record<CliProvider, boolean> = { claude: true, gemini: true, gpt: true };
 
-/** highest effort each CLI understands (Antigravity models come in low / medium / high) */
+/** default ceiling, unless a model explicitly supports more */
 export const EFFORT_CAP: Record<CliProvider, Effort> = { claude: "max", gemini: "high", gpt: "max" };
+
+export function modelEffortCap(provider: CliProvider, model: string): Effort {
+  return LADDERS[provider][tierOf(provider, model)]?.maxEffort ?? EFFORT_CAP[provider];
+}
 
 export const SITE_INFO: Record<WebSite, { label: string; url: string; family: "gemini" | "gpt" }> = {
   "gemini-web": { label: "웹 제미나이", url: "https://gemini.google.com/app", family: "gemini" },
@@ -128,9 +135,11 @@ export function allowedModels(provider: CliProvider, limit: ProviderLimit): Mode
   return max < 0 ? ladder : ladder.slice(0, max + 1);
 }
 
-export function allowedEfforts(provider: CliProvider, limit: ProviderLimit): Effort[] {
+export function allowedEfforts(provider: CliProvider, limit: ProviderLimit, model?: string): Effort[] {
   if (!SUPPORTS_EFFORT[provider]) return [];
-  const cap = effortIndex(EFFORT_CAP[provider]);
+  const cap = model
+    ? effortIndex(modelEffortCap(provider, model))
+    : Math.max(effortIndex(EFFORT_CAP[provider]), ...allowedModels(provider, limit).map((m) => effortIndex(modelEffortCap(provider, m.id))));
   const lim = effortIndex(limit.maxEffort);
   const max = lim < 0 ? cap : Math.min(lim, cap);
   return EFFORTS.slice(0, max + 1);
@@ -158,7 +167,7 @@ export function checkTopModelUsage(provider: CliProvider, model: string | undefi
 }
 
 /** the default rung when the chair names no model */
-export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-argon", gpt: "gpt-6.1-sol" };
+export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-hydrogen", gpt: "gpt-6.1-sol" };
 
 /** default = the "workhorse" clamped to the limit */
 export function resolveModel(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): string {
@@ -172,9 +181,11 @@ export function resolveModel(provider: CliProvider, requested: string | undefine
 }
 
 /** default = medium clamped to the limit; undefined when the CLI has no effort setting */
-export function resolveEffort(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): Effort | undefined {
+export function resolveEffort(provider: CliProvider, requested: string | undefined, limit: ProviderLimit, model = resolveModel(provider, undefined, limit)): Effort | undefined {
   if (!SUPPORTS_EFFORT[provider]) return undefined;
-  const allowed = allowedEfforts(provider, limit);
+  // agy gives an explicit model suffix precedence over the separate effort option.
+  if (provider === "gemini") requested = model.match(/-(low|medium|high|xhigh)$/)?.[1] ?? requested;
+  const allowed = allowedEfforts(provider, limit, model);
   if (!requested) return allowed.includes("medium") ? "medium" : allowed[allowed.length - 1];
   if (!EFFORTS.includes(requested as Effort)) throw new LimitError(`unknown effort "${requested}". use one of ${EFFORTS.join(", ")}`);
   if (!allowed.includes(requested as Effort)) throw new LimitError(`${provider} effort "${requested}" is above the user's limit (${limit.maxEffort}). allowed: ${allowed.join(", ")}`);

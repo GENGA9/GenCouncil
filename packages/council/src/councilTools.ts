@@ -107,7 +107,7 @@ export function createCouncilMcp(council: Council): McpServer {
       inputSchema: {
         task_id: z.string(),
         provider: z.enum(["claude", "gemini", "gpt", "relay"]).optional().describe("default: project.members.defaultProvider"),
-        model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-3.8-flash | gemini-4-argon, gpt-6-luna | gpt-6.1-terra | gpt-6.1-sol | gpt-6-astra. default: the workhorse model within the limit"),
+        model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-3.8-flash | gemini-4-hydrogen | gemini-4-argon, gpt-6-luna | gpt-6.1-terra | gpt-6.1-sol | gpt-6-astra. default: the workhorse model within the limit"),
         effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("claude/gpt only. default medium (clamped to the limit)"),
         advisor: z.string().optional().describe("claude only: stronger model consulted before locking a plan, after a repeated error and before declaring done, e.g. opus. omit for short tasks"),
         account: z.string().optional().describe("preferred account id (see council_accounts)"),

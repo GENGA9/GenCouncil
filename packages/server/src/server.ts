@@ -17,7 +17,7 @@ import {
   SITE_INFO,
   SHOW_TYPES,
   SUPPORTS_EFFORT,
-  EFFORT_CAP,
+  allowedEfforts,
   WEB_SITES,
   createProject,
   updateProject,
@@ -366,7 +366,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     return { ...p, scanSummary };
   });
   on("GET", "/api/models", () => ({
-    providers: CLI_PROVIDERS.map((p) => ({ id: p, models: LADDERS[p].map(({ id, label, note }) => ({ id, label, note })), effort: SUPPORTS_EFFORT[p], efforts: EFFORTS.slice(0, EFFORTS.indexOf(EFFORT_CAP[p]) + 1) })),
+    providers: CLI_PROVIDERS.map((p) => ({ id: p, models: LADDERS[p].map(({ id, label, note }) => ({ id, label, note })), effort: SUPPORTS_EFFORT[p], efforts: allowedEfforts(p, { maxMembers: 1 }) })),
     sites: WEB_SITES.map((s) => ({ id: s, ...SITE_INFO[s] })),
     efforts: EFFORTS,
     defaults: DEFAULT_LIMITS,
