@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { api } from "../api";
 import type { Limits, ModelsInfo } from "../types";
 
@@ -36,7 +36,8 @@ export function LimitsEditor({ value, onChange }: { value: Limits; onChange: (v:
       {models.providers.map((p) => {
         const l = value[p.id] ?? models.defaults[p.id];
         return (
-          <div key={p.id} className="limits-row">
+          <Fragment key={p.id}>
+          <div className="limits-row">
             <span className={`limits-name fam-${p.id}`}>{LABEL[p.id] ?? p.id}</span>
             <input type="number" min={0} max={20} value={l.maxMembers} onChange={(e) => set(p.id, { maxMembers: Number(e.target.value) })} />
             <select value={l.maxModel ?? ""} disabled={l.maxMembers === 0} onChange={(e) => set(p.id, { maxModel: e.target.value })}>
@@ -54,6 +55,21 @@ export function LimitsEditor({ value, onChange }: { value: Limits; onChange: (v:
               <span className="small muted">없음</span>
             )}
           </div>
+          {(p.id === "claude" || p.id === "gpt") && (
+            <div className="limits-floor small muted">
+              <span>최상위 모델({p.id === "claude" ? "fable" : "astra"}) 차단 기준: 주간</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={l.topModelMinWeeklyLeft ?? (p.id === "claude" ? 30 : 50)}
+                disabled={l.maxMembers === 0}
+                onChange={(e) => set(p.id, { topModelMinWeeklyLeft: Math.min(100, Math.max(0, Math.round(Number(e.target.value) || 0))) })}
+              />
+              <span>% 미만이면 차단 (0 = 차단 안 함)</span>
+            </div>
+          )}
+          </Fragment>
         );
       })}
       {models.sites.map((s) => {

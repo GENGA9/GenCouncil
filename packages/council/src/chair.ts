@@ -234,6 +234,7 @@ export class Chair {
       wikiToc: new WikiStore().renderRoot({ project: projectMemoryKey(this.council.project) }),
       integrationWorktree: store.integrationWorktree(),
       limits: this.council.limitsMarkdown(),
+      topModelFloor: { claude: this.council.limits().claude.topModelMinWeeklyLeft, gpt: this.council.limits().gpt.topModelMinWeeklyLeft },
     });
   }
 
