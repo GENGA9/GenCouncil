@@ -86,9 +86,12 @@ export interface AssignInput {
   files?: string[];
   /** false: skip the automatic Claude check after a Gemini Flash member (doc-only or trivial work) */
   verify?: boolean;
+  /** only when the user explicitly asked for this top model: skip the weekly-usage floor */
+  overrideUsage?: boolean;
 }
 
 export interface VerifyOptions {
+  overrideUsage?: boolean;
   model?: string;
   effort?: string;
   reason?: string;
@@ -535,7 +538,7 @@ ${rows.join("\n")}`;
       this.checkSlot(p);
       // a fallback provider cannot use the other provider's model name
       model = this.fitModel(account, resolveModel(p, p === requested ? input.model : undefined, limits[p]));
-      checkTopModelUsage(p, model, this.weeklyLeft(p));
+      checkTopModelUsage(p, model, this.weeklyLeft(p), input.overrideUsage);
       effort = resolveEffort(p, input.effort, limits[p]);
       if (p === "claude") advisor = resolveAdvisor(model, input.advisor, limits.claude);
     } else {
@@ -960,7 +963,7 @@ ${rows.join("\n")}`;
     const allowed = allowedModels("claude", limits.claude).map((m) => m.id);
     const wantModel = opts.model ?? (allowed.includes("sonnet") ? "sonnet" : allowed[allowed.length - 1]);
     const model = resolveModel("claude", wantModel, limits.claude);
-    checkTopModelUsage("claude", model, this.weeklyLeft("claude"));
+    checkTopModelUsage("claude", model, this.weeklyLeft("claude"), opts.overrideUsage);
     const efforts = allowedEfforts("claude", limits.claude);
     const effort = resolveEffort("claude", opts.effort ?? (efforts.includes("high") ? "high" : efforts[efforts.length - 1]), limits.claude);
     const id = this.nextMemberId("claude");
