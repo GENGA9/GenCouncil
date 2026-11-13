@@ -174,6 +174,19 @@ check("all models spent: no lower model left", reg.fitModel("gemini", "gemini-4-
 reg.markOk("gemini");
 check("markOk clears model blocks", reg.fitModel("gemini", "gemini-4-argon") === "gemini-4-argon");
 
+// Model-aware effort validation must use the fitted model, including during handover.
+council.project.members.limits.gemini.maxEffort = "xhigh";
+const tHydrogen = council.addTask({ title: "Hydrogen xhigh", goal: 2 });
+const h1 = await council.assign({ taskId: tHydrogen.id, provider: "gemini", effort: "xhigh", instructions: "조사하라." });
+check("default assignment uses hydrogen with xhigh", h1.model === "gemini-4-hydrogen" && h1.effort === "xhigh");
+await new Promise((r) => council.on("member:done", (m) => m.id === h1.id && r()));
+reg.blockModel("gemini", "gemini-4-hydrogen", agyQuota);
+const h2 = await council.handover(h1.id, { account: "gemini" });
+check("hydrogen xhigh handover clamps to flash high", h2.model === "gemini-3.8-flash" && h2.effort === "high" && h2.account === "gemini");
+await new Promise((r) => council.on("member:done", (m) => m.id === h2.id && r()));
+const tFlash = council.addTask({ title: "Flash rejects xhigh", goal: 2 });
+check("fitted flash assignment rejects explicit xhigh", await council.assign({ taskId: tFlash.id, provider: "gemini", effort: "xhigh", instructions: "조사하라." }).then(() => false, (e) => /above the user's limit/.test(e.message)));
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall handover checks passed");
 process.exitCode = failed ? 1 : 0;

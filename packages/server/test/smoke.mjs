@@ -42,6 +42,11 @@ check("401 wrong token", (await api("GET", "/api/overview", undefined, "nope")).
 check("login sets cookie", (await api("POST", "/api/login", { token: "test-token" }, "")).status === 200);
 check("static 503 when web not built", (await fetch(`http://127.0.0.1:${srv.config.port}/`)).status === 503);
 
+const models = await api("GET", "/api/models");
+const geminiModels = models.json.providers.find((p) => p.id === "gemini");
+check("model API lists the three gemini tiers", geminiModels.models.map((m) => m.id).join() === "gemini-3.8-flash,gemini-4-hydrogen,gemini-4-argon");
+check("limits UI can select hydrogen xhigh", geminiModels.efforts.join() === "low,medium,high,xhigh" && models.json.defaults.gemini.maxEffort === "high" && models.json.defaults.gemini.maxModel === "gemini-4-argon");
+
 const ov0 = await api("GET", "/api/overview");
 check("overview empty", ov0.status === 200 && ov0.json.projects.length === 0 && ov0.json.memory.verified === 0);
 
