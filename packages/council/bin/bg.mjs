@@ -66,29 +66,45 @@ function launch() {
     console.log(`bg started pid=${child.pid} log=${log}`);
     return;
   }
-  // WMI creates the process outside the caller's job and process tree, in a new console window.
-  // the runner keeps the window open after the job ends (with the result in its title)
+  // WMI starts the process outside the caller's job and process tree, so it survives the member's
+  // turn. SW_HIDE keeps it off the screen entirely; the output goes to the log file. If a hidden
+  // start is refused, fall back to a visible window that shows the output and closes itself.
   const line = `"${process.execPath}" "${self}" --run ${payload}`;
-  const ps =
-    "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $env:GC_BG_LINE; CurrentDirectory = $env:GC_BG_CWD };" +
-    "\"$($r.ReturnValue) $($r.ProcessId)\"";
-  let out;
-  try {
-    out = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], {
-      encoding: "utf8",
-      windowsHide: true,
-      env: { ...process.env, GC_BG_LINE: line, GC_BG_CWD: cwd },
-    }).trim();
-  } catch (e) {
-    console.error(`bg: could not start: ${e.message}`);
-    process.exit(1);
+  const create = (hidden) =>
+    execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        (hidden ? "$s = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 };" : "$s = $null;") +
+          "$a = @{ CommandLine = $env:GC_BG_LINE; CurrentDirectory = $env:GC_BG_CWD };" +
+          "if ($s) { $a.ProcessStartupInformation = $s };" +
+          "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $a;" +
+          '"$($r.ReturnValue) $($r.ProcessId)"',
+      ],
+      { encoding: "utf8", windowsHide: true, env: { ...process.env, GC_BG_LINE: line, GC_BG_CWD: cwd } },
+    ).trim();
+  let pid;
+  let hidden = true;
+  for (const tryHidden of [true, false]) {
+    try {
+      const [rv, p] = create(tryHidden).split(/\s+/);
+      if (rv === "0" && p) {
+        pid = p;
+        hidden = tryHidden;
+        break;
+      }
+      if (tryHidden) continue; // a hidden start was refused: show a window instead
+      console.error(`bg: Win32_Process.Create returned ${rv}`);
+      process.exit(1);
+    } catch (e) {
+      if (tryHidden) continue;
+      console.error(`bg: could not start: ${e.message}`);
+      process.exit(1);
+    }
   }
-  const [rv, pid] = out.split(/\s+/);
-  if (rv !== "0") {
-    console.error(`bg: Win32_Process.Create returned ${rv}`);
-    process.exit(1);
-  }
-  console.log(`bg started pid=${pid} log=${log}`);
+  console.log(`bg started pid=${pid}${hidden ? "" : " (창 표시)"} log=${log}`);
 }
 
 function runJob(job) {
@@ -116,13 +132,9 @@ function runJob(job) {
     const mins = Math.round((Date.now() - started) / 60000);
     const ok = code === 0;
     both(`\n=== ${stamp()} ${ok ? "끝남" : "실패"}: exit ${code}${note ? " (" + note + ")" : ""}, ${mins}분 걸림\n`);
-    if (process.platform === "win32") both("=== 이 창은 확인용으로 남겨 둔다. 다 봤으면 닫으면 된다.\n");
     setTitle(`[${ok ? "끝남" : "실패 " + code}] ${job.title}`);
-    logStream.end(() => {
-      // keep the window (and its title) until the user closes it
-      if (process.platform === "win32") setInterval(() => {}, 1 << 30);
-      else process.exit(0);
-    });
+    // nothing is left behind: a window, if one was shown at all, closes with this process
+    logStream.end(() => process.exit(0));
   };
   child.on("error", (e) => finish(-1, e.message));
   child.on("close", (code, signal) => finish(code ?? -1, signal ? `signal ${signal}` : ""));

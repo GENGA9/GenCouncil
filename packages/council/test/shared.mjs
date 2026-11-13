@@ -105,11 +105,16 @@ check("fable goes out as the full 5.2 id", claudeModelId("fable") === "claude-fa
 check("background runner exists", fs.existsSync(BG_RUNNER), BG_RUNNER);
 check("background rule names the runner and the log", bgRule().includes(BG_RUNNER) && bgRule().includes("--log"));
 // the runner itself: output reaches the log, the end line records the exit code
-if (process.platform !== "win32") {
+{
   const log = path.join(tmp, "bg.log");
-  execFileSync(process.execPath, [BG_RUNNER, "--title", "t", "--log", log, "--", process.execPath, "-e", "console.log(\"hello\");process.exit(4)"]);
-  for (let i = 0; i < 50 && !(fs.existsSync(log) && fs.readFileSync(log, "utf8").includes("exit 4")); i++) await new Promise((r) => setTimeout(r, 100));
-  check("runner logs output and exit code", /hello[sS]*exit 4/.test(fs.readFileSync(log, "utf8")));
+  const started = execFileSync(process.execPath, [BG_RUNNER, "--title", "t", "--log", log, "--", process.execPath, "-e", 'console.log("hello");process.exit(4)'], {
+    encoding: "utf8",
+  });
+  check("runner starts hidden (no window shown)", /^bg started pid=\d+ log=/.test(started.trim()), started.trim());
+  for (let i = 0; i < 100 && !(fs.existsSync(log) && fs.readFileSync(log, "utf8").includes("exit 4")); i++) await new Promise((r) => setTimeout(r, 100));
+  const text = fs.readFileSync(log, "utf8");
+  check("runner logs output and exit code", /hello[\s\S]*exit 4/.test(text), text.slice(-200));
+  check("runner leaves nothing on screen to close", !/닫으면|남겨 둔다/.test(text));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
