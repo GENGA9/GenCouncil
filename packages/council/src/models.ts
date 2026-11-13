@@ -140,11 +140,11 @@ export const TOP_MODEL_WEEKLY_FLOOR: Array<{ provider: CliProvider; match: RegEx
 ];
 
 /** throws when model is a top model and the provider's best account has too little weekly allowance left */
-export function checkTopModelUsage(provider: CliProvider, model: string | undefined, weeklyLeft: number | undefined): void {
-  if (!model || weeklyLeft === undefined) return;
+export function checkTopModelUsage(provider: CliProvider, model: string | undefined, weeklyLeft: number | undefined, override?: boolean): void {
+  if (!model || weeklyLeft === undefined || override) return;
   const rule = TOP_MODEL_WEEKLY_FLOOR.find((r) => r.provider === provider && r.match.test(model));
   if (rule && weeklyLeft < rule.minWeeklyLeft)
-    throw new LimitError(`${rule.label}은(는) ${provider} 주간 사용량이 ${rule.minWeeklyLeft}% 이상 남았을 때만 쓴다 (지금 ${weeklyLeft}% 남음). 한 단계 낮은 모델을 고른다.`);
+    throw new LimitError(`${rule.label}은(는) ${provider} 주간 사용량이 ${rule.minWeeklyLeft}% 이상 남았을 때만 쓴다 (지금 ${weeklyLeft}% 남음). 한 단계 낮은 모델을 고른다. 사용자가 이 모델을 명시했다면 override_usage:true로 다시 배정한다.`);
 }
 
 /** the default rung when the chair names no model */

@@ -115,12 +115,13 @@ export function createCouncilMcp(council: Council): McpServer {
         label: z.string().optional().describe("relay only: display label, e.g. 제미나이(agy)"),
         files: z.array(z.string()).optional().describe("relay only: repo-relative files/dirs to bundle into the packet"),
         verify: z.boolean().optional().describe("gemini flash only: false skips the automatic Claude check (use for doc-only or trivial work)"),
+        override_usage: z.boolean().optional().describe("ONLY when the user's own message explicitly asked for this top model (fable / gpt-6-astra): skip the weekly-usage floor. Never set on your own judgment."),
         instructions: z.string().min(20),
       },
     },
-    async ({ task_id, ...rest }) =>
+    async ({ task_id, override_usage, ...rest }) =>
       guard(async () => {
-        const m = await council.assign({ taskId: task_id, ...rest });
+        const m = await council.assign({ taskId: task_id, overrideUsage: override_usage, ...rest });
         return { member_id: m.id, provider: m.provider, model: m.model, effort: m.effort, advisor: m.advisor, site: m.site, account: m.account, branch: m.branch, worktree: m.worktree, status: m.status };
       }),
   );
@@ -235,9 +236,10 @@ export function createCouncilMcp(council: Council): McpServer {
         model: z.string().optional().describe("claude model within the limits (default sonnet)"),
         effort: z.string().optional().describe("default high, clamped to the limit"),
         reason: z.string().optional(),
+        override_usage: z.boolean().optional().describe("ONLY when the user's own message explicitly asked for this top model (fable / gpt-6-astra): skip the weekly-usage floor. Never set on your own judgment."),
       },
     },
-    async ({ member_id, model, effort, reason }) => guard(() => council.verify(member_id, { model, effort, reason })),
+    async ({ member_id, model, effort, reason, override_usage }) => guard(() => council.verify(member_id, { model, effort, reason, overrideUsage: override_usage })),
   );
 
   server.registerTool(

@@ -194,6 +194,7 @@ check("astra refused under 50% GPT weekly", throws(() => checkTopModelUsage("gpt
 check("astra allowed at 60%", !throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 60)));
 check("sol never held back", !throws(() => checkTopModelUsage("gpt", "gpt-6.1-sol", 5)));
 check("fable refused under 30% Claude weekly", throws(() => checkTopModelUsage("claude", "fable", 25)) && !throws(() => checkTopModelUsage("claude", "opus", 5)));
+check("override passes fable/astra", !throws(() => checkTopModelUsage("claude", "fable", 20, true)) && !throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 20, true)) && throws(() => checkTopModelUsage("claude", "fable", 20)) && throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 20)));
 check("unknown usage never blocks", !throws(() => checkTopModelUsage("claude", "fable", undefined)));
 council.setUsageProvider(() => [{ provider: "claude", account: "claude", weekly: { usedPct: 80 } }, { provider: "claude", account: "claude-b", weekly: { usedPct: 90 } }]);
 check("best account decides", council.weeklyLeft("claude") === 20);
