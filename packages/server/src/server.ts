@@ -384,28 +384,18 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     fs.writeFileSync(registry.guidelinesPath(p), String(b.text ?? ""), "utf8");
     return { ok: true };
   });
-  on("PUT", "/api/projects/:id/chair", async ({ params, body }) => {
-    const p = registry.get(params.id);
-    if (!p) throw new HttpError(404, "unknown project");
+  // the chair belongs to the agenda: this changes one agenda only, never the project's other ones
+  on("PUT", "/api/a/:id/:slug/chair", async ({ params, body }) => {
+    const rt = await getRuntime(params.id, params.slug);
     const b = await body();
-    p.chair.model = (b.model as string) || undefined;
-    p.chair.effort = (b.effort as string) || undefined;
-    if (b.advisor !== undefined) p.chair.advisor = String(b.advisor);
-    const accountChanged = b.account !== undefined && ((b.account as string) || undefined) !== p.chair.account;
-    if (b.account !== undefined) p.chair.account = (b.account as string) || undefined;
-    registry.save(p);
-    for (const a of AgendaStore.list(p)) {
-      const rt = runtimes.get(`${p.id}/${a.slug}`);
-      if (rt)
-        (await rt).setChair({
-          model: p.chair.model ?? "",
-          effort: p.chair.effort ?? "",
-          advisor: p.chair.advisor,
-          ...(accountChanged ? { account: p.chair.account ?? "" } : {}),
-        });
-    }
+    rt.setChair({
+      model: (b.model as string) ?? undefined,
+      effort: (b.effort as string) ?? undefined,
+      ...(b.advisor !== undefined ? { advisor: String(b.advisor) } : {}),
+      ...(b.account !== undefined ? { account: (b.account as string) || "" } : {}),
+    });
     broadcast({ type: "overview" });
-    return p.chair;
+    return rt.state().chair;
   });
 
   // ---------- accounts ----------

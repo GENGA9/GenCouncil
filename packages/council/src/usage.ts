@@ -26,8 +26,18 @@ export interface AccountUsage {
   weekly?: UsageWindow;
   /** the plan has no such window (e.g. GPT Pro Lite has weekly only) */
   noFiveHour?: boolean;
+  /** every limit the CLI reports (Gemini: model groups and per-model limits such as Argon) */
+  details?: UsageDetail[];
   error?: string;
   checkedAt: string;
+}
+
+export interface UsageDetail {
+  group: string;
+  label: string;
+  /** 0..100 */
+  usedPct: number;
+  resetsAt?: string;
 }
 
 type UsageData = Omit<AccountUsage, "provider" | "account" | "checkedAt">;
@@ -144,10 +154,11 @@ export function parseAgyUsage(text: string): UsageData {
     const cols = line.split("\t");
     if (cols.length < 3) continue;
     const [group, label, pct, reset] = cols;
-    if (!/^gemini models$/i.test(group.trim())) continue;
     const remaining = Number(pct.replace("%", "").trim());
     if (!Number.isFinite(remaining)) continue;
     const win: UsageWindow = { usedPct: clampPct(100 - remaining), resetsAt: reset?.trim() || undefined };
+    (out.details ??= []).push({ group: group.trim(), label: label.trim(), ...win });
+    if (!/^gemini models$/i.test(group.trim())) continue;
     if (/five hour/i.test(label)) out.fiveHour = win;
     else if (/weekly/i.test(label)) out.weekly = win;
   }

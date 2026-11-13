@@ -40,8 +40,9 @@ export const api = {
   createProject: (b: Record<string, unknown>) => call<{ id: string; scanSummary?: string }>("POST", "/api/projects", b),
   guidelines: (id: string) => call<{ text: string; path: string }>("GET", `/api/projects/${encodeURIComponent(id)}/guidelines`),
   saveGuidelines: (id: string, text: string) => call("PUT", `/api/projects/${encodeURIComponent(id)}/guidelines`, { text }),
-  setChair: (id: string, model: string, effort: string, account?: string, advisor?: string) =>
-    call("PUT", `/api/projects/${encodeURIComponent(id)}/chair`, {
+  // the chair is per agenda: key is "<projectId>/<agendaSlug>"
+  setChair: (key: string, model: string, effort: string, account?: string, advisor?: string) =>
+    call("PUT", `/api/a/${key.split("/").map(encodeURIComponent).join("/")}/chair`, {
       model,
       effort,
       ...(account !== undefined ? { account } : {}),

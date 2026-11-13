@@ -92,11 +92,16 @@ await new Promise((resolve, reject) => {
   ws.on("open", resolve);
   ws.on("error", reject);
 });
-await api("PUT", `/api/projects/${encodeURIComponent(proj.json.id)}/chair`, { model: "claude-opus-5-5", effort: "high" });
+const chairUrl = `/api/a/${encodeURIComponent(proj.json.id)}/${encodeURIComponent("첫-안건")}/chair`;
+await api("PUT", chairUrl, { model: "claude-opus-5-5", effort: "high" });
 await new Promise((r) => setTimeout(r, 300));
 check("ws hello + overview broadcast", msgs.some((m) => m.type === "hello") && msgs.some((m) => m.type === "overview"), JSON.stringify(msgs.map((m) => m.type)));
 const a2 = await api("GET", `/api/a/${encodeURIComponent(proj.json.id)}/${encodeURIComponent("첫-안건")}`);
 check("chair change applied to open runtime", a2.json.state.chair.model === "claude-opus-5-5" && a2.json.state.chair.effort === "high");
+// the chair belongs to the agenda: the project default and other agendas are untouched
+const ov = await api("GET", "/api/overview");
+const projAfter = (ov.json.projects ?? []).find((x) => x.id === proj.json.id);
+check("project default chair untouched", projAfter?.chair?.model !== "claude-opus-5-5", JSON.stringify(projAfter?.chair));
 const wsBad = new WebSocket(`ws://127.0.0.1:${srv.config.port}/ws?token=bad`);
 const wsBadResult = await new Promise((resolve) => {
   wsBad.on("open", () => resolve("open"));

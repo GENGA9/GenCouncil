@@ -22,3 +22,4 @@ export * from "./usage.js";
 export * from "./interrupt.js";
 export * from "./wikiCurator.js";
 export * from "./shared.js";
+export * from "./bg.js";

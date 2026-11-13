@@ -178,6 +178,21 @@ council.project.chair.account = "claude";
 await chairTok.turn("클로드 의장", () => {});
 check("claude chair loads its tools up front (no ToolSearch)", fs.readFileSync(path.join(rec, "claude-env.txt"), "utf8").includes("ets=false"));
 
+// ---- the chair belongs to the agenda: a second agenda of the same project keeps its own ----
+{
+  const store2 = AgendaStore.create(project, "다른 안건", ["y"]);
+  const council2 = new Council(store2, memory);
+  await council2.open();
+  council.saveChairCfg({ account: "gpt", model: "gpt-5.5-codex" });
+  check("agenda 1 runs on its own chair", council.chairCfg().account === "gpt" && council.chairCfg().model === "gpt-5.5-codex", JSON.stringify(council.chairCfg()));
+  check("agenda 2 untouched, follows the project", council2.chairCfg().account === project.chair.account && council2.chairCfg().model === project.chair.model, JSON.stringify(council2.chairCfg()));
+  check("the project default is unchanged", project.chair.account === "claude" && project.chair.model === "opus", JSON.stringify(project.chair));
+  council2.saveChairCfg({ account: "gemini" });
+  check("each agenda keeps its own account", council.chairCfg().account === "gpt" && council2.chairCfg().account === "gemini");
+  council.saveChairCfg({ account: "claude", model: "opus" });
+  council2.close?.();
+}
+
 memory.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall chair log checks passed");

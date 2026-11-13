@@ -189,6 +189,32 @@ export class Council extends EventEmitter {
   private waiters: Array<() => void> = [];
   /** where claude members reach the permission tool (set by whoever hosts the council MCP) */
   private memberMcp?: (memberId: string) => { url: string; headers?: Record<string, string> };
+  /**
+   * The chair settings this agenda runs on: its own choices, falling back to the project's.
+   * Every agenda picks its own AI, so a change here never reaches another agenda.
+   */
+  chairCfg(): ProjectConfig["chair"] {
+    const own = this.store.agenda().chair ?? {};
+    const p = this.project.chair;
+    return {
+      ...p,
+      ...(own.model !== undefined ? { model: own.model || undefined } : {}),
+      ...(own.effort !== undefined ? { effort: own.effort || undefined } : {}),
+      ...(own.advisor !== undefined ? { advisor: own.advisor } : {}),
+      ...(own.account !== undefined ? { account: own.account || undefined } : {}),
+    };
+  }
+
+  /** Store this agenda's own chair settings (undefined values are left as they were). */
+  saveChairCfg(patch: { model?: string; effort?: string; advisor?: string; account?: string }): void {
+    const a = this.store.agenda();
+    a.chair = { ...(a.chair ?? {}) };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v !== undefined) (a.chair as Record<string, string>)[k] = v;
+    }
+    this.store.saveAgenda(a);
+  }
+
   /** decides permission requests the rules can't; replaceable in tests */
   reviewer: Reviewer;
   private approver: ChairApprover;
@@ -201,10 +227,11 @@ export class Council extends EventEmitter {
     this.project = store.project;
     // the reviewer always runs on Claude; a GPT/Gemini chair borrows a usable claude login with Opus
     this.reviewer = (req) => {
-      const chairAccount = this.accounts.get(this.project.chair.account ?? "claude");
+      const cfg = this.chairCfg();
+      const chairAccount = this.accounts.get(cfg.account ?? "claude");
       const onClaude = !chairAccount || chairAccount.provider === "claude";
       return chairReview(req, {
-        model: onClaude ? this.project.chair.model : "opus",
+        model: onClaude ? cfg.model : "opus",
         env: this.accounts.env(onClaude ? chairAccount : this.accounts.pick("claude")),
       });
     };

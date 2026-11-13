@@ -284,7 +284,7 @@ export class AgendaRuntime extends EventEmitter {
         provider: this.chair.provider(),
         model: this.chair.model(),
         effort: this.chair.effort(),
-        advisor: this.council.project.chair.advisor,
+        advisor: this.council.chairCfg().advisor,
         account: this.chair.account(),
         sessionId: session.sessionId,
         busy: this.chair.isBusy(),
@@ -316,23 +316,23 @@ export class AgendaRuntime extends EventEmitter {
     return !this.council.store.chairSession().sessionId;
   }
 
-  /** Change chair model/effort (persisted on the project; takes effect next turn, session continues). */
+  /**
+   * Change this agenda's chair model/effort/advisor/account (takes effect next turn, session
+   * continues). The settings belong to the agenda, so other agendas of the project keep theirs.
+   */
   setChair(cfg: { model?: string; effort?: string; advisor?: string; account?: string }): void {
     this.chair.setOverrides({});
-    const p = this.council.project;
-    if (cfg.model !== undefined) p.chair.model = cfg.model || undefined;
-    if (cfg.effort !== undefined) p.chair.effort = cfg.effort || undefined;
-    if (cfg.advisor !== undefined) p.chair.advisor = cfg.advisor;
-    if (cfg.account !== undefined && cfg.account !== (p.chair.account ?? "")) {
-      p.chair.account = cfg.account || undefined;
+    const before = this.council.chairCfg();
+    this.council.saveChairCfg(cfg);
+    if (cfg.account !== undefined && (cfg.account || undefined) !== before.account) {
       // a Claude Code session lives in one config dir; the new account starts fresh from state.md
       this.chair.resetSession();
     }
     // the model must belong to the chair account's CLI (moving to a GPT account turns "opus" into its default)
     const provider = this.chair.provider();
-    if (provider !== "claude") p.chair.model = chairModelFor(provider, p.chair.model);
-    else if (p.chair.model && tierOf("claude", p.chair.model) < 0) p.chair.model = CHAIR_DEFAULT_MODEL.claude;
-    this.council.registry.save(p);
+    const model = this.council.chairCfg().model;
+    if (provider !== "claude") this.council.saveChairCfg({ model: chairModelFor(provider, model) });
+    else if (model && tierOf("claude", model) < 0) this.council.saveChairCfg({ model: CHAIR_DEFAULT_MODEL.claude });
     this.emitEvent({ type: "state" });
   }
 

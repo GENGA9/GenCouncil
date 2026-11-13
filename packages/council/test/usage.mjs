@@ -18,6 +18,7 @@ const agy = parseAgyUsage(
 );
 check("agy weekly used = 41%", agy.weekly?.usedPct === 41 && agy.weekly.resetsAt === "2026-10-24T03:07:27Z", JSON.stringify(agy));
 check("agy 5h used = 0%", agy.fiveHour?.usedPct === 0 && !agy.error);
+check("agy details keep every limit, Argon included", agy.details?.length === 4 && agy.details[3].group === "Gemini 4 Argon" && agy.details[3].usedPct === 40, JSON.stringify(agy.details));
 check("agy garbage -> error", Boolean(parseAgyUsage("not logged in").error));
 
 // codex account/rateLimits/read

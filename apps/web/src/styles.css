@@ -328,6 +328,16 @@ button.tg-auto:disabled.on { opacity: 1; }
 .usage-bar-fill { display: block; height: 100%; border-radius: 2px; transition: width 0.4s; }
 .usage-bar-pct { min-width: 26px; white-space: nowrap; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .usage-err { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; }
+.usage-acct.clickable { cursor: pointer; border-radius: 4px; }
+.usage-acct.clickable:hover { background: var(--border); }
+/* detail popup: one block per limit group */
+.usage-detail-group { margin-bottom: 12px; }
+.usage-detail-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.usage-detail-row { display: grid; grid-template-columns: 110px 1fr 40px; align-items: center; gap: 8px; font-size: 12px; padding: 2px 0; }
+.usage-detail-row .usage-bar { height: 6px; border-radius: 3px; }
+.usage-detail-row .usage-bar-pct { font-size: 12px; color: var(--text, inherit); }
+.usage-detail-reset { grid-column: 1 / -1; padding-left: 2px; margin-top: -2px; }
+.usage-detail-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* resume after an interruption */
 .resume-card { border: 1px solid var(--c-claude); border-radius: 10px; padding: 10px 12px; margin: 8px 0; background: var(--event); display: flex; flex-direction: column; gap: 6px; }

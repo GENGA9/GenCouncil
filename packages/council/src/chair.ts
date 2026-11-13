@@ -194,7 +194,7 @@ export class Chair {
   }
 
   model(): string | undefined {
-    const m = this.opts.model ?? this.council.project.chair.model;
+    const m = this.opts.model ?? this.council.chairCfg().model;
     const p = this.provider();
     if (p === "claude") return m;
     const want = chairModelFor(p, m);
@@ -203,17 +203,17 @@ export class Chair {
   }
 
   effort(): string | undefined {
-    return this.opts.effort ?? this.council.project.chair.effort;
+    return this.opts.effort ?? this.council.chairCfg().effort;
   }
 
   advisor(): string | undefined {
     if (this.provider() !== "claude") return undefined;
-    return advisorFor(this.model(), this.council.project.chair.advisor);
+    return advisorFor(this.model(), this.council.chairCfg().advisor);
   }
 
   /** account id the chair runs on (default "claude") */
   account(): string {
-    return this.council.project.chair.account ?? "claude";
+    return this.council.chairCfg().account ?? "claude";
   }
 
   private currentAccount(): Account {
@@ -242,13 +242,11 @@ export class Chair {
     this.council.store.saveChairSession({});
   }
 
-  /** Switch the chair to another usable claude account (persisted). Returns the new account or undefined. */
+  /** Switch the chair to another usable account (this agenda only). Returns the new account or undefined. */
   private switchAccount(exclude: string[]): Account | undefined {
     const next = this.council.accounts.pick(this.provider(), { exclude });
     if (!next) return undefined;
-    const p = this.council.project;
-    p.chair.account = next.id;
-    this.council.registry.save(p);
+    this.council.saveChairCfg({ account: next.id });
     this.resetSession();
     return next;
   }
@@ -303,7 +301,7 @@ export class Chair {
         account = next;
       }
       if (!res) throw new Error("no attempt made");
-      if (this.council.project.chair.directEdit) {
+      if (this.council.chairCfg().directEdit) {
         const note = await this.commitOwnEdits(shownText ?? message);
         if (note) res.text = `${res.text}\n\n${note}`;
       }
@@ -356,7 +354,7 @@ export class Chair {
     const args = ["-p", "--output-format", "stream-json", "--verbose"];
     if (resume) args.push("--resume", resume);
     args.push("--mcp-config", this.mcpFile, "--strict-mcp-config");
-    const tools = chairToolArgs(Boolean(this.council.project.chair.directEdit));
+    const tools = chairToolArgs(Boolean(this.council.chairCfg().directEdit));
     args.push("--allowedTools", ...tools.allowed);
     args.push("--disallowedTools", ...tools.disallowed);
     const spFile = path.join(store.chairDir(), "system-prompt.md");
@@ -408,7 +406,7 @@ export class Chair {
 
   /** Codex CLI: read-only sandbox unless the chair may edit; MCP servers as -c overrides */
   private codexLaunch(message: string, resume: string | undefined, account: Account): ChairLaunch {
-    const directEdit = Boolean(this.council.project.chair.directEdit);
+    const directEdit = Boolean(this.council.chairCfg().directEdit);
     const council = this.mcpCfg.mcpServers.council;
     const memory = this.mcpCfg.mcpServers.gencouncil;
     const opts = [
@@ -449,7 +447,7 @@ export class Chair {
     if (resume) args.push("--conversation", resume);
     const model = agyModelId(this.model(), this.effort());
     if (model) args.push("--model", model);
-    if (this.council.project.chair.directEdit) args.push("--mode", "accept-edits");
+    if (this.council.chairCfg().directEdit) args.push("--mode", "accept-edits");
     args.push("--add-dir", store.worktreeRoot(), "--add-dir", this.council.project.repo);
     const attachDir = path.join(store.dir, "attachments");
     if (fs.existsSync(attachDir)) args.push("--add-dir", attachDir);

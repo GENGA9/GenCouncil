@@ -21,7 +21,8 @@ function chairToolsText(i: ChairPromptInput): string {
     `읽기(Read/Grep/Glob)는 통합 worktree ${i.integrationWorktree} 와 위원 worktree에서 할 수 있다. 웹 검색·웹 페이지 읽기(WebSearch/WebFetch)로 자료를 직접 찾아도 된다. ` +
     "명령은 읽기 전용만 된다: git status/log/diff/show/branch/rev-parse/ls-tree/worktree list, 읽기 도구(ls, cat, head, tail, grep, wc, sort, uniq, cut, echo, du), 테스트·타입 검사(npm test, npx vitest, npx tsc --noEmit, pytest 등). 위원 결과를 검증할 때 통합 worktree에서 직접 돌려 본다.\n" +
     `메인 폴더 ${i.project.repo} 의 파일도 Read/Grep/Glob으로 읽을 수 있다. git 명령은 cd 없이 지금 폴더(통합 worktree)에서 바로 쓴다: 같은 저장소라 git log main, git branch, git diff main...<브랜치>로 모든 브랜치가 보인다(메인 폴더에 커밋 안 한 변경은 council_finish가 알려 준다). cd 다른폴더 && git …, git -C, for/while 반복문, $(...) 치환, PowerShell은 거부되니 쓰지 않는다. 한 번에 허용된 명령 하나나 && · | 로 이은 허용 명령만 쓴다. 파일 내용은 명령보다 Read/Grep/Glob으로 본다.\n` +
-    "Artifact 게시 같은 다른 도구는 없다. 결과물을 사용자에게 보여 줄 때는 council_show를 쓴다." +
+    "Artifact 게시 같은 다른 도구는 없다. 결과물을 사용자에게 보여 줄 때는 council_show를 쓴다.\n" +
+    "위원의 오래 걸리는 작업(렌더 등)은 GenCouncil 백그라운드 실행기로 띄우게 되어 있다: 사용자가 보는 콘솔 창에 진행이 찍히고 로그 파일에 남으며, 끝나도 창이 남는다. 진행·결과는 위원이 RESULT.md에 적은 로그 파일을 Read로 읽어 확인한다(맨 끝 '=== … 끝남/실패: exit N' 줄)." +
     (sharedRule(i.project) ? `
 ${sharedRule(i.project)} 위원에게 렌더를 맡길 때 저장할 공유 폴더 경로를 지시에 적는다.` : "");
   if (!i.project.chair.directEdit) return base + "\n코드는 직접 수정하지 않는다(편집 도구가 없다). 수정은 위원에게 맡긴다.";

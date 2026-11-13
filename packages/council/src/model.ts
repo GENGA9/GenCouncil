@@ -81,6 +81,12 @@ export interface AgendaConfig {
   baseBranch: string;
   created: string;
   closed?: string;
+  /**
+   * This agenda's own chair settings. Each agenda picks its AI (account), model, effort and
+   * advisor by itself; a field left out follows the project's setting. The project setting is
+   * what a new agenda starts from.
+   */
+  chair?: { model?: string; effort?: string; advisor?: string; account?: string };
   /** the chair was in the middle of a turn when the app stopped */
   chairInterrupted?: { at: string; message: string };
   /** worktree folders a finish could not delete yet (locked); retried when the agenda is opened */

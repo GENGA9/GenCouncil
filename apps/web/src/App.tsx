@@ -366,9 +366,13 @@ export function App() {
         project={currentProject}
         onSend={send}
         onSetChair={async (model, effort, account, advisor) => {
-          if (!currentProject) return;
-          await api.setChair(currentProject.id, model, effort, account, advisor);
-          notify(account !== undefined ? `의장 계정을 ${account}로 바꿨습니다. 새 세션으로 시작합니다.` : "의장 설정을 저장했습니다. 다음 턴부터 적용됩니다.");
+          if (!selected) return;
+          await api.setChair(selected, model, effort, account, advisor);
+          notify(
+            account !== undefined
+              ? `이 안건의 의장 계정을 ${account}로 바꿨습니다. 새 세션으로 시작합니다. (다른 안건은 그대로입니다)`
+              : "이 안건의 의장 설정을 저장했습니다. 다음 턴부터 적용됩니다. (다른 안건은 그대로입니다)",
+          );
           if (selected) void refreshState(selected);
         }}
         onSetAutonomy={async (autonomy) => {

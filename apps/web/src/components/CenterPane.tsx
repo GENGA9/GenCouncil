@@ -199,13 +199,13 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
       <div className="chair-head">
         <div className="chair-title">
           <span className="chair-label">의장 · {PROVIDER_LABEL[chairProvider] ?? chairProvider}</span>
-          <select value={MODELS.includes(model) ? model : "custom"} onChange={(e) => e.target.value !== "custom" && onSetChair(e.target.value, chairProvider === "gemini" && effort === "xhigh" && !/hydrogen/i.test(e.target.value) ? "high" : effort)} title="의장 모델">
+          <select value={MODELS.includes(model) ? model : "custom"} onChange={(e) => e.target.value !== "custom" && onSetChair(e.target.value, chairProvider === "gemini" && effort === "xhigh" && !/hydrogen/i.test(e.target.value) ? "high" : effort)} title="의장 모델 (이 안건에만 적용)">
             {MODELS.map((m) => (
               <option key={m} value={m}>{m || "기본 모델"}</option>
             ))}
             {!MODELS.includes(model) && <option value="custom">{model}</option>}
           </select>
-          <select value={effort} onChange={(e) => onSetChair(model, e.target.value)} title="추론 수준">
+          <select value={effort} onChange={(e) => onSetChair(model, e.target.value)} title="추론 수준 (이 안건에만 적용)">
             {EFFORTS.map((e) => (
               <option key={e} value={e}>{e ? `추론 ${e}` : "추론 기본"}</option>
             ))}
@@ -213,11 +213,11 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
 
           <select
             value={state.chair.account ?? "claude"}
-            title="의장 계정. GPT·제미나이 계정을 고르면 그 AI가 의장을 맡습니다 (바꾸면 state.md 기반으로 새 세션 시작)"
+            title="의장 계정. GPT·제미나이 계정을 고르면 그 AI가 의장을 맡습니다. 이 안건에만 적용되고 다른 안건은 그대로입니다 (바꾸면 state.md 기반으로 새 세션 시작)"
             onChange={(e) => {
               const next = state.accounts.find((a) => a.id === e.target.value);
               const other = next && next.provider !== chairProvider ? `${PROVIDER_LABEL[next.provider] ?? next.provider}가 의장을 맡고 ` : "";
-              if (confirm(`의장 계정을 바꾸면 ${other}대화 세션이 새로 시작됩니다 (state.md는 유지). 계속할까요?`)) void onSetChair(model, effort, e.target.value);
+              if (confirm(`이 안건의 의장 계정을 바꾸면 ${other}대화 세션이 새로 시작됩니다 (state.md는 유지). 다른 안건은 그대로입니다. 계속할까요?`)) void onSetChair(model, effort, e.target.value);
             }}
           >
             {CLI_PROVIDERS.map((p) => {

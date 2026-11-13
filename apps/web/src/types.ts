@@ -105,6 +105,7 @@ export interface AccountUsage {
   fiveHour?: UsageWindow;
   weekly?: UsageWindow;
   noFiveHour?: boolean;
+  details?: Array<{ group: string; label: string; usedPct: number; resetsAt?: string }>;
   error?: string;
   checkedAt: string;
 }

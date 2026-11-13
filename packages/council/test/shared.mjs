@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { claudeModelId, linkShared, prepareShared, removeWorktree, sharedDirs, sharedRule, initLocalGit, unlinkLinks } from "@gencouncil/council";
+import { BG_RUNNER, bgRule, claudeModelId, linkShared, prepareShared, removeWorktree, sharedDirs, sharedRule, initLocalGit, unlinkLinks } from "@gencouncil/council";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-shared-"));
 const repo = path.join(tmp, "proj");
@@ -101,6 +101,16 @@ check("uncommitted render rescued to main", fs.existsSync(path.join(repo, "outpu
 check("member rule names shared folders", sharedRule(project).includes("`_shared/`") && sharedRule(project).includes("`output/video/`"));
 check("git project without a list has no rule", sharedRule({ repo: tmp, localGit: false }) === "");
 check("fable goes out as the full 5.2 id", claudeModelId("fable") === "claude-fable-5-2" && claudeModelId("opus") === "opus" && claudeModelId("claude-fable-5-1") === "claude-fable-5-1");
+
+check("background runner exists", fs.existsSync(BG_RUNNER), BG_RUNNER);
+check("background rule names the runner and the log", bgRule().includes(BG_RUNNER) && bgRule().includes("--log"));
+// the runner itself: output reaches the log, the end line records the exit code
+if (process.platform !== "win32") {
+  const log = path.join(tmp, "bg.log");
+  execFileSync(process.execPath, [BG_RUNNER, "--title", "t", "--log", log, "--", process.execPath, "-e", "console.log(\"hello\");process.exit(4)"]);
+  for (let i = 0; i < 50 && !(fs.existsSync(log) && fs.readFileSync(log, "utf8").includes("exit 4")); i++) await new Promise((r) => setTimeout(r, 100));
+  check("runner logs output and exit code", /hello[sS]*exit 4/.test(fs.readFileSync(log, "utf8")));
+}
 
 fs.rmSync(tmp, { recursive: true, force: true });
 if (failed) {

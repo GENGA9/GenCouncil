@@ -1,5 +1,6 @@
 import type { AgendaConfig, MemberRecord, MemberResult, MemoryProposal, ProjectConfig, Task } from "./model.js";
 import { sharedDirs } from "./shared.js";
+import { bgRule } from "./bg.js";
 
 /** member/chair rule for the shared render folders (empty when the project has none) */
 export function sharedRule(project: Pick<ProjectConfig, "repo" | "localGit">): string {
@@ -98,6 +99,7 @@ ${i.project.localGit ? `
 1-2. 확인용 개발 서버·브라우저는 이 작업 전용 포트로 띄우고(예: \`--strictPort\`), 사용자가 쓰는 공용 포트는 쓰지도 끄지도 않는다. 띄운 것은 끝나기 전에 닫는다.
 1-3. 라이선스 동의가 필요하거나 접근이 막힌(gated, 403) 모델·데이터는 미러·다른 토큰으로 우회하지 말고 멈춘 뒤 이름과 라이선스 링크를 RESULT.md에 적는다.
 1-4. 측정·생성 중간 파일은 \`.council/\` 아래에 두고 커밋하지 않는다(\`tmp/\` 등 저장소 안 임시 폴더를 커밋하지 않는다).
+1-5. ${bgRule()}
 2. 완료하면 \`git add -A && git commit -m "${i.task.title}: <요약>"\` 으로 전부 커밋한다. 중간 커밋을 여러 번 해도 된다. \`.council/\` 폴더는 커밋하지 않는다(이미 제외되어 있다).
 3. 마지막에 \`.council/RESULT.md\` 를 아래 양식으로 작성한다.
 4. 재사용 가치가 있는 발견(비자명한 해결책, 도구 위치, 규약)은 \`memory_propose\` 도구가 있으면 그걸로, 없으면 RESULT.md의 '기억 제안' 절에 적는다. 제안은 관리자가 Gen Wiki에 등록한다. 특정 버그 하나의 수정 기록, 이번 작업의 결과, 코드나 git 기록을 보면 아는 사실은 제안하지 않는다. 다른 작업에서도 다시 찾아 쓸 지식만 제안한다. 다른 프로젝트에서도 쓰는 지식(공통 도구 사용법, 외부 서비스 절차, 환경 문제)은 scope: common으로, 이 프로젝트 코드·데이터에만 맞는 사실은 scope: project로 제안한다. 작업을 시작할 때 쓸 도구·절차가 있으면 먼저 아래 Gen Wiki 맨 위 분류에서 \`wiki_toc\`로 필요한 갈래만 내려가 \`wiki_read\`로 읽거나, \`wiki_search\`·\`memory_search\`로 찾는다. 위키 전체를 훑지 않는다.

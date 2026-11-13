@@ -41,6 +41,7 @@ function Bar({ label, w, color, none }: { label: string; w?: UsageWindow; color:
 export function UsagePanel({ pushed }: { pushed?: UsageSnapshot | null }) {
   const [snap, setSnap] = useState<UsageSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const [detail, setDetail] = useState<{ u: AccountUsage; label: string; color: string } | null>(null);
   const load = useCallback(async (refresh: boolean) => {
     setLoading(true);
     try {
@@ -80,8 +81,12 @@ export function UsagePanel({ pushed }: { pushed?: UsageSnapshot | null }) {
           );
         }
         return rows.map((u) => (
-          <div key={u.account} className="usage-acct">
-            <div className="usage-name" style={{ color: p.color }} title={rows.length > 1 ? `${p.label} · ${u.account}` : p.label}>
+          <div
+            key={u.account}
+            className={`usage-acct${u.details?.length ? " clickable" : ""}`}
+            onClick={u.details?.length ? () => setDetail({ u, label: rows.length > 1 ? `${p.label} · ${u.account}` : p.label, color: p.color }) : undefined}
+          >
+            <div className="usage-name" style={{ color: p.color }} title={u.details?.length ? "눌러서 세부 한도 보기" : rows.length > 1 ? `${p.label} · ${u.account}` : p.label}>
               {rows.length > 1 ? `${p.label}·${u.account}` : p.label}
             </div>
             {u.error ? (
@@ -96,6 +101,49 @@ export function UsagePanel({ pushed }: { pushed?: UsageSnapshot | null }) {
           </div>
         ));
       })}
+      {detail && <DetailPopup {...detail} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
+
+/** every limit one account reports (Gemini: model groups plus per-model limits such as Argon) */
+function DetailPopup({ u, label, color, onClose }: { u: AccountUsage; label: string; color: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const groups = new Map<string, NonNullable<AccountUsage["details"]>>();
+  for (const d of u.details ?? []) groups.set(d.group, [...(groups.get(d.group) ?? []), d]);
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <span style={{ color }}>{label} 세부 한도</span>
+          <button className="icon" onClick={onClose}>✕</button>
+        </div>
+        {[...groups].map(([group, list]) => (
+          <div key={group} className="usage-detail-group">
+            <div className="usage-detail-title">{group}</div>
+            {list.map((d) => {
+              const left = 100 - d.usedPct;
+              return (
+                <div key={d.label} className="usage-detail-row">
+                  <span className="usage-detail-label">{d.label.replace(group, "").replace(/remaining/i, "").trim() || d.label}</span>
+                  <span className="usage-bar">
+                    <span className="usage-bar-fill" style={{ width: `${left}%`, background: left <= 10 ? "var(--danger, #d64545)" : color }} />
+                  </span>
+                  <span className="usage-bar-pct">{left}%</span>
+                  <span className="muted small usage-detail-reset" title={d.resetsAt ? new Date(d.resetsAt).toLocaleString() : ""}>
+                    {d.resetsAt ? `${until(d.resetsAt)} (${new Date(d.resetsAt).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })})` : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <div className="muted small">마지막 확인 {new Date(u.checkedAt).toLocaleString()}</div>
+      </div>
     </div>
   );
 }
