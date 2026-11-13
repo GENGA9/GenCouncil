@@ -194,6 +194,18 @@ check("astra refused under 50% GPT weekly", throws(() => checkTopModelUsage("gpt
 check("astra allowed at 60%", !throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 60)));
 check("sol never held back", !throws(() => checkTopModelUsage("gpt", "gpt-6.1-sol", 5)));
 check("fable refused under 30% Claude weekly", throws(() => checkTopModelUsage("claude", "fable", 25)) && !throws(() => checkTopModelUsage("claude", "opus", 5)));
+check("override passes fable/astra", !throws(() => checkTopModelUsage("claude", "fable", 20, true)) && !throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 20, true)) && throws(() => checkTopModelUsage("claude", "fable", 20)) && throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 20)));
+{
+  const { normalizeLimits: nl } = await import("@gencouncil/council");
+  const d = nl({});
+  check("floor defaults 30/50", d.claude.topModelMinWeeklyLeft === 30 && d.gpt.topModelMinWeeklyLeft === 50 && d.gemini.topModelMinWeeklyLeft === undefined);
+  const c = nl({ claude: { topModelMinWeeklyLeft: 250 }, gpt: { topModelMinWeeklyLeft: -5 }, gemini: { topModelMinWeeklyLeft: 10 } });
+  check("floor clamped 0..100, gemini ignored", c.claude.topModelMinWeeklyLeft === 100 && c.gpt.topModelMinWeeklyLeft === 0 && c.gemini.topModelMinWeeklyLeft === undefined);
+  check("floor garbage -> default", nl({ claude: { topModelMinWeeklyLeft: "abc" } }).claude.topModelMinWeeklyLeft === 30);
+  check("floor 10: fable ok at 20%", !throws(() => checkTopModelUsage("claude", "fable", 20, false, 10)));
+  check("floor 50: fable refused at 40%", throws(() => checkTopModelUsage("claude", "fable", 40, false, 50)));
+  check("floor 0: astra ok at 1%", !throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 1, false, 0)));
+}
 check("unknown usage never blocks", !throws(() => checkTopModelUsage("claude", "fable", undefined)));
 council.setUsageProvider(() => [{ provider: "claude", account: "claude", weekly: { usedPct: 80 } }, { provider: "claude", account: "claude-b", weekly: { usedPct: 90 } }]);
 check("best account decides", council.weeklyLeft("claude") === 20);

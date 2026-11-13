@@ -65,14 +65,16 @@ export interface ProviderLimit {
   maxModel?: string;
   /** highest effort the chair may pick (providers that support effort) */
   maxEffort?: Effort;
+  /** claude/gpt only: weekly % that must remain to use the top model (fable / gpt-6-astra); 0 = never hold back */
+  topModelMinWeeklyLeft?: number;
 }
 
 export type Limits = Record<LimitKey, ProviderLimit>;
 
 export const DEFAULT_LIMITS: Limits = {
-  claude: { maxMembers: 3, maxModel: "fable", maxEffort: "high" },
+  claude: { maxMembers: 3, maxModel: "fable", maxEffort: "high", topModelMinWeeklyLeft: 30 },
   gemini: { maxMembers: 2, maxModel: "gemini-4-argon", maxEffort: "high" },
-  gpt: { maxMembers: 2, maxModel: "gpt-6.1-sol", maxEffort: "high" },
+  gpt: { maxMembers: 2, maxModel: "gpt-6.1-sol", maxEffort: "high", topModelMinWeeklyLeft: 50 },
   "gemini-web": { maxMembers: 1 },
   aistudio: { maxMembers: 1 },
   chatgpt: { maxMembers: 0 },
@@ -90,7 +92,13 @@ export function normalizeLimits(l?: Partial<Record<string, Partial<ProviderLimit
       const t = tierOf(p, maxModel);
       if (t >= 0) maxModel = LADDERS[p][t].id;
     }
+    const rawFloor = v.topModelMinWeeklyLeft as unknown;
+    const floor =
+      rawFloor !== undefined && rawFloor !== null && rawFloor !== "" && Number.isFinite(Number(rawFloor))
+        ? Math.min(100, Math.max(0, Math.round(Number(rawFloor))))
+        : d.topModelMinWeeklyLeft;
     out[k] = {
+      ...(d.topModelMinWeeklyLeft !== undefined ? { topModelMinWeeklyLeft: floor } : {}),
       maxMembers: Number.isFinite(Number(v.maxMembers)) ? Math.max(0, Math.floor(Number(v.maxMembers))) : d.maxMembers,
       maxModel,
       maxEffort: (v.maxEffort && EFFORTS.includes(v.maxEffort as Effort) ? v.maxEffort : d.maxEffort) as Effort | undefined,
@@ -140,11 +148,13 @@ export const TOP_MODEL_WEEKLY_FLOOR: Array<{ provider: CliProvider; match: RegEx
 ];
 
 /** throws when model is a top model and the provider's best account has too little weekly allowance left */
-export function checkTopModelUsage(provider: CliProvider, model: string | undefined, weeklyLeft: number | undefined): void {
-  if (!model || weeklyLeft === undefined) return;
+export function checkTopModelUsage(provider: CliProvider, model: string | undefined, weeklyLeft: number | undefined, override?: boolean, minWeeklyLeft?: number): void {
+  if (!model || weeklyLeft === undefined || override) return;
   const rule = TOP_MODEL_WEEKLY_FLOOR.find((r) => r.provider === provider && r.match.test(model));
-  if (rule && weeklyLeft < rule.minWeeklyLeft)
-    throw new LimitError(`${rule.label}은(는) ${provider} 주간 사용량이 ${rule.minWeeklyLeft}% 이상 남았을 때만 쓴다 (지금 ${weeklyLeft}% 남음). 한 단계 낮은 모델을 고른다.`);
+  if (!rule) return;
+  const floor = minWeeklyLeft ?? rule.minWeeklyLeft;
+  if (weeklyLeft < floor)
+    throw new LimitError(`${rule.label}은(는) ${provider} 주간 사용량이 ${floor}% 이상 남았을 때만 쓴다 (지금 ${weeklyLeft}% 남음). 한 단계 낮은 모델을 고른다. 사용자가 이 모델을 명시했다면 override_usage:true로 다시 배정한다.`);
 }
 
 /** the default rung when the chair names no model */
