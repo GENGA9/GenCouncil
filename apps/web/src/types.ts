@@ -10,6 +10,7 @@ export interface LimitEntry {
   maxMembers: number;
   maxModel?: string;
   maxEffort?: string;
+  topModelMinWeeklyLeft?: number;
 }
 export type Limits = Record<string, LimitEntry>;
 

@@ -277,6 +277,8 @@ button.tg-auto:disabled.on { opacity: 1; }
 .limits { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
 .limits-head, .limits-row { display: grid; grid-template-columns: 1.3fr 0.7fr 1.4fr 1fr; gap: 8px; align-items: center; }
 .limits-row input, .limits-row select { padding: 4px 6px; }
+.limits-floor { display: flex; align-items: center; gap: 6px; margin: -2px 0 4px 8px; }
+.limits-floor input { width: 64px; padding: 4px 6px; }
 .limits-name { font-weight: 600; }
 .fam-claude { color: var(--c-claude); }
 .fam-gemini { color: var(--c-gemini); }

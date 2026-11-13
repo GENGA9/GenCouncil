@@ -538,7 +538,7 @@ ${rows.join("\n")}`;
       this.checkSlot(p);
       // a fallback provider cannot use the other provider's model name
       model = this.fitModel(account, resolveModel(p, p === requested ? input.model : undefined, limits[p]));
-      checkTopModelUsage(p, model, this.weeklyLeft(p), input.overrideUsage);
+      checkTopModelUsage(p, model, this.weeklyLeft(p), input.overrideUsage, limits[p].topModelMinWeeklyLeft);
       effort = resolveEffort(p, input.effort, limits[p]);
       if (p === "claude") advisor = resolveAdvisor(model, input.advisor, limits.claude);
     } else {
@@ -963,7 +963,7 @@ ${rows.join("\n")}`;
     const allowed = allowedModels("claude", limits.claude).map((m) => m.id);
     const wantModel = opts.model ?? (allowed.includes("sonnet") ? "sonnet" : allowed[allowed.length - 1]);
     const model = resolveModel("claude", wantModel, limits.claude);
-    checkTopModelUsage("claude", model, this.weeklyLeft("claude"), opts.overrideUsage);
+    checkTopModelUsage("claude", model, this.weeklyLeft("claude"), opts.overrideUsage, this.limits().claude.topModelMinWeeklyLeft);
     const efforts = allowedEfforts("claude", limits.claude);
     const effort = resolveEffort("claude", opts.effort ?? (efforts.includes("high") ? "high" : efforts[efforts.length - 1]), limits.claude);
     const id = this.nextMemberId("claude");
