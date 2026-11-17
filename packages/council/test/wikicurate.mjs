@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-wikicur-"));
 process.env.GENCOUNCIL_HOME = home;
 const { MemoryStore, WikiStore } = await import("@gencouncil/core");
-const { selectWikiInbox, wikiChanges, saveWikiReviewed, wikiRegisterPrompt, wikiReviewPrompt } = await import("@gencouncil/council");
+const { curatorArgs, selectWikiInbox, wikiChanges, saveWikiReviewed, wikiRegisterPrompt, wikiReviewPrompt } = await import("@gencouncil/council");
 
 let failed = 0;
 const check = (name, cond, extra = "") => {
@@ -50,6 +50,15 @@ check("review prompt has both parts: change review and cleanup", rv.includes("1�
 const quiet = wikiReviewPrompt([], { ...ch, files: [], diff: "" }, "", wiki.list(), 3);
 check("with no changes the review still does the cleanup", quiet.includes("1부는 건너뛰고 2부만"));
 check("cleanup flags pages of unregistered projects", wikiReviewPrompt([], ch, "", wiki.list()).includes("등록되지 않은 프로젝트"));
+
+// the prompt never rides on the command line: a real check carries the whole diff (60k chars) plus
+// the page list, and Windows caps a command line at 32,767 chars (spawn fails with ENAMETOOLONG)
+const WIN_CMD_MAX = 32767;
+const bigDiff = wikiReviewPrompt([], { ...ch, diff: "x".repeat(60_000), truncated: true }, "", wiki.list(), 3);
+check("a real check's prompt is past the command-line limit", bigDiff.length > WIN_CMD_MAX, `${bigDiff.length} chars`);
+const cargs = curatorArgs("fable", "high", "C:\\x\\mcp.json");
+check("curator passes -p with no prompt argument", cargs[0] === "-p" && cargs[1].startsWith("--"), cargs.slice(0, 3).join(" "));
+check("no curator argument is anywhere near the limit", cargs.every((a) => a.length < 1000) && cargs.join(" ").length < 1000, String(cargs.join(" ").length));
 
 // ---- owner MCP tools: memory_to_wiki and the removal cap ----
 const serverJs = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../mcp/dist/server.js");

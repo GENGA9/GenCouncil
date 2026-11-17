@@ -314,6 +314,31 @@ export function runTidy(
   return runCurator({ ...opts, prompt: tidyPrompt(projects, candidates, retireBudget, pruneBudget), label: "tidy", retireBudget, pruneBudget });
 }
 
+/**
+ * The curator's command line. `-p` carries no prompt: the prompt is written to stdin instead,
+ * because a wiki check's prompt holds the whole diff and page list and would blow past the
+ * command-line limit (Windows: 32,767 chars, spawn fails with ENAMETOOLONG).
+ */
+export function curatorArgs(model: string, effort: string, mcpFile: string): string[] {
+  return [
+    "-p",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    claudeModelId(model),
+    "--effort",
+    effort,
+    "--mcp-config",
+    mcpFile,
+    "--strict-mcp-config",
+    "--tools",
+    "",
+    "--allowedTools",
+    "mcp__gencouncil",
+  ];
+}
+
 export function runCurator(
   opts: { account?: string; model?: string; effort?: string; prompt?: string; label?: string; retireBudget?: number; pruneBudget?: number; wikiRemoveBudget?: number; onEvent?: (e: ClaudeEvent) => void } = {},
 ): Promise<CuratorResult> {
@@ -334,24 +359,10 @@ export function runCurator(
   );
   const model = opts.model ?? CURATOR_MODEL;
   const effort = opts.effort ?? CURATOR_EFFORT;
-  const args = [
-    "-p",
-    opts.prompt ?? curatorPrompt(),
-    "--output-format",
-    "stream-json",
-    "--verbose",
-    "--model",
-    claudeModelId(model),
-    "--effort",
-    effort,
-    "--mcp-config",
-    mcpFile,
-    "--strict-mcp-config",
-    "--tools",
-    "",
-    "--allowedTools",
-    "mcp__gencouncil",
-  ];
+  // the prompt goes on stdin, never in the arguments: a wiki check carries the whole diff and page
+  // list, and Windows caps a command line at 32,767 chars (spawn fails with ENAMETOOLONG)
+  const prompt = opts.prompt ?? curatorPrompt();
+  const args = curatorArgs(model, effort, mcpFile);
   const env: NodeJS.ProcessEnv = { ...process.env, ...accounts.env(account) };
   delete env.CLAUDECODE;
   const log = fs.createWriteStream(curatorLogFile(), { flags: "a" });
@@ -370,7 +381,7 @@ export function runCurator(
     let isError = false;
     let costUsd: number | undefined;
     let stderr = "";
-    const proc = wireProcess(child, { cwd, prompt: "", autonomy: "edits" }, (stream, line) => {
+    const proc = wireProcess(child, { cwd, prompt: "", stdinText: prompt, autonomy: "edits" }, (stream, line) => {
       log.write(`[${stream}] ${line}\n`);
       if (stream === "stderr") {
         stderr += line + "\n";
