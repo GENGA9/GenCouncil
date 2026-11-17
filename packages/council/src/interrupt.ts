@@ -69,10 +69,12 @@ export async function stopProcessesUnder(dir: string): Promise<number[]> {
   const win = dir.replace(/[\\/]+$/, "");
   const fwd = win.replace(/\\/g, "/");
   const bash = fwd.replace(/^([A-Za-z]):/, (_m, d: string) => "/" + d.toLowerCase());
-  const needles = [...new Set([win, fwd, bash])].map((n) => "'" + n.replace(/'/g, "''") + "'");
+  // the path must end where the needle ends: a plain substring match makes claude-6 match claude-69
+  const alts = [...new Set([win, fwd, bash])].map((n) => n.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")).join("|");
+  const pattern = `(?:${alts})(?:["'\\s\\\\/,;]|$)`.replace(/'/g, "''");
   const names = AGENT_PROGRAMS.map((n) => `'${n}'`).join(",");
   const script =
-    `$n=@(${names}); Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $n -contains $_.Name.ToLower() -and $_.ProcessId -ne ${process.pid} -and $_.ProcessId -ne $PID -and $_.CommandLine -and (@(${needles.join(",")}) | Where-Object { $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) } | ForEach-Object { $_.ProcessId }`;
+    `$n=@(${names}); $re='${pattern}'; Get-CimInstance Win32_Process | Where-Object { $n -contains $_.Name.ToLower() -and $_.ProcessId -ne ${process.pid} -and $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine -imatch $re } | ForEach-Object { $_.ProcessId }`;
   const pids = await new Promise<number[]>((resolve) => {
     execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 30000 }, (err, stdout) => {
       if (err) return resolve([]);
@@ -140,4 +142,47 @@ export async function stopTracked(list: TrackedProcess[] | undefined): Promise<n
   let n = 0;
   for (const t of list ?? []) if (await stopLeftover(t.pid, t.startedAt)) n++;
   return n;
+}
+
+/**
+ * Shell pipeline filters a member leaves behind. A member running `tail -f x.log | grep ...` in a
+ * background shell leaves these alive when the shell dies: on Windows nothing reaps them, and
+ * `taskkill /t` can no longer reach them because their parent is already gone. They do nothing but
+ * hold memory and handles — 170 of them, five days old, was the state that prompted this.
+ *
+ * Only pure filters are on the list: with a dead parent nobody is reading their output, so killing
+ * one cannot interrupt work. Anything that could be doing work on its own (node, python, a CLI, a
+ * shell) is never touched here — those are handled by worktree, in stopProcessesUnder.
+ */
+const STRAY_FILTERS = ["tail.exe", "grep.exe", "sleep.exe", "cut.exe", "head.exe", "sed.exe", "awk.exe", "wc.exe", "sort.exe", "uniq.exe", "tr.exe", "xargs.exe"];
+
+/**
+ * Kill orphaned pipeline filters: parent already dead, and older than minAgeMinutes (a filter in a
+ * pipeline being set up right now is young and its shell may be a moment behind). Returns how many
+ * of each program was stopped.
+ */
+export async function reapStrays(opts: { minAgeMinutes?: number; pids?: number[] } = {}): Promise<Record<string, number>> {
+  if (process.platform !== "win32") return {};
+  if (opts.pids && opts.pids.length === 0) return {};
+  const minutes = opts.minAgeMinutes ?? 10;
+  const names = STRAY_FILTERS.map((n) => `'${n}'`).join(",");
+  // pids narrows the sweep to a known set (the test's own processes); without it, every orphan goes
+  const only = opts.pids ? ` -and @(${opts.pids.map((p) => String(Math.trunc(p))).join(",")}) -contains [int]$_.ProcessId` : "";
+  const script = [
+    `$names=@(${names})`,
+    "$live=@{}; Get-Process | ForEach-Object { $live[[int]$_.Id]=$true }",
+    `$cut=(Get-Date).AddMinutes(-${minutes})`,
+    `Get-CimInstance Win32_Process | Where-Object { $names -contains $_.Name.ToLower() -and -not $live.ContainsKey([int]$_.ParentProcessId) -and $_.CreationDate -lt $cut${only} } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop; $_.Name } catch {} }`,
+  ].join("; ");
+  const text = await new Promise<string>((resolve) => {
+    execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 60000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) =>
+      resolve(err ? "" : String(stdout)),
+    );
+  });
+  const out: Record<string, number> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const name = line.trim().toLowerCase();
+    if (name) out[name] = (out[name] ?? 0) + 1;
+  }
+  return out;
 }

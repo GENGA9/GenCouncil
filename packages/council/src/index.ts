@@ -12,6 +12,7 @@ export * from "./accounts.js";
 export * from "./quota.js";
 export * from "./relay.js";
 export * from "./explorers.js";
+export * from "./oneshot.js";
 export * from "./models.js";
 export * from "./localgit.js";
 export * from "./launch.js";

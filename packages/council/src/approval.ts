@@ -47,7 +47,8 @@ export function ruleDecision(req: Pick<PermissionRequest, "toolName" | "input">)
     if (parts.length && parts.every((p) => SAFE_COMMANDS.some((re) => re.test(p)))) return { behavior: "allow", reason: "읽기·빌드·테스트 명령", by: "rule" };
     return undefined;
   }
-  if (/^(Read|Glob|Grep|LS|TodoWrite|Task|mcp__gencouncil__memory_(search|read|index|list|propose))$/.test(req.toolName)) {
+  // the member's own read-only helpers: the explorer and the advisor consult cannot change anything
+  if (/^(Read|Glob|Grep|LS|TodoWrite|Task|mcp__council_member__(consult|explore)|mcp__gencouncil__memory_(search|read|index|list|propose))$/.test(req.toolName)) {
     return { behavior: "allow", reason: "읽기 전용 도구", by: "rule" };
   }
   return undefined;

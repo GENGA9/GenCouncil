@@ -41,6 +41,7 @@ import {
   normalizeLimits,
   openLoginWindow,
   openWebSite,
+  reapStrays,
   type AccountProvider,
   type Autonomy,
   type CliProvider,
@@ -921,6 +922,28 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     for (const c of clients) if (c.readyState === c.OPEN) c.ping();
   }, 30_000);
 
+  // Safety net for the shell pipelines a member leaves behind that the per-member cleanup cannot
+  // place: one started between two descendant snapshots, or one whose command line names no
+  // worktree (`tail -n0 -f kf.log`, run from the worktree with a relative path). Only filters whose
+  // parent is already dead are stopped, so nothing anyone is still reading can be hit.
+  const sweep = async (): Promise<void> => {
+    try {
+      const killed = await reapStrays({ minAgeMinutes: 10 });
+      const total = Object.values(killed).reduce((a, b) => a + b, 0);
+      if (total) {
+        const what = Object.entries(killed)
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        log(`reaped ${total} orphaned shell process(es): ${what}`);
+      }
+    } catch (e) {
+      log(`reaper: ${(e as Error).message.split("\n")[0]}`);
+    }
+  };
+  const reaper = setInterval(() => void sweep(), 15 * 60_000);
+  reaper.unref?.();
+  void sweep();
+
   await new Promise<void>((resolve, reject) => {
     server.on("error", reject);
     server.listen(listenPort, config.host, resolve);
@@ -977,6 +1000,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     url: `http://${shownHost}:${config.port}`,
     close: async () => {
       clearInterval(ping);
+      clearInterval(reaper);
       telegram?.stop();
       for (const p of runtimes.values()) (await p).close({ closeMemory: false });
       runtimes.clear();

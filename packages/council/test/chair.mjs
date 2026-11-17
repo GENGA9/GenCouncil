@@ -142,6 +142,12 @@ await chairTok.turn("GPT 의장 둘째 턴", () => {});
 const cArgs2 = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8");
 const cIn2 = fs.readFileSync(path.join(rec, "codex-stdin.txt"), "utf8");
 check("next gpt turn resumes the thread with a short refresh", /exec resume .* t-9 -/.test(cArgs2) && cIn2.includes("<의장_지침_갱신>") && !cIn2.includes("<의장_지침>"), cArgs2);
+// codex has no system-prompt flag, so the rules that decide whether it hands work out go again every turn
+check(
+  "the refresh repeats the assignment rules",
+  cIn2.includes("위원 고르기") && cIn2.includes("council_explore") && cIn2.includes("council_consult"),
+  cIn2.slice(0, 200),
+);
 
 // agy reads MCP only from its global config: keep the test away from the real home
 const fakeHome = path.join(tmp, "userhome");

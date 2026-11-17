@@ -7,7 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { permissionToolResult } from "./approval.js";
-import { userAskedToMergeBase, type Council } from "./council.js";
+import { memberHelpers, userAskedToMergeBase, type Council } from "./council.js";
 
 function text(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
@@ -200,6 +200,40 @@ export function createCouncilMcp(council: Council): McpServer {
   );
 
   server.registerTool(
+    "council_consult",
+    {
+      title: "Consult the advisor",
+      description:
+        "Ask a stronger model one question and get its judgement back; it cannot edit anything. This is your advisor whatever provider you are: " +
+        "Claude Code's --advisor is a claude-only flag, so this tool is how a GPT or Gemini chair gets the same second opinion. " +
+        "Consult at three moments and no others: before locking the task breakdown, the second time the same kind of failure appears, and before declaring the agenda finishable. " +
+        "Put everything the advisor needs in `context` — it sees nothing else, not this conversation and not the repo.",
+      inputSchema: {
+        question: z.string().min(1).describe("one decision, concrete. not 'review this'"),
+        context: z.string().optional().describe("the plan / the error / the diff / what you decided so far. the advisor has no other context"),
+        model: z.string().optional().describe("default: the strongest model your limits allow. e.g. opus | fable | gpt-6-astra | gemini-4-argon"),
+      },
+    },
+    async (i) => guard(() => council.consult(i)),
+  );
+
+  server.registerTool(
+    "council_explore",
+    {
+      title: "Look something up in the repository",
+      description:
+        "Have a cheap read-only model find it for you instead of reading and grepping the repo in this session. " +
+        "Use it before planning a change and before writing assignment instructions: your own context is for handing work out, not for mapping the tree. " +
+        "kind: search = which files relate to a topic, grep = every definition and use of a symbol, docs = how an API is used here.",
+      inputSchema: {
+        query: z.string().min(1).describe("the topic, symbol or API to look up"),
+        kind: z.enum(["search", "grep", "docs"]).optional().describe("default search"),
+      },
+    },
+    async (i) => guard(() => council.explore(i)),
+  );
+
+  server.registerTool(
     "council_wait",
     {
       title: "Wait for a member to finish",
@@ -370,8 +404,54 @@ export function createCouncilMcp(council: Council): McpServer {
 }
 
 /** MCP server a claude member talks to for permission decisions (autonomy "chair"). */
-export function createMemberMcp(council: Council, memberId: string): McpServer {
+/**
+ * The member-facing server. `consult` and `explore` are always there — they are what a claude
+ * member gets from `--advisor` and `--agents`, which Codex and Antigravity have no equivalent for.
+ * `permission` is only registered in "chair approves" autonomy, where Claude Code points
+ * --permission-prompt-tool at it.
+ */
+export function createMemberMcp(
+  council: Council,
+  memberId: string,
+  opts: { permission?: boolean; helpers?: Array<"consult" | "explore"> } = {},
+): McpServer {
   const server = new McpServer({ name: "council_member", version: "0.1.0" });
+  const helpers = opts.helpers ?? ["consult", "explore"];
+
+  if (helpers.includes("consult"))
+    server.registerTool(
+      "consult",
+      {
+        title: "Consult the advisor",
+        description:
+          "Ask a stronger model one question and get its judgement back; it cannot edit your files. " +
+          "Consult at three moments and no others: before you lock your plan, the second time the same error appears, and before you declare the task done. " +
+          "Put everything it needs in `context` — it sees neither this conversation nor your worktree.",
+        inputSchema: {
+          question: z.string().min(1).describe("one decision, concrete. not 'review this'"),
+          context: z.string().optional().describe("your plan / the error and what you tried / the diff. the advisor has no other context"),
+        },
+      },
+      async (i) => guard(() => council.consult({ ...i, memberId })),
+    );
+
+  if (helpers.includes("explore"))
+    server.registerTool(
+      "explore",
+      {
+        title: "Look something up in your worktree",
+        description:
+          "Have a cheap read-only model find it for you instead of grepping the tree yourself. Use it before planning the change. " +
+          "kind: search = which files relate to a topic, grep = every definition and use of a symbol, docs = how an API is used here.",
+        inputSchema: {
+          query: z.string().min(1).describe("the topic, symbol or API to look up"),
+          kind: z.enum(["search", "grep", "docs"]).optional().describe("default search"),
+        },
+      },
+      async (i) => guard(() => council.explore({ ...i, memberId })),
+    );
+
+  if (!opts.permission) return server;
   server.registerTool(
     "permission",
     {
@@ -389,7 +469,11 @@ export function createMemberMcp(council: Council, memberId: string): McpServer {
 
 export async function handleMemberMcpRequest(council: Council, memberId: string, req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  const mcp = createMemberMcp(council, memberId);
+  const m = council.members().find((x) => x.id === memberId);
+  const mcp = createMemberMcp(council, memberId, {
+    permission: council.project.members.autonomy === "chair",
+    helpers: m ? memberHelpers(m, council.project) : undefined,
+  });
   res.on("close", () => {
     void transport.close();
     void mcp.close();

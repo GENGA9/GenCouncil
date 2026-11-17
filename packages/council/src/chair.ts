@@ -8,7 +8,7 @@ import type { Council } from "./council.js";
 import { agyModelId, claudeModelId, codexMcpArgs, makeAgyParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
 import { tierOf, type CliProvider } from "./models.js";
 import { advisorFor, projectMemoryKey } from "./model.js";
-import { chairSystemPrompt } from "./prompts.js";
+import { assignmentRules, chairSystemPrompt } from "./prompts.js";
 import { classifyFailure } from "./quota.js";
 import { git, isClean } from "./git.js";
 
@@ -395,10 +395,16 @@ export class Chair {
     const store = this.council.store;
     const agenda = store.agenda();
     const goals = agenda.goals.map((g, n) => `${n + 1}. ${g}`).join("\n") || "(아직 목표 없음)";
+    // the assignment rules go again every turn: they are the part that decides whether this chair
+    // hands work out or starts doing it, and in a long thread the opening message stops carrying weight
+    const limits = this.council.limits();
     const refresh = [
       `안건: "${agenda.title}"`,
       `목표:\n${goals}`,
-      `위원 한도(지금 기준):\n${this.council.limitsMarkdown()}`,
+      assignmentRules({
+        limits: this.council.limitsMarkdown(),
+        topModelFloor: { claude: limits.claude.topModelMinWeeklyLeft, gpt: limits.gpt.topModelMinWeeklyLeft },
+      }),
       `state.md:\n${store.chairState() || "(없음)"}`,
     ].join("\n\n");
     return `<의장_지침_갱신>\n${refresh}\n</의장_지침_갱신>\n\n${message}`;

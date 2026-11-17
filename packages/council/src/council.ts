@@ -29,6 +29,15 @@ import {
 } from "./git.js";
 import { explorerAgents } from "./explorers.js";
 import {
+  consultPrompt,
+  explorePrompt,
+  explorerModel,
+  oneShot,
+  providerOfModel,
+  strongestWithin,
+  type ExploreKind,
+} from "./oneshot.js";
+import {
   LIMIT_KEYS,
   LimitError,
   SITE_INFO,
@@ -44,6 +53,7 @@ import {
   allowedModels,
   tierOf,
   type CliProvider,
+  type Effort,
   type LimitKey,
   type Limits,
   type WebSite,
@@ -64,7 +74,7 @@ import {
 } from "./model.js";
 import { buildHandoverPacket, buildPacket, buildVerifyPacket, MEMBER_PROMPT, parseResult } from "./packet.js";
 import { classifyFailure } from "./quota.js";
-import { snapshotDescendants, stopLeftover, stopProcessesUnder, stopTracked } from "./interrupt.js";
+import { reapStrays, snapshotDescendants, stopLeftover, stopProcessesUnder, stopTracked } from "./interrupt.js";
 import { applyRelayFiles, bundleFiles, parseRelayResponse, RELAY_FORMAT } from "./relay.js";
 
 export { accountsFile, loadAccounts, type Account } from "./accounts.js";
@@ -135,6 +145,19 @@ export interface CouncilState {
 
 /** merged member folders kept per agenda for new members to reuse; the rest are removed */
 export const PARKED_FOLDERS = 4;
+
+/**
+ * Which one-shot helpers a member needs from the council endpoint. A claude member has the real
+ * things in-session (`--advisor`, `--agents`), so it is given a tool only where that flag is
+ * missing: no advisor was attached (a Fable main cannot take one), or explorers are off.
+ */
+export function memberHelpers(member: Pick<MemberRecord, "provider" | "advisor">, project: ProjectConfig): Array<"consult" | "explore"> {
+  const out: Array<"consult" | "explore"> = [];
+  const claude = member.provider === "claude";
+  if (!claude || !member.advisor) out.push("consult");
+  if (!claude && (project.members.explorers ?? true)) out.push("explore");
+  return out;
+}
 
 const RELAY_PROMPT_HEAD = `# 릴레이 작업 패킷
 
@@ -641,9 +664,18 @@ ${rows.join("\n")}`;
     const chairApproves = provider === "claude" && this.project.members.autonomy === "chair" && Boolean(this.memberMcp);
     if (provider === "claude" && this.project.members.autonomy === "chair" && !this.memberMcp)
       this.log(`member ${member.id}: chair approval unavailable here (no council endpoint); running with file edits only`);
-    if (chairApproves) {
-      const t = this.memberMcp!(member.id);
-      mcpCfg.mcpServers.council_member = { type: "http", url: t.url, ...(t.headers ? { headers: t.headers } : {}) };
+    // the member endpoint carries consult/explore (and the permission tool in "chair approves"
+    // autonomy), so a Codex or Antigravity member has an advisor and an explorer too. A claude
+    // member keeps the native --advisor/--agents and only needs the endpoint when it has neither.
+    let councilToken: string | undefined;
+    if (this.memberMcp && (chairApproves || memberHelpers(member, this.project).length > 0)) {
+      const t = this.memberMcp(member.id);
+      councilToken = (t.headers?.Authorization ?? t.headers?.authorization)?.replace(/^Bearer\s+/i, "");
+      // Codex takes the bearer token from an env var, not from a headers map
+      mcpCfg.mcpServers.council_member =
+        provider === "gpt" && councilToken
+          ? { type: "http", url: t.url, bearerTokenEnvVar: "GENCOUNCIL_COUNCIL_TOKEN" }
+          : { type: "http", url: t.url, ...(t.headers ? { headers: t.headers } : {}) };
     }
     const mcpFile = path.join(councilDir, "mcp.json");
     fs.writeFileSync(mcpFile, JSON.stringify(mcpCfg, null, 2), "utf8");
@@ -700,6 +732,7 @@ ${rows.join("\n")}`;
             GENCOUNCIL_AGENT: agentLabel,
             // strict MCP config keeps the tool list small: load it up front instead of a ToolSearch round trip
             ...(provider === "claude" ? { ENABLE_TOOL_SEARCH: "false" } : {}),
+            ...(councilToken ? { GENCOUNCIL_COUNCIL_TOKEN: councilToken } : {}),
           },
           extraArgs,
         },
@@ -766,6 +799,25 @@ ${rows.join("\n")}`;
     member.endedAt = new Date().toISOString();
     member.exitCode = code;
     if (member.status !== "stopped") member.status = code === 0 && !sawError ? "done" : "failed";
+    // The member is gone; the shells it started are not. Windows reaps nothing, and once a member's
+    // own background shell exits, taskkill /t can no longer reach what that shell left (a `tail -f`
+    // on a log, a `grep --line-buffered` behind it, a polling `sleep`) because the parent it would
+    // walk is already dead. Until now this ran only when the app restarted or a run was resumed, so
+    // every normally finished member left its pipeline behind for good — 170 of them, up to five
+    // days old, was the state that prompted this.
+    //
+    // Only the pipeline filters among its own remembered descendants are taken, and only where the
+    // parent is already dead. The worktree-wide sweep (stopProcessesUnder) is NOT used here: a
+    // render or a conversion started through bin/bg.mjs is supposed to outlive the member, and its
+    // command line names the member's worktree, so that sweep would kill the work.
+    try {
+      const pids = (member.descendants ?? []).map((d) => d.pid);
+      const killed = await reapStrays({ minAgeMinutes: 0, pids });
+      const n = Object.values(killed).reduce((a, b) => a + b, 0);
+      if (n) this.log(`member ${member.id}: stopped ${n} leftover shell process(es) (${Object.keys(killed).join(", ")})`);
+    } catch (e) {
+      this.log(`member ${member.id}: cleanup skipped (${(e as Error).message.split("\n")[0]})`);
+    }
     try {
       if (!(await isClean(member.worktree))) {
         await git(member.worktree, ["add", "-A"]);
@@ -1046,6 +1098,113 @@ ${rows.join("\n")}`;
     this.log(`verify ${prev.id} → ${id} (claude ${model}/${effort ?? "-"}): ${opts.reason ?? "manual"}`);
     this.spawnMember(next, packet, pick.account);
     return next;
+  }
+
+  // ---------- advisor consult / repository explorer (every provider) ----------
+
+  /** per-caller one-shot counts for this agenda, so a looping member cannot burn an allowance */
+  private oneShotUsed = new Map<string, number>();
+
+  private takeOneShot(kind: "consult" | "explore", who: string): void {
+    const cap = kind === "consult" ? 12 : 30;
+    const key = `${kind}\u0000${who}`;
+    const used = this.oneShotUsed.get(key) ?? 0;
+    if (used >= cap)
+      throw new Error(`${who}의 ${kind} 호출이 이 안건에서 ${cap}회 한도에 닿았다. 직접 판단하거나 결과를 RESULT.md에 적고 끝낸다.`);
+    this.oneShotUsed.set(key, used + 1);
+  }
+
+  /** where a one-shot call may read: the asking member's worktree, or the chair's integration worktree */
+  private oneShotCwd(memberId?: string): string {
+    return memberId ? this.member(memberId).worktree : this.store.integrationWorktree();
+  }
+
+  /**
+   * Pick provider + model for a one-shot call, clamped to the user's limits, on an account that is
+   * actually usable. A fallback to another provider changes the model too: a claude model id means
+   * nothing to codex.
+   */
+  private oneShotTarget(want: string | undefined, kind: "consult" | "explore"): { provider: CliProvider; model: string; account: Account } {
+    const limits = this.limits();
+    const asked = want?.trim() || undefined;
+    let provider = (asked && providerOfModel(asked)) || "claude";
+    if (asked && !providerOfModel(asked)) throw new LimitError(`unknown model "${asked}"`);
+    const pick = this.chooseAccount(provider, undefined, []);
+    provider = pick.provider;
+    const limit = limits[provider];
+    // the asked-for model only survives when the fallback did not move us to another provider
+    const rung = kind === "explore" ? explorerModel(provider) : (asked && providerOfModel(asked) === provider ? asked : strongestWithin(provider, limit.maxModel));
+    let model: string;
+    try {
+      model = resolveModel(provider, rung, limit);
+    } catch {
+      model = strongestWithin(provider, limit.maxModel);
+    }
+    return { provider, model: this.fitModel(pick.account, model), account: pick.account };
+  }
+
+  private oneShotEffort(provider: CliProvider, model: string, want: Effort): Effort | undefined {
+    try {
+      return resolveEffort(provider, want, this.limits()[provider], model);
+    } catch {
+      return resolveEffort(provider, undefined, this.limits()[provider], model);
+    }
+  }
+
+  /**
+   * Ask a stronger model one question and return its answer. This is what `claude --advisor` does
+   * for a claude member, as a tool any provider can call.
+   */
+  async consult(input: { question: string; context?: string; model?: string; memberId?: string }): Promise<Record<string, unknown>> {
+    const q = input.question?.trim();
+    if (!q) throw new Error("question is required");
+    const cwd = this.oneShotCwd(input.memberId);
+    const { provider, model, account } = this.oneShotTarget(input.model, "consult");
+    const asker = input.memberId ? `위원 ${input.memberId}` : "의장";
+    this.takeOneShot("consult", asker);
+    const effort = this.oneShotEffort(provider, model, "high");
+    this.accounts.touch(account.id);
+    this.log(`consult by ${asker}: ${provider} ${model}/${effort ?? "-"} (${account.id})`);
+    const r = await oneShot({
+      provider,
+      model,
+      effort,
+      cwd,
+      env: this.accounts.env(account),
+      prompt: consultPrompt({ question: q, context: input.context, asker }),
+      tools: "none",
+      timeoutMs: 300_000,
+    });
+    this.log(`consult by ${asker} → ${r.error ? "실패: " + r.error : `${r.seconds}초, ${r.text.length}자`}`);
+    return { advisor: `${provider}:${model}`, seconds: r.seconds, ...(r.error ? { error: r.error } : {}), answer: r.text };
+  }
+
+  /**
+   * Read-only repository lookup on the cheapest rung, so the asking session spends its own context
+   * on the work instead of on `git grep`.
+   */
+  async explore(input: { kind?: ExploreKind; query: string; memberId?: string }): Promise<Record<string, unknown>> {
+    const query = input.query?.trim();
+    if (!query) throw new Error("query is required");
+    const kind: ExploreKind = input.kind ?? "search";
+    this.takeOneShot("explore", input.memberId ?? "의장");
+    const cwd = this.oneShotCwd(input.memberId);
+    const { provider, model, account } = this.oneShotTarget(undefined, "explore");
+    const effort = this.oneShotEffort(provider, model, "low");
+    this.accounts.touch(account.id);
+    this.log(`explore(${kind}) by ${input.memberId ?? "chair"}: ${provider} ${model} (${account.id}) "${query.slice(0, 60)}"`);
+    const r = await oneShot({
+      provider,
+      model,
+      effort,
+      cwd,
+      env: this.accounts.env(account),
+      prompt: explorePrompt(kind, query),
+      tools: "read",
+      timeoutMs: 240_000,
+    });
+    this.log(`explore(${kind}) → ${r.error ? "실패: " + r.error : `${r.seconds}초, ${r.text.length}자`}`);
+    return { explorer: `${provider}:${model}`, kind, seconds: r.seconds, ...(r.error ? { error: r.error } : {}), found: r.text };
   }
 
   // ---------- relay ----------
