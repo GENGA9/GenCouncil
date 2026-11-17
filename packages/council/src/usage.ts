@@ -10,8 +10,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { findExecutable } from "./drivers.js";
-import type { Account, AccountRegistry } from "./accounts.js";
-import type { CliProvider } from "./models.js";
+import { isCliProvider, type Account, type AccountRegistry } from "./accounts.js";
+import { LADDERS, tierOf, type CliProvider } from "./models.js";
 
 export interface UsageWindow {
   /** 0..100 */
@@ -215,9 +215,15 @@ export async function collectUsage(registry: AccountRegistry): Promise<AccountUs
     .list()
     .filter((a): a is Account & { provider: CliProvider } => ["claude", "gpt", "gemini"].includes(a.provider) && a.status !== "disabled");
   const results = await Promise.all(accounts.map((a) => accountUsage(a)));
+  applyUsageToAccounts(registry, results);
+  return results;
+}
+
+/** What a usage reading means for the registry (separate from reading it, so it can be tested). */
+export function applyUsageToAccounts(registry: AccountRegistry, results: AccountUsage[]): void {
   for (const u of results) {
     if (u.error) continue;
-    const acct = accounts.find((a) => a.id === u.account);
+    const acct = registry.get(u.account);
     if (!acct) continue;
     const full = [u.fiveHour, u.weekly].filter((w): w is UsageWindow => Boolean(w && w.usedPct >= 100));
     if (full.length) {
@@ -225,7 +231,28 @@ export async function collectUsage(registry: AccountRegistry): Promise<AccountUs
       if (acct.status !== "exhausted" || acct.resetAt !== resetAt) registry.markExhausted(u.account, "사용 한도 소진 (사용량 확인)", resetAt);
     } else if (acct.status !== "ok") {
       registry.markOk(u.account);
+    } else {
+      // room on an account that already reads ok: drop the message a past failure left behind
+      registry.clearError(u.account);
     }
+    applyModelLimits(registry, u);
   }
-  return results;
+}
+
+/**
+ * Per-model limits the CLI reports (Antigravity counts Gemini 4 Argon on its own). A model with
+ * nothing left is blocked until its reset, one with room again has its block lifted — otherwise a
+ * model stays blocked until something marks the whole account ok, and the chair is told a model is
+ * spent long after it came back.
+ */
+function applyModelLimits(registry: AccountRegistry, u: AccountUsage): void {
+  if (!isCliProvider(u.provider) || !u.details?.length) return;
+  const ladder = LADDERS[u.provider];
+  for (const d of u.details) {
+    // only a limit of one model's own, not a whole model group ("Gemini Models", "Claude and GPT models")
+    if (/\bmodels\b/i.test(d.group)) continue;
+    const t = tierOf(u.provider, d.group);
+    if (t < 0) continue;
+    registry.setModelBlock(u.account, ladder[t].id, d.usedPct >= 100 ? (d.resetsAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString()) : undefined);
+  }
 }

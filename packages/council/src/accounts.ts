@@ -190,9 +190,38 @@ export class AccountRegistry {
     if (!model || !a?.modelBlocks || !isCliProvider(a.provider)) return model;
     const ladder = LADDERS[a.provider];
     const t = tierOf(a.provider, model);
-    if (t < 0 || !a.modelBlocks[ladder[t].id]) return model;
-    for (let i = t - 1; i >= 0; i--) if (!a.modelBlocks[ladder[i].id]) return ladder[i].id;
+    const blocked = (mid: string) => {
+      const until = a.modelBlocks?.[mid];
+      // a block ends at its reset time: past it the model is usable again
+      return Boolean(until) && new Date(until as string).getTime() > Date.now();
+    };
+    if (t < 0 || !blocked(ladder[t].id)) return model;
+    for (let i = t - 1; i >= 0; i--) if (!blocked(ladder[i].id)) return ladder[i].id;
     return undefined;
+  }
+
+  /** Block a model until `until`, or lift the block when `until` is undefined. */
+  setModelBlock(id: string, modelId: string, until: string | undefined): void {
+    const a = this.get(id);
+    if (!a) return;
+    const cur = a.modelBlocks?.[modelId];
+    if ((cur ?? undefined) === (until ?? undefined)) return;
+    this.patch(id, (x) => {
+      const blocks = { ...(x.modelBlocks ?? {}) };
+      if (until) blocks[modelId] = until;
+      else delete blocks[modelId];
+      x.modelBlocks = Object.keys(blocks).length ? blocks : undefined;
+    });
+  }
+
+  /**
+   * A usage check found room on this account: forget the error left by an older failure. The chair
+   * reads the account list, and a stale message there had it believing a usable CLI was spent.
+   */
+  clearError(id: string): void {
+    const a = this.get(id);
+    if (!a?.lastError) return;
+    this.patch(id, (x) => (x.lastError = undefined));
   }
 
   markAuth(id: string, error: string): Account {

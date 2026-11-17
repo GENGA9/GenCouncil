@@ -264,14 +264,48 @@ export function projectDir(id: string): string {
   return path.join(projectsDir(), id);
 }
 
+/**
+ * Parsed JSON kept in memory while the file on disk has not changed. The web overview reads the
+ * agenda, task and member files of every open agenda each time it is drawn; on a busy disk (a
+ * render writing video) those reads were what made the app stall for seconds. A cache hit costs
+ * one stat instead of a read and a parse, and a file another process rewrites is picked up because
+ * its timestamp or size changes. Callers mutate what they get back, so values are copied both ways.
+ */
+const jsonCache = new Map<string, { mtimeMs: number; size: number; value: unknown }>();
+const JSON_CACHE_MAX = 4000;
+
+function cacheJson(file: string, value: unknown): void {
+  let st: fs.Stats;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    jsonCache.delete(file);
+    return;
+  }
+  if (jsonCache.size >= JSON_CACHE_MAX) jsonCache.clear();
+  jsonCache.set(file, { mtimeMs: st.mtimeMs, size: st.size, value: structuredClone(value) });
+}
+
 function readJson<T>(file: string, fallback: T): T {
-  if (!fs.existsSync(file)) return fallback;
-  return JSON.parse(fs.readFileSync(file, "utf8")) as T;
+  let st: fs.Stats;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    jsonCache.delete(file);
+    return fallback;
+  }
+  const hit = jsonCache.get(file);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return structuredClone(hit.value) as T;
+  const value = JSON.parse(fs.readFileSync(file, "utf8")) as T;
+  if (jsonCache.size >= JSON_CACHE_MAX) jsonCache.clear();
+  jsonCache.set(file, { mtimeMs: st.mtimeMs, size: st.size, value: structuredClone(value) });
+  return value;
 }
 
 function writeJson(file: string, value: unknown): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n", "utf8");
+  cacheJson(file, value);
 }
 
 // ---------- projects ----------
