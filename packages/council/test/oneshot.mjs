@@ -96,7 +96,8 @@ if (process.platform !== "win32") {
   process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
   process.env.GC_REC = rec;
 
-  const args = (who) => fs.readFileSync(path.join(rec, `${who}-args.txt`), "utf8");
+  // every argument reaches a batch file quoted; the checks below read them as plain words
+  const args = (who) => fs.readFileSync(path.join(rec, `${who}-args.txt`), "utf8").replace(/"/g, "");
 
   // consult: no tools at all, so it cannot touch the worktree
   const c = await oneShot({ provider: "claude", model: "opus", effort: "high", cwd, prompt: "질문", tools: "none" });

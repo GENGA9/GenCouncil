@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -111,6 +112,24 @@ const MIME: Record<string, string> = {
   ".map": "application/json",
 };
 
+/**
+ * A token that opens one MCP endpoint only. The chair and every member get their own, derived from
+ * the server token, so what is written into a worktree's MCP config cannot log in to the web API
+ * or call another role's endpoint.
+ */
+export function scopedToken(master: string, scope: string): string {
+  return crypto.createHmac("sha256", master).update(scope).digest("base64url");
+}
+export const chairScope = (id: string, slug: string): string => `chair:${id}/${slug}`;
+export const memberScope = (id: string, slug: string, memberId: string): string => `member:${id}/${slug}/${memberId}`;
+
+function sameToken(a: string | undefined, b: string): boolean {
+  if (!a) return false;
+  const x = crypto.createHash("sha256").update(a).digest();
+  const y = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(x, y);
+}
+
 export function defaultWebDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../apps/web/dist");
 }
@@ -197,14 +216,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       const started = Date.now();
       p = AgendaRuntime.open(store, memory, {
         councilUrl: `http://127.0.0.1:${config.port}/mcp/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}`,
-        councilHeaders: { Authorization: `Bearer ${config.token}` },
+        councilHeaders: { Authorization: `Bearer ${scopedToken(config.token, chairScope(project.id, store.slug))}` },
       }).then((rt) => {
         rt.council.setUsageProvider(() => usageCache?.items);
         // council_telegram: the chair sends to Telegram only when the user told it to
         rt.council.setTelegramSender(async (req) => (telegram ? telegram.sendRequested(key, req) : { ok: false, detail: "텔레그램 봇이 연결되어 있지 않다" }));
         rt.council.setMemberMcp((mid) => ({
           url: `http://127.0.0.1:${config.port}/mcp-member/${encodeURIComponent(project.id)}/${encodeURIComponent(store.slug)}/${encodeURIComponent(mid)}`,
-          headers: { Authorization: `Bearer ${config.token}` },
+          headers: { Authorization: `Bearer ${scopedToken(config.token, memberScope(project.id, store.slug, mid))}` },
         }));
         rt.on("event", (e: RuntimeEvent) => {
           broadcast({ key, ts: new Date().toISOString(), ...e });
@@ -238,7 +257,12 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const m = /(?:^|;\s*)gc_token=([^;]+)/.exec(cookie);
     return m ? decodeURIComponent(m[1]) : undefined;
   };
-  const authorized = (req: http.IncomingMessage, url: URL) => tokenOf(req, url) === config.token;
+  const authorized = (req: http.IncomingMessage, url: URL) => sameToken(tokenOf(req, url), config.token);
+  /** the server token, or the token of exactly this endpoint */
+  const authorizedFor = (req: http.IncomingMessage, url: URL, scope: string) => {
+    const t = tokenOf(req, url);
+    return sameToken(t, config.token) || sameToken(t, scopedToken(config.token, scope));
+  };
 
   // ---------- overview helpers ----------
   const overview = async () => {
@@ -283,7 +307,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
 
   on("POST", "/api/login", async ({ res, body }) => {
     const b = await body();
-    if (b.token !== config.token) throw new HttpError(401, "invalid token");
+    if (typeof b.token !== "string" || !sameToken(b.token, config.token)) throw new HttpError(401, "invalid token");
     res.setHeader("Set-Cookie", `gc_token=${encodeURIComponent(config.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
     return { ok: true };
   });
@@ -844,16 +868,18 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       // member permission endpoint (autonomy "chair")
       const mm = /^\/mcp-member\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
       if (mm) {
-        if (!authorized(req, url)) throw new HttpError(401, "unauthorized");
-        const rt = await getRuntime(decodeURIComponent(mm[1]), decodeURIComponent(mm[2]));
-        await handleMemberMcpRequest(rt.council, decodeURIComponent(mm[3]), req, res);
+        const [pid, slug, mid] = [decodeURIComponent(mm[1]), decodeURIComponent(mm[2]), decodeURIComponent(mm[3])];
+        if (!authorizedFor(req, url, memberScope(pid, slug, mid))) throw new HttpError(401, "unauthorized");
+        const rt = await getRuntime(pid, slug);
+        await handleMemberMcpRequest(rt.council, mid, req, res);
         return;
       }
       // chair MCP endpoints
       const mcp = /^\/mcp\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
       if (mcp) {
-        if (!authorized(req, url)) throw new HttpError(401, "unauthorized");
-        const rt = await getRuntime(decodeURIComponent(mcp[1]), decodeURIComponent(mcp[2]));
+        const [pid, slug] = [decodeURIComponent(mcp[1]), decodeURIComponent(mcp[2])];
+        if (!authorizedFor(req, url, chairScope(pid, slug))) throw new HttpError(401, "unauthorized");
+        const rt = await getRuntime(pid, slug);
         await handleCouncilMcpRequest(rt.council, req, res);
         return;
       }

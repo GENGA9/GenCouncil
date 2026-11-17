@@ -26,25 +26,45 @@ export interface PermissionDecision {
 const SAFE_COMMANDS: RegExp[] = [
   /^\s*git\s+(status|log|diff|show|add|commit|rev-parse|ls-files|branch\s+(--show-current|-a|--list)?\s*$|stash\s+list)\b/i,
   /^\s*(ls|dir|pwd|cat|type|head|tail|wc|echo|where|which|find|grep|rg|tree)\b/i,
-  /^\s*(node\s+--test|node\s+-e|node\s+--version|npm\s+(test|run\s+(test|build|lint|typecheck|check))|npx\s+(tsc|vitest|jest|eslint|prettier\s+--check)|tsc|pnpm\s+(test|build|lint)|yarn\s+(test|build|lint))\b/i,
+  /^\s*(node\s+--test|node\s+--version|npm\s+(test|run\s+(test|build|lint|typecheck|check))|npx\s+(tsc|vitest|jest|eslint|prettier\s+--check)|tsc|pnpm\s+(test|build|lint)|yarn\s+(test|build|lint))\b/i,
   /^\s*(pytest|python\s+-m\s+(pytest|unittest|py_compile)|cargo\s+(test|build|check|clippy)|go\s+(test|build|vet)|dotnet\s+(build|test))\b/i,
 ];
 
 /** never allowed for a member, whatever the chair says */
 const FORBIDDEN_COMMANDS: RegExp[] = [
   /\bgit\s+(push|checkout|switch|merge|rebase|reset\s+--hard|clean\s+-[a-z]*f|worktree|remote|config\s+--global)\b/i,
-  /\brm\s+-[a-z]*r[a-z]*f?\s+(\/|~|[a-z]:\\?\s*$|\.\.)/i,
+  /\brm\s+-[a-z]*r[a-z]*f?\s+["']?(\/|~|[a-z]:[\\/]?["']?\s*($|[;&|])|\.\.)/i,
   /\b(format|shutdown|reboot|diskpart|reg\s+(add|delete)|schtasks|netsh|Set-ExecutionPolicy)\b/i,
   /\b(curl|wget|iwr|Invoke-WebRequest)\b[^|]*\|\s*(sh|bash|powershell|pwsh|iex|cmd)\b/i,
 ];
 
+/** options that turn a read-only command into one that runs or deletes something */
+const UNSAFE_OPTIONS: RegExp[] = [
+  /^\s*find\b.*\s-(delete|exec|execdir|ok|okdir|fprint|fprintf|fls)\b/i,
+  /^\s*(rg|grep)\b.*\s--pre(=|\s)/i,
+  /^\s*git\s+(diff|log|show)\b.*\s(--output(=|\s)|--ext-diff\b)/i,
+  /^\s*git\s+(-c|--exec-path|-C)\b/i,
+];
+
+/**
+ * A command line the rules may allow without a second look: every command in it is on the safe
+ * list. It is cut at everything a shell cuts at (`&&`, `||`, `;`, a lone `&`, a pipe, a line break),
+ * so `ls & rm -rf x` and `cat f | sh` are judged by their second half too. Anything that can run a
+ * command the list never sees (substitution, a redirect into a file) is left for the reviewer.
+ */
+function isSafeCommandLine(cmd: string): boolean {
+  // the two harmless redirects members use all the time
+  const plain = cmd.replace(/\s*\d?>&\d\b/g, " ").replace(/\s*\d?>\s*(\/dev\/null|nul)\b/gi, " ");
+  if (/[`<>]|\$\(|\$\{|<\(|>\(/.test(plain)) return false;
+  const parts = plain.split(/&&|\|\||[;&|\r\n]/).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 && parts.every((p) => SAFE_COMMANDS.some((re) => re.test(p)) && !UNSAFE_OPTIONS.some((re) => re.test(p)));
+}
+
 export function ruleDecision(req: Pick<PermissionRequest, "toolName" | "input">): PermissionDecision | undefined {
   const cmd = typeof req.input.command === "string" ? req.input.command : undefined;
   if (cmd) {
-    // chained commands are only "safe" if every part is
-    const parts = cmd.split(/&&|\|\||;|\n/).map((s) => s.trim()).filter(Boolean);
     if (FORBIDDEN_COMMANDS.some((re) => re.test(cmd))) return { behavior: "deny", reason: "위원에게 금지된 명령 (브랜치 이동·push·광역 삭제·시스템 변경 등)", by: "rule" };
-    if (parts.length && parts.every((p) => SAFE_COMMANDS.some((re) => re.test(p)))) return { behavior: "allow", reason: "읽기·빌드·테스트 명령", by: "rule" };
+    if (isSafeCommandLine(cmd)) return { behavior: "allow", reason: "읽기·빌드·테스트 명령", by: "rule" };
     return undefined;
   }
   // the member's own read-only helpers: the explorer and the advisor consult cannot change anything

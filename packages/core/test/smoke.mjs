@@ -184,6 +184,17 @@ const reread = new MemoryStore({ git: false });
 await reread.init();
 check("scope survives reload", reread.get(promoted.meta.id)?.meta.scope === "common" && reread.get(proj.meta.id)?.meta.scope === "project");
 
+// a file dropped into proposals/ by hand is a proposal, whatever its status line says
+for (const [id, statusLine] of [["drop-nostatus", ""], ["drop-claims", "status: verified\n"]]) {
+  fs.writeFileSync(path.join(reread.dir, "proposals", `${id}.md`), `---\nid: ${id}\ntitle: 몰래 넣은 항목 ${id}\ntype: solution\n${statusLine}---\n본문\n`);
+}
+reread.load();
+check("a dropped proposal without status stays proposed", reread.get("drop-nostatus")?.meta.status === "proposed");
+check("a dropped proposal claiming verified stays proposed", reread.get("drop-claims")?.meta.status === "proposed");
+check("dropped proposals are not in the verified list", !reread.list({ status: "verified" }).some((m) => m.id.startsWith("drop-")));
+reread.remove("drop-nostatus");
+reread.remove("drop-claims");
+
 // clearAll: everything goes, a backup copy stays
 const before = reread.size();
 reread.propose({ type: "tool", title: "지울 제안", body: "x" });

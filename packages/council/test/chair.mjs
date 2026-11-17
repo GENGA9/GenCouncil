@@ -132,14 +132,14 @@ council.project.chair.account = "gpt";
 check("chair provider follows the account", chairTok.provider() === "gpt");
 check("claude model swapped for the provider default", chairTok.model() === "gpt-6.1-sol" && rt.chairModelFor("gpt", "gpt-6-astra") === "gpt-6-astra");
 const g1 = await chairTok.turn("GPT 의장 첫 턴", () => {});
-const cArgs = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8");
+const cArgs = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8").replace(/"/g, ""); // arguments reach a batch file quoted
 const cIn = fs.readFileSync(path.join(rec, "codex-stdin.txt"), "utf8");
 check("gpt chair reply and thread id", !g1.isError && g1.text === "gpt chair reply" && g1.sessionId === "t-9", JSON.stringify(g1));
 check("codex runs read-only with council + memory MCP", /exec --json/.test(cArgs) && cArgs.includes("sandbox_mode='read-only'") && cArgs.includes("mcp_servers.council.url") && cArgs.includes("mcp_servers.gencouncil.command") && cArgs.includes("-m gpt-6.1-sol"), cArgs);
 check("council token reaches codex through env", fs.readFileSync(path.join(rec, "codex-env.txt"), "utf8").includes("token=tok-1"));
 check("first gpt turn carries the full chair prompt", cIn.includes("<의장_지침>") && cIn.includes("GPT 의장 첫 턴"));
 await chairTok.turn("GPT 의장 둘째 턴", () => {});
-const cArgs2 = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8");
+const cArgs2 = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8").replace(/"/g, ""); // arguments reach a batch file quoted
 const cIn2 = fs.readFileSync(path.join(rec, "codex-stdin.txt"), "utf8");
 check("next gpt turn resumes the thread with a short refresh", /exec resume .* t-9 -/.test(cArgs2) && cIn2.includes("<의장_지침_갱신>") && !cIn2.includes("<의장_지침>"), cArgs2);
 // codex has no system-prompt flag, so the rules that decide whether it hands work out go again every turn
@@ -157,7 +157,7 @@ process.env.USERPROFILE = fakeHome;
 council.project.chair.account = "gemini";
 const m1 = await chairTok.turn("제미나이 의장 첫 턴", () => {});
 process.env.USERPROFILE = realProfile;
-const aArgs = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8");
+const aArgs = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8").replace(/"/g, ""); // arguments reach a batch file quoted
 const aIn = fs.readFileSync(path.join(rec, "agy-stdin.txt"), "utf8");
 check("gemini chair reply and conversation id", !m1.isError && m1.text === "gemini chair reply" && m1.sessionId === "c-7", JSON.stringify(m1));
 check("gpt session not resumed by gemini", !aArgs.includes("--conversation"), aArgs);
@@ -175,7 +175,7 @@ const shown = [];
 const m2 = await chairTok.turn("아르곤 한도 소진", (e) => e.kind === "text" && shown.push(e.text));
 process.env.USERPROFILE = realProfile;
 delete process.env.GC_ARGON_SPENT;
-const aArgs2 = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8");
+const aArgs2 = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8").replace(/"/g, ""); // arguments reach a batch file quoted
 check("argon quota: same gemini login retried with hydrogen", !m2.isError && aArgs2.includes("--model gemini-4-hydrogen") && council.accounts.get("gemini").status === "ok", JSON.stringify([m2, aArgs2]));
 check("the user is told about the step down", shown.some((t) => /gemini-4-argon 한도 소진 → gemini-4-hydrogen/.test(t)), JSON.stringify(shown));
 check("chair model now reports hydrogen", chairTok.model() === "gemini-4-hydrogen");

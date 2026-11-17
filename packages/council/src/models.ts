@@ -173,6 +173,8 @@ export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini
 export function resolveModel(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): string {
   const allowed = allowedModels(provider, limit);
   if (!requested) return allowed[Math.min(tierOf(provider, WORKHORSE[provider]), allowed.length - 1)].id;
+  // the name ends up on a command line: nothing but what a model id is made of
+  if (!/^[\w.:[\]-]{1,80}$/.test(requested)) throw new LimitError(`unknown ${provider} model "${requested.slice(0, 80)}". allowed: ${allowed.map((m) => m.id).join(", ")}`);
   const t = tierOf(provider, requested);
   const max = tierOf(provider, limit.maxModel);
   if (t < 0) throw new LimitError(`unknown ${provider} model "${requested}". allowed: ${allowed.map((m) => m.id).join(", ")}`);

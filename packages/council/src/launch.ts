@@ -23,7 +23,7 @@ export function openLoginWindow(account: Account, registry = new AccountRegistry
     delete env.CLAUDECODE;
     if (process.platform === "win32") {
       const line = [quote(exe), ...cmd.args.map(quote)].join(" ");
-      spawn("cmd.exe", ["/d", "/c", `start "GenCouncil 로그인 - ${account.id}" cmd /k ${line}`], {
+      spawn("cmd.exe", ["/d", "/c", `start "GenCouncil 로그인 - ${account.id.replace(/[^\p{L}\p{N}_.@ -]/gu, "_")}" cmd /k ${line}`], {
         env,
         detached: true,
         stdio: "ignore",

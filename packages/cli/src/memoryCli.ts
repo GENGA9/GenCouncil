@@ -76,6 +76,8 @@ export async function memoryMain(cmd: string, rest: string[]): Promise<number> {
   }
 }
 
+const OWNER_COMMANDS = new Set(["add", "update", "approve", "reject", "remove"]);
+
 async function dispatch(cmd: string, rest: string[], store: MemoryStore): Promise<number> {
   if (cmd === "init") {
     const created = await store.init();
@@ -84,6 +86,13 @@ async function dispatch(cmd: string, rest: string[], store: MemoryStore): Promis
     return 0;
   }
   store.load();
+
+  // a council member's shell carries GENCOUNCIL_ROLE=member: it proposes, like its MCP tools do,
+  // and leaves approving and editing to the owner and the chair
+  if (OWNER_COMMANDS.has(cmd) && (process.env.GENCOUNCIL_ROLE ?? "").toLowerCase() === "member") {
+    console.error(`'${cmd}' is not available to a council member (GENCOUNCIL_ROLE=member). Use 'gencouncil propose' instead; the owner or the chair approves it.`);
+    return 3;
+  }
 
   switch (cmd) {
     case "status": {

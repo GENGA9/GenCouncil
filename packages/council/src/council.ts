@@ -25,6 +25,8 @@ import {
   suspiciousFiles,
   removeWorktree,
   removeDir,
+  leftoverDir,
+  isInside,
   type MergeResult,
 } from "./git.js";
 import { explorerAgents } from "./explorers.js";
@@ -1581,7 +1583,12 @@ ${rows.join("\n")}`;
     if (!a.cleanupPending?.length) return [];
     const still: string[] = [];
     for (const dir of a.cleanupPending) {
-      const p = dir.replace(/ \(.*\)$/, "");
+      const p = leftoverDir(dir);
+      // only this agenda's own worktree folder is ever deleted here, whatever the saved entry says
+      if (!isInside(this.store.worktreeRoot(), p)) {
+        this.log(`cleanup: skipped "${dir}" (not inside ${this.store.worktreeRoot()})`);
+        continue;
+      }
       // the whole worktree folder is pending when the finish died before its cleanup: do the full
       // cleanup (archive notes, remove each worktree through git, unlink node_modules junctions)
       if (path.resolve(p) === path.resolve(this.store.worktreeRoot())) still.push(...(await this.clean()));

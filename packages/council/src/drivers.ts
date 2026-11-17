@@ -60,18 +60,52 @@ export function findExecutable(name: string): string | null {
   return null;
 }
 
-function quoteForCmd(a: string): string {
-  if (a === "") return '""';
-  if (!/[\s"&|<>^()]/.test(a)) return a;
-  return `"${a.replace(/"/g, '\\"')}"`;
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+
+/**
+ * One argument of a command line that cmd.exe runs a batch file with. cmd.exe knows no `\"`: a
+ * quote always toggles its quoting, so an argument holding one could end the quoting and run
+ * whatever follows (`x" & calc & rem "`). Here the argument is quoted for the program that finally
+ * reads it, and then every character cmd.exe gives a meaning to, the quotes included, is escaped
+ * with `^`: twice, because a batch file parses its arguments a second time when it passes them on
+ * with `%*`.
+ */
+export function quoteForCmd(a: string): string {
+  if (/[\r\n\0]/.test(a)) throw new Error("an argument with a line break cannot be passed to a .cmd/.bat file");
+  let s = a.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1");
+  s = `"${s}"`;
+  return s.replace(CMD_META, "^$1").replace(CMD_META, "^$1");
 }
 
-/** spawn a CLI; .cmd shims must go through cmd.exe */
+/**
+ * The node script behind an npm launcher (`codex.cmd` -> `node_modules/@openai/codex/bin/codex.js`),
+ * so the CLI can be started directly, without cmd.exe: arguments then arrive exactly as given,
+ * line breaks included. Undefined when the file is not such a launcher.
+ */
+export function npmShimTarget(cmdFile: string): { node: string; script: string } | undefined {
+  let text: string;
+  try {
+    text = fs.readFileSync(cmdFile, "utf8");
+  } catch {
+    return undefined;
+  }
+  const m = /"%(?:~dp0|dp0%)\\?([^"%\r\n]+\.[cm]?js)"\s+%\*/i.exec(text);
+  if (!m) return undefined;
+  const dir = path.dirname(cmdFile);
+  const script = path.join(dir, m[1]);
+  if (!fs.existsSync(script)) return undefined;
+  const own = path.join(dir, "node.exe");
+  return { node: fs.existsSync(own) ? own : process.execPath, script };
+}
+
+/** spawn a CLI; an npm launcher runs as its node script, any other .cmd goes through cmd.exe */
 export function spawnCli(name: string, args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv }): ChildProcess {
   const exe = findExecutable(name);
   if (!exe) throw new Error(`${name} not found on PATH`);
   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(exe)) {
-    const line = [quoteForCmd(exe), ...args.map(quoteForCmd)].join(" ");
+    const shim = npmShimTarget(exe);
+    if (shim) return spawn(shim.node, [shim.script, ...args], { cwd: opts.cwd, env: opts.env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const line = [`"${exe}"`, ...args.map(quoteForCmd)].join(" ");
     return spawn("cmd.exe", ["/d", "/s", "/c", `"${line}"`], {
       cwd: opts.cwd,
       env: opts.env,

@@ -126,6 +126,9 @@ export class MemoryStore {
         }
         const e = parseEntry(text, file);
         if (!e) continue;
+        // nothing in proposals/ counts as verified until it is approved: a file dropped there with
+        // no status line (or one claiming "verified") stays a proposal
+        if (d === PROPOSALS_DIR && e.meta.status === "verified") e.meta.status = "proposed";
         if (this.entries.has(e.meta.id)) continue; // first wins; duplicates are a user error
         this.entries.set(e.meta.id, e);
         this.index.add(e);

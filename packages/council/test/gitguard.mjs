@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { git, mergeInto, suspiciousFiles } from "@gencouncil/council";
+import { git, isInside, leftoverDir, mergeInto, suspiciousFiles } from "@gencouncil/council";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-gitguard-"));
 const repo = path.join(tmp, "repo");
@@ -51,6 +51,15 @@ fs.writeFileSync(path.join(wt, "c.txt"), "three\n");
 await git(wt, ["add", "-A"]);
 await git(wt, ["commit", "-q", "-m", "side"]);
 check("configured identity is kept", (await git(wt, ["log", "-1", "--format=%an"])).trim() === "Real Person", repo2);
+
+// a folder that could not be deleted is remembered as "<dir> (<code>: ...)"; the folder is read back whole
+const reason = "EBUSY: 다른 프로그램이 폴더나 그 안의 파일을 쓰고 있음)";
+const copyDir = path.join("D:", "work", "app (copy)", ".worktrees", "안건");
+check("leftover folder with brackets in its name is read back whole", leftoverDir(`${copyDir} (${reason}`) === copyDir, leftoverDir(`${copyDir} (${reason}`));
+check("plain leftover folder", leftoverDir(`${path.join(tmp, "wt")} (${reason}`) === path.join(tmp, "wt"));
+check("a plain path is itself", leftoverDir(copyDir) === copyDir);
+check("isInside: the folder and what is under it", isInside(copyDir, copyDir) && isInside(copyDir, path.join(copyDir, "claude-1")));
+check("isInside: not the parent, a sibling or a name that only starts the same", !isInside(copyDir, path.dirname(copyDir)) && !isInside(copyDir, path.join("D:", "work", "app")) && !isInside(copyDir, copyDir + "-2"));
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall git guard checks passed");
