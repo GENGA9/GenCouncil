@@ -2,12 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "../api";
 import type { CurateStatus, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "../types";
 
-/** folder path -> label: "common/comfyui" -> "공용 · comfyui", "projects/h3_studio/video" -> "프로젝트 · h3_studio · video" */
-const SECTION_LABEL = (s: string) => {
-  const [top, ...rest] = s.split("/");
-  const head = top === "common" ? "공용" : top === "models" ? "모델" : top === "projects" ? "프로젝트" : top;
-  return [head, ...rest].join(" · ");
-};
+import { buildSections, folderLabel, type Folder } from "../wikiTree";
 
 /** Small markdown renderer: headings, lists, code blocks, quotes, tables, bold, inline code, links. No HTML passthrough. */
 function inline(text: string, onLink: (p: string) => void, key: string): ReactNode[] {
@@ -232,17 +227,8 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
     }
   };
 
-  /** one group per folder; the folder's index page names the group and is opened from its title */
-  const sections = useMemo(() => {
-    const m = new Map<string, { index?: WikiPageMeta; pages: WikiPageMeta[] }>();
-    for (const p of pages) {
-      const g = m.get(p.section) ?? { pages: [] };
-      if (p.path.endsWith("/index")) g.index = p;
-      else g.pages.push(p);
-      m.set(p.section, g);
-    }
-    return [...m.entries()];
-  }, [pages]);
+  /** one row per project (or common area), its deeper folders nested inside (wikiTree.ts) */
+  const sections = useMemo(() => buildSections(pages), [pages]);
   const [openSecs, setOpenSecs] = useState<Set<string>>(new Set());
   const toggleSec = (s: string) =>
     setOpenSecs((prev) => {
@@ -306,29 +292,46 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
               <div className="small muted">찾은 페이지가 없습니다.</div>
             )
           ) : sections.length ? (
-            sections.map(([s, g]) => {
-              const isOpen = openSecs.has(s) || page?.section === s;
+            sections.map((g) => {
+              // a group stays open while the page being read is anywhere inside it, subfolders included
+              const isOpen = openSecs.has(g.key) || page?.section === g.key || g.subs.some((s) => s.key === page?.section);
+              const items = (f: Folder) => (
+                <>
+                  {f.index && (
+                    <button className={`wiki-item wiki-index ${page?.path === f.index.path ? "on" : ""}`} onClick={() => void open(f.index!.path)}>
+                      이 폴더 소개
+                    </button>
+                  )}
+                  {f.pages.map((p) => (
+                    <button key={p.path} className={`wiki-item ${page?.path === p.path ? "on" : ""}`} title={p.summary} onClick={() => void open(p.path)}>
+                      {p.title}
+                    </button>
+                  ))}
+                </>
+              );
               return (
-                <div key={s} className="wiki-section">
-                  <button className="wiki-section-title" title={g.index?.summary} onClick={() => toggleSec(s)}>
+                <div key={g.key} className="wiki-section">
+                  <button className="wiki-section-title" title={g.index?.summary} onClick={() => toggleSec(g.key)}>
                     <span className="wiki-caret">{isOpen ? "▾" : "▸"}</span>
-                    <span className="wiki-section-name">
-                      {g.index ? `${SECTION_LABEL(s.split("/").slice(0, -1).join("/") || s)} · ${g.index.title}` : SECTION_LABEL(s)}
-                    </span>
-                    <span className="wiki-count">{g.pages.length}</span>
+                    <span className="wiki-section-name">{folderLabel(g, false)}</span>
+                    <span className="wiki-count">{g.total}</span>
                   </button>
                   {isOpen && (
                     <>
-                      {g.index && (
-                        <button className={`wiki-item wiki-index ${page?.path === g.index.path ? "on" : ""}`} onClick={() => void open(g.index!.path)}>
-                          이 폴더 소개
-                        </button>
-                      )}
-                      {g.pages.map((p) => (
-                        <button key={p.path} className={`wiki-item ${page?.path === p.path ? "on" : ""}`} title={p.summary} onClick={() => void open(p.path)}>
-                          {p.title}
-                        </button>
-                      ))}
+                      {items(g)}
+                      {g.subs.map((sub) => {
+                        const subOpen = openSecs.has(sub.key) || page?.section === sub.key;
+                        return (
+                          <div key={sub.key} className="wiki-subsection">
+                            <button className="wiki-section-title" title={sub.index?.summary} onClick={() => toggleSec(sub.key)}>
+                              <span className="wiki-caret">{subOpen ? "▾" : "▸"}</span>
+                              <span className="wiki-section-name">{folderLabel(sub, true)}</span>
+                              <span className="wiki-count">{sub.pages.length}</span>
+                            </button>
+                            {subOpen && items(sub)}
+                          </div>
+                        );
+                      })}
                     </>
                   )}
                 </div>
