@@ -128,6 +128,26 @@ const s6m = await doneOf(s6.id);
 drivers.claude = shotsDrv;
 check("member screenshots are collected (images only)", s6m.shots?.length === 1 && s6m.shots[0].endsWith("title-after.png"), JSON.stringify(s6m.shots));
 check("chair event lists the screenshots", /스크린샷 1장/.test(memberEventText(s6m)));
+{
+  const many = Array.from({ length: 30 }, (_, i) => ` src/f${i}.ts | ${i + 1} +`).concat(" 30 files changed, 465 insertions(+)").join("\n");
+  const ev = memberEventText({ ...s6m, diffstat: many });
+  const evLines = ev.split("\n");
+  check("chair event carries the diffstat, capped with the total kept", ev.includes("diffstat:") && ev.includes("src/f0.ts") && !ev.includes("src/f29.ts") && /… \d+ files more/.test(ev) && ev.includes("30 files changed, 465 insertions(+)"), ev);
+  check("diffstat takes at most 15 lines", evLines.filter((l) => /^ ?src\/f|files more|files changed/.test(l)).length <= 15);
+  check("verifying event carries only the total line", memberEventText({ ...s6m, verifiedBy: "claude-9", diffstat: many }).includes("diffstat: 30 files changed") && !memberEventText({ ...s6m, verifiedBy: "claude-9", diffstat: many }).includes("src/f0.ts"));
+  check("event without diffstat has no diffstat line", !memberEventText({ ...s6m, diffstat: "" }).includes("diffstat:"));
+  check("event guides toward diffstat and files", /diffstat/.test(ev) && ev.includes("files:[핵심 파일]") && ev.includes("council_verify"));
+  const full = await council.memberInfo(s6m.id, { diff: true });
+  check("memberInfo diff:true still returns a diff and the diffstat", typeof full.diff === "string" && full.diff.includes("diff --git") && typeof full.diffstat === "string", String(full.diff).slice(0, 80));
+  const firstFile = /^diff --git a\/(\S+) /m.exec(full.diff)?.[1];
+  const onlyOne = await council.memberInfo(s6m.id, { diff: true, files: [firstFile] });
+  check("files filter limits the diff to those paths", firstFile && onlyOne.diff.includes(`a/${firstFile}`) && (onlyOne.diff.match(/^diff --git /gm) ?? []).length === 1, firstFile);
+  const none = await council.memberInfo(s6m.id, { diff: true, files: ["no/such/file.txt"] });
+  check("files filter with an unknown path gives an empty diff", none.diff === "");
+  const capped = await council.memberInfo(s6m.id, { diff: true, maxChars: 50 });
+  check("max_chars truncates and points at files", capped.diff.includes("truncated") && capped.diff.includes("files 인자"), capped.diff.slice(-120));
+  check("no diff unless asked", (await council.memberInfo(s6m.id)).diff === undefined);
+}
 const shownEvents = [];
 council.on("show", (e) => shownEvents.push(e));
 const shown = council.showFiles([s6m.shots[0]], "A안: 타이틀 화면");
