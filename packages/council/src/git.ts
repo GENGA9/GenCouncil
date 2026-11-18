@@ -254,9 +254,9 @@ export async function diffStat(dir: string, from: string, to: string): Promise<s
   return (await git(dir, ["diff", "--stat", `${from}...${to}`])).trim();
 }
 
-export async function diffFull(dir: string, from: string, to: string, maxChars = 60_000): Promise<string> {
-  const out = await git(dir, ["diff", `${from}...${to}`]);
-  return out.length > maxChars ? out.slice(0, maxChars) + `\n… (truncated, ${out.length} chars)` : out;
+export async function diffFull(dir: string, from: string, to: string, maxChars = 60_000, paths: string[] = []): Promise<string> {
+  const out = await git(dir, ["diff", `${from}...${to}`, ...(paths.length ? ["--", ...paths] : [])]);
+  return out.length > maxChars ? out.slice(0, maxChars) + `\n… (truncated, ${out.length} chars. files 인자로 파일을 골라 다시 읽어라)` : out;
 }
 
 export interface MergeResult {
