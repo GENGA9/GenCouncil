@@ -1246,7 +1246,7 @@ ${rows.join("\n")}`;
 
   // ---------- members: inspection / control ----------
 
-  async memberInfo(id: string, opts: { tail?: number; diff?: boolean } = {}): Promise<Record<string, unknown>> {
+  async memberInfo(id: string, opts: { tail?: number; diff?: boolean; files?: string[]; maxChars?: number } = {}): Promise<Record<string, unknown>> {
     const m = this.member(id);
     const agenda = this.store.agenda();
     const logFile = this.store.memberLog(id);
@@ -1258,7 +1258,8 @@ ${rows.join("\n")}`;
     let diff: string | undefined;
     if (opts.diff) {
       try {
-        diff = await diffFull(this.project.repo, agenda.branch, m.branch);
+        const files = opts.files?.filter(Boolean) ?? [];
+        diff = await diffFull(this.project.repo, agenda.branch, m.branch, opts.maxChars ?? (files.length ? 60_000 : 20_000), files);
       } catch (e) {
         diff = `(diff failed: ${(e as Error).message})`;
       }

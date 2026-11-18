@@ -189,14 +189,18 @@ export function createCouncilMcp(council: Council): McpServer {
     "council_member",
     {
       title: "Inspect member",
-      description: "Status, commits, diffstat, RESULT.md summary, optional log tail and full diff vs the agenda branch.",
+      description:
+        "Status, commits, diffstat, RESULT.md summary, optional log tail and diff vs the agenda branch. " +
+        "Judge from the event summary and diffstat first; for code read only the key files with diff:true + files:[...] instead of the whole diff.",
       inputSchema: {
         member_id: z.string(),
         tail: z.number().int().min(0).max(400).optional().describe("lines of log tail"),
-        diff: z.boolean().optional().describe("include full diff (review before merging)"),
+        diff: z.boolean().optional().describe("include the diff (default cap 20000 chars without files)"),
+        files: z.array(z.string()).optional().describe("repo-relative paths; with diff:true, diff only these files"),
+        max_chars: z.number().int().min(1000).max(200000).optional().describe("cap on diff characters"),
       },
     },
-    async ({ member_id, tail, diff }) => guard(() => council.memberInfo(member_id, { tail, diff })),
+    async ({ member_id, tail, diff, files, max_chars }) => guard(() => council.memberInfo(member_id, { tail, diff, files, maxChars: max_chars })),
   );
 
   server.registerTool(
@@ -251,7 +255,7 @@ export function createCouncilMcp(council: Council): McpServer {
     "council_merge",
     {
       title: "Merge member branch into agenda branch",
-      description: "Review the diff first (council_member diff:true). On conflict the merge is aborted and conflict files are returned.",
+      description: "Judge from the event summary and diffstat; docs and small changes can be merged right away, for code read the key files (council_member diff:true, files:[...]) or hand a big untrusted result to council_verify. On conflict the merge is aborted and conflict files are returned.",
       inputSchema: { member_id: z.string() },
     },
     async ({ member_id }) => guard(() => council.merge(member_id)),
