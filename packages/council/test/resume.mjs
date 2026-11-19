@@ -113,6 +113,7 @@ const res = await rt2.resume();
 check("claude-1 resumed, broken record reported", res.resumed.length === 1 && res.resumed[0].from === "claude-1" && res.failed.length === 1 && res.failed[0].id === "claude-9", JSON.stringify(res));
 const m2 = await resumedDone;
 check("resumed member keeps worktree, branch and account", m2.worktree === m1.worktree && m2.branch === m1.branch && m2.account === "claude");
+check("a resume is recorded as a resume, not as a failure", m2.handoverCause === "resume", String(m2.handoverCause));
 check("resumed member got the handover packet with STATE.md", packets[1].includes("인계 패킷") && packets[1].includes("남은 일: b 마무리"));
 check("resumed member finished", m2.status === "done" && m2.result.summary === "b 완료", JSON.stringify([m2.status, m2.result?.summary]));
 await new Promise((r) => setTimeout(r, 100));

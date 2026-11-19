@@ -120,6 +120,16 @@ export type MemberStatus = "starting" | "running" | "waiting" | "done" | "failed
 
 export type FailureKind = "quota" | "auth" | "other";
 
+/** how hard the chair judged a task to be; past results are counted per kind (effortStats) */
+export const TASK_KINDS = ["mechanical", "routine", "complex"] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+
+/**
+ * Why a member took another's work over: the login ran out or stopped working (quota, auth), the
+ * app was restarted mid-run (resume), or the chair or user decided to (manual).
+ */
+export type HandoverCause = "quota" | "auth" | "resume" | "manual";
+
 export interface MemberFailure {
   kind: FailureKind;
   message: string;
@@ -151,12 +161,18 @@ export interface MemberRecord {
   site?: WebSite;
   model?: string;
   effort?: Effort;
+  /** the chair's judgement of the task when it assigned it; a member that takes the work over keeps it */
+  kind?: TaskKind;
   /** claude members: advisor the chair attached */
   advisor?: string;
   account?: string;
   taskId: string;
   /** previous member whose worktree/branch this one continues */
   handoverFrom?: string;
+  /** why it took the work over; without it an old record cannot tell a restart from a failure */
+  handoverCause?: HandoverCause;
+  /** the reason given for the handover, shortened */
+  handoverReason?: string;
   /** member that took this one's work over */
   handoverTo?: string;
   /** why it failed, when classified */

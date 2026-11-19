@@ -67,13 +67,16 @@ import {
   ProjectRegistry,
   projectMemoryKey,
   SHOW_TYPES,
+  TASK_KINDS,
   type AgendaConfig,
   type MemberRecord,
   type ProjectConfig,
   type Provider,
   type Task,
+  type TaskKind,
   type TaskStatus,
 } from "./model.js";
+import { effortStats, effortStatsMarkdown } from "./effortStats.js";
 import { buildHandoverPacket, buildPacket, buildVerifyPacket, MEMBER_PROMPT, parseResult } from "./packet.js";
 import { classifyFailure } from "./quota.js";
 import { reapStrays, snapshotDescendants, stopLeftover, stopProcessesUnder, stopTracked } from "./interrupt.js";
@@ -85,8 +88,10 @@ export interface AssignInput {
   taskId: string;
   provider?: Provider;
   model?: string;
-  /** low | medium | high | xhigh | max (claude, gpt) */
+  /** low | medium | high | xhigh | max, as far as the model and the user's limit go */
   effort?: string;
+  /** mechanical | routine | complex: recorded with the member so results can be compared per kind */
+  kind?: string;
   /** claude only: stronger model consulted at key decisions */
   advisor?: string;
   account?: string;
@@ -476,6 +481,19 @@ export class Council extends EventEmitter {
 ${rows.join("\n")}`;
   }
 
+  /** how past members did per model and reasoning level, for the models this project may use ("" when there is nothing yet) */
+  effortStatsMarkdown(): string {
+    const limits = this.limits();
+    try {
+      return effortStatsMarkdown(effortStats(), {
+        allow: (p, model) => limits[p].maxMembers > 0 && (tierOf(p, limits[p].maxModel) < 0 || tierOf(p, model) <= tierOf(p, limits[p].maxModel)),
+      });
+    } catch (e) {
+      this.log(`effort stats unavailable: ${(e as Error).message}`);
+      return "";
+    }
+  }
+
   private checkSlot(key: LimitKey): void {
     const lim = this.limits()[key];
     if (lim.maxMembers <= 0) throw new LimitError(`${key} members are disabled by the user's limits`);
@@ -615,6 +633,7 @@ ${rows.join("\n")}`;
       site,
       model,
       effort,
+      kind: (TASK_KINDS as readonly string[]).includes(input.kind ?? "") ? (input.kind as TaskKind) : undefined,
       advisor,
       account: account?.id,
       taskId: task.id,
@@ -970,6 +989,7 @@ ${rows.join("\n")}`;
       provider,
       model,
       effort,
+      kind: prev.kind,
       advisor,
       account: pick.account.id,
       taskId: prev.taskId,
@@ -979,6 +999,9 @@ ${rows.join("\n")}`;
       startedAt: new Date().toISOString(),
       toolCalls: 0,
       handoverFrom: prev.id,
+      // a login that ran out or stopped working is not a verdict on the work; a restart is neither
+      handoverCause: opts.resume ? "resume" : prev.failure?.kind === "quota" || prev.failure?.kind === "auth" ? prev.failure.kind : "manual",
+      handoverReason: opts.reason?.replace(/\s+/g, " ").trim().slice(0, 200) || undefined,
     };
     const members = this.members();
     prev.handoverTo = id;

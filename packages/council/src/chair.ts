@@ -235,6 +235,7 @@ export class Chair {
       integrationWorktree: store.integrationWorktree(),
       limits: this.council.limitsMarkdown(),
       topModelFloor: { claude: this.council.limits().claude.topModelMinWeeklyLeft, gpt: this.council.limits().gpt.topModelMinWeeklyLeft },
+      effortStats: this.council.effortStatsMarkdown(),
     });
   }
 
@@ -396,7 +397,8 @@ export class Chair {
     const agenda = store.agenda();
     const goals = agenda.goals.map((g, n) => `${n + 1}. ${g}`).join("\n") || "(아직 목표 없음)";
     // the assignment rules go again every turn: they are the part that decides whether this chair
-    // hands work out or starts doing it, and in a long thread the opening message stops carrying weight
+    // hands work out or starts doing it, and in a long thread the opening message stops carrying weight.
+    // The results table stays in the opening message (and in council_limits): it is long and changes slowly.
     const limits = this.council.limits();
     const refresh = [
       `안건: "${agenda.title}"`,

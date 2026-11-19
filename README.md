@@ -107,6 +107,8 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
 
 CLI: `gencouncil project set <project> --limit claude=3,opus,high --limit gpt=2,gpt-6.2-sol,high --limit gemini-web=1`, 확인은 `gencouncil project limits <project>`.
 
+추론 수준은 세 provider 모두 작업 유형에서 시작한다: 좁고 기계적인 일(`mechanical`)은 low, 범위가 분명한 일반 작업(`routine`)은 medium, 여러 모듈에 걸친 변경·원인 모를 버그·설계(`complex`)는 high. xhigh는 high로 실패한 작업을 다시 맡길 때만, max는 사용자가 직접 요청했을 때만 쓴다. 의장은 배정할 때 이 유형(`kind`)을 적고, 서버는 끝난 위원의 결과를 모델 × 추론 × 유형별로 모아(완주, 한도로 끊김, 인계·실패·중단, tool call, 소요 시간) 의장 지침과 `council_limits`, `gencouncil project limits`에 보여 준다. 인계할 때는 사유(한도·로그인·재시작·수동)가 기록되어, 재시작으로 이어 간 작업은 실패로 세지 않는다.
+
 위원 카드와 작업 칩에는 `claude-1` 같은 id 대신 **실제로 실행된 모델명**(Sonnet 5.5, GPT-6.1 Sol, Gemini 2.5 Pro …)과 추론 수준·advisor가 표시된다.
 
 색: 클로드 주황 `#d97757`, 제미나이 구글 블루 `#4285f4`, GPT 그린 `#10a37f`, 그 외 릴레이 보라. 릴레이 위원은 라벨(제미나이/agy/aistudio → 블루, gpt/chatgpt → 그린)로 판별한다. 실행 중에는 레퍼런스의 회전 2×2 스피너가 그 색으로 돈다.

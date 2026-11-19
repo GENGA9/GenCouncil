@@ -108,7 +108,11 @@ export function createCouncilMcp(council: Council): McpServer {
         task_id: z.string(),
         provider: z.enum(["claude", "gemini", "gpt", "relay"]).optional().describe("default: project.members.defaultProvider"),
         model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-3.8-flash | gemini-4-hydrogen | gemini-4-argon | gemini-4-neon, gpt-6-luna | gpt-6.1-terra | gpt-6.2-sol | gpt-6.2-astra. default: the workhorse model within the limit"),
-        effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("claude/gpt only. default medium (clamped to the limit)"),
+        effort: z
+          .enum(["low", "medium", "high", "xhigh", "max"])
+          .optional()
+          .describe("claude, gpt and gemini (gemini: up to high, xhigh on Hydrogen/Neon only). Start from the kind: mechanical low, routine medium, complex high. xhigh only to retry a task that failed at high; max only when the user asked for it. default medium, clamped to the limit"),
+        kind: z.enum(["mechanical", "routine", "complex"]).optional().describe("always set: how hard the task is (see the effort table in your instructions). Recorded so results can be compared per kind"),
         advisor: z.string().optional().describe("claude only: stronger model consulted before locking a plan, after a repeated error and before declaring done, e.g. opus. omit for short tasks"),
         account: z.string().optional().describe("preferred account id (see council_accounts)"),
         site: z.enum(["gemini-web", "aistudio", "chatgpt"]).optional().describe("relay only: which web AI; opens the user's pre-logged-in profile and counts toward that site's limit"),
@@ -122,7 +126,7 @@ export function createCouncilMcp(council: Council): McpServer {
     async ({ task_id, override_usage, ...rest }) =>
       guard(async () => {
         const m = await council.assign({ taskId: task_id, overrideUsage: override_usage, ...rest });
-        return { member_id: m.id, provider: m.provider, model: m.model, effort: m.effort, advisor: m.advisor, site: m.site, account: m.account, branch: m.branch, worktree: m.worktree, status: m.status };
+        return { member_id: m.id, provider: m.provider, model: m.model, effort: m.effort, kind: m.kind, advisor: m.advisor, site: m.site, account: m.account, branch: m.branch, worktree: m.worktree, status: m.status };
       }),
   );
 
@@ -137,9 +141,9 @@ export function createCouncilMcp(council: Council): McpServer {
         member_id: z.string(),
         provider: z.enum(["claude", "gemini", "gpt"]).optional(),
         model: z.string().optional(),
-        effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+        effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("default: the previous member's. Raise it one step only when the work itself fell short, not for a quota or login cut"),
         account: z.string().optional(),
-        reason: z.string().optional(),
+        reason: z.string().optional().describe("why you hand it over (recorded with the new member)"),
       },
     },
     async ({ member_id, ...rest }) =>
@@ -169,10 +173,10 @@ export function createCouncilMcp(council: Council): McpServer {
     "council_limits",
     {
       title: "Member limits",
-      description: "The user's limits per provider (max simultaneous members, max model, max effort) and how many are working now.",
+      description: "The user's limits per provider (max simultaneous members, max model, max effort), how many are working now, and how past members did per model and effort.",
       inputSchema: {},
     },
-    async () => text(council.limitsMarkdown()),
+    async () => text([council.limitsMarkdown(), council.effortStatsMarkdown()].filter(Boolean).join("\n\n")),
   );
 
   server.registerTool(

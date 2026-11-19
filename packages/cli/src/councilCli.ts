@@ -22,6 +22,8 @@ import {
   isCliProvider,
   isWebSite,
   limitsMarkdown,
+  effortStats,
+  effortStatsMarkdown,
   normalizeLimits,
   openLoginWindow,
   LIMIT_KEYS,
@@ -179,6 +181,8 @@ export async function councilMain(cmd: string, rest: string[]): Promise<number> 
       case "limits": {
         const p = requireProject(args[0]);
         console.log(limitsMarkdown(normalizeLimits(p.members.limits), {}));
+        const stats = effortStatsMarkdown(effortStats());
+        if (stats) console.log(`\n${stats}`);
         return 0;
       }
       case "show": {

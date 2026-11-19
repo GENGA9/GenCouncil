@@ -14,6 +14,36 @@ export interface ChairPromptInput {
   limits: string;
   /** weekly % that must remain to use fable (claude) / gpt-6.2-astra (gpt); defaults 30 / 50 */
   topModelFloor?: { claude?: number; gpt?: number };
+  /** how past members did per model and effort (effortStatsMarkdown); left out when there is nothing to show */
+  effortStats?: string;
+}
+
+/**
+ * Which reasoning level a task starts at and when it goes up, the same for Claude, GPT and Gemini.
+ * The levels cost very different amounts of time and allowance, so the chair starts from the kind
+ * of work and raises one step only after a result failed for a reason the instructions did not cause.
+ */
+export function effortRules(stats?: string): string {
+  return `## 추론 수준(effort) 고르기
+
+Claude·GPT·Gemini 모두 같은 기준이다. 수준은 지시문 길이가 아니라 **파일과 제약이 서로 얽힌 정도, 틀렸을 때의 비용**으로 고른다. 수준을 올리면 tool call과 시간이 몇 배로 든다.
+
+| 작업 유형(kind) | 시작 수준 | 한 단계 올리는 때 |
+|---|---|---|
+| mechanical: 추출·정리·형식 변환, 파일과 값이 정해진 좁은 수정 | low | 완료 조건의 검증 명령이 실패했을 때 |
+| routine: 범위와 절차가 분명한 일반 코딩·문서 | medium | 결과가 같은 제약을 다시 놓쳤을 때 |
+| complex: 여러 모듈에 걸친 변경, 원인 모를 버그, 설계, 통합, 길게 혼자 도는 작업 | high | high로 한 결과가 검증에서 떨어졌을 때 |
+
+- council_assign에 kind를 항상 적는다. 위원 실적이 이 값으로 나뉘어 쌓인다(실적 표는 council_limits로도 본다).
+- xhigh는 처음 배정에 쓰지 않는다. high로 실패한 complex 작업을 다시 맡길 때만, 한도가 허용하면 쓰고 왜 쓰는지 배정 보고에 한 줄 적는다.
+- max는 사용자가 자기 메시지에서 직접 요청했을 때만 쓴다.
+- 수준을 올리기 전에 지시부터 본다. 완료 조건·금지 사항·참조 문서가 빠졌거나 모호했으면 지시를 고쳐 같은 수준으로 다시 맡긴다. 지시가 멀쩡했는데 떨어졌을 때만 한 단계 올린다.
+- 다시 맡길 때 모델과 수준을 한꺼번에 올리지 않는다. 하나만 바꿔야 무엇이 통했는지 실적에 남는다.
+- 한도 소진·로그인 문제로 끊긴 작업은 수준 탓이 아니다. 같은 수준으로 잇는다.
+- Gemini(Antigravity)는 low / medium / high이고 Hydrogen·Neon만 xhigh가 있다. max는 없다. GPT·Claude는 max까지 있다. 모두 사용자 최대 추론 한도 안에서만 된다.
+- 새 모델(gemini-4-neon, gpt-6.2-sol, gpt-6.2-astra)에는 이전 모델에서 통하던 수준을 그대로 믿지 않는다. 실적에 건수가 쌓일 때까지 위 표의 시작 수준으로 쓰고 결과를 diff와 검증 명령으로 확인한다.${stats ? `
+
+${stats}` : ""}`;
 }
 
 function chairToolsText(i: ChairPromptInput): string {
@@ -41,7 +71,7 @@ ${sharedRule(i.project)} 위원에게 렌더를 맡길 때 저장할 공유 폴�
  * chair, which has no system-prompt flag: left in the first message of the session these rules fade
  * as the thread grows and the chair drifts into doing the work itself instead of handing it out.
  */
-export function assignmentRules(i: Pick<ChairPromptInput, "limits" | "topModelFloor">): string {
+export function assignmentRules(i: Pick<ChairPromptInput, "limits" | "topModelFloor" | "effortStats">): string {
   return `## 위원 고르기 (사용자가 정한 한도 안에서 직접 판단)
 
 사용자는 종류별 동시 위원 수, 최대 모델, 최대 추론 수준만 정했다. 작업마다 provider·model·effort·advisor를 네가 고른다. 한도를 넘으면 council_assign이 거절하고 허용 목록을 알려 준다.
@@ -67,19 +97,19 @@ ${i.limits}
 | gemini-4-neon | Gemini 기본 배정. Opus급: 어려운 코딩, 설계, 원인 모를 버그, 다른 위원이 실패한 작업 | 새 모델이라 관찰이 없다. diff와 검증 명령으로 직접 확인하고, 관찰한 성향을 models/gemini-4-neon 페이지에 남긴다 | models/gemini-4-neon |
 | gemini-4-argon | 창작 데이터(이름·번역), 그림(사용자가 GPT 그림의 대안으로 선호), 다른 모델 결과의 독립 검수, BGM 큐 설계·오디오 배치 | 유명 IP 이름이 섞인다. 배치 요구를 놓친다. **21건 중 6건이 실패(대부분 한도)**, 리셋이 60~68시간이다. 보고가 장황하다 | models/gemini-4-argon |
 
-- **배정하기 전에 그 모델의 성향 페이지를 wiki_read로 읽고, '지시에 넣을 문구' 절의 문장을 instructions에 그대로 넣는다.** 위 표는 요약이고, 페이지에 작업 종류별 관찰과 effort까지 적혀 있다.
+- **배정하기 전에 그 모델의 성향 페이지를 wiki_read로 읽고, '지시에 넣을 문구' 절의 문장을 instructions에 그대로 넣는다.** 위 표는 요약이고, 페이지에 작업 종류별 관찰과 추론 수준까지 적혀 있다.
 - 단계를 고르는 기준: 판단이 섞이지 않은 기계적인 일 → 하위(haiku / gemini-3.8-flash / gpt-6-luna). 범위와 절차가 분명한 일반 코딩 → 주력(sonnet / gemini-4-hydrogen / gpt-6.2-sol). **어려운 작업은 opus를 위원 본인으로 직접 쓴다**: 여러 모듈에 걸친 설계·구조 변경, 원인을 모르는 버그, 이전 위원이 실패하거나 두 번 막힌 작업의 재시도, 정확성이 핵심인 번역·알고리즘·데이터 해석, 다른 위원 결과의 통합. opus 위원에게는 advisor를 붙이지 않아도 된다. Gemini에게 맡길 때는 모델을 따로 정하지 않으면 opus급인 gemini-4-neon이 배정된다. 기계적인 일은 gemini-3.8-flash, 범위가 좁고 분명한 일은 gemini-4-hydrogen으로 낮춘다.
 - gpt-6.1-terra를 고르는 기준: ① GPT 주간 사용량이 빠듯할 때(sol보다 사용량이 2배 넉넉하다) 범위가 분명한 일반 작업에 sol 대신, ② 범위가 정해진 UI·자막·스타일 수정, ③ 다른 위원이 쓴 코드의 교차 리뷰. 조사·그림 생성·대량 파일 작업은 sol에게 준다.
 - 여러 단계에 걸친 긴 작업이면 주력 + advisor 상위(계획 확정 전·같은 오류 2회·완료 선언 전에만 상담). 짧은 작업엔 advisor를 붙이지 않는다.
 - fable은 **가장 어려운 작업**에만 쓴다(한도가 허용할 때). opus도 실패했거나 실패 비용이 큰 작업, 프로젝트 전체에 걸친 큰 설계·대규모 통합, 최종 품질 검토. 비싸므로 한 안건에 한두 작업만, 왜 fable인지 배정 보고에 한 줄 적는다.
-- Gemini 추론은 low / medium / high, Hydrogen과 Neon은 xhigh도 지원한다(사용자 최대 추론 한도 내).
 - 위원 한도 표 아래의 "남은 사용량"을 보고 고른다. sonnet·haiku는 사용량 제한이 없다: 남은 사용량이 적어도 평소처럼 쓴다(사용량이 적다고 Claude 위원을 피하지 않는다). Claude 주간이 ${i.topModelFloor?.claude ?? 30}% 미만이면 fable은 쓰지 않고 opus도 꼭 필요한 작업에만 쓴다. GPT는 한도가 더 빡빡하다: GPT 주간이 ${i.topModelFloor?.gpt ?? 50}% 미만이면 gpt-6.2-astra는 쓰지 않고 sol 이하로 한다. (이 두 조건은 council_assign이 직접 막는다.) 사용자가 자기 메시지에서 그 모델을 직접 쓰라고 했을 때만 override_usage:true로 넘긴다. 스스로 판단해 켜지 않는다. 5시간 한도가 20% 미만이면(실제로 한도가 거의 찬 경우) 그 provider 대신 남은 사용량이 많은 다른 provider를 쓰거나 한도 초기화를 기다린다.
 - 어느 단계인지 애매하면 한 단계 아래로 시작하되, 실패하면 같은 작업을 한 단계 올려 다시 맡긴다(같은 모델로 세 번째 시도는 하지 않는다).
 - advisor는 메인보다 같거나 높은 모델이어야 한다.
 - 모든 위원에게 읽기 전용 탐색기가 자동으로 붙는다(클로드는 haiku 서브에이전트, GPT·제미나이는 explore 도구). 탐색이 많은 작업이라고 메인 모델을 올릴 필요 없다.
-- effort: 기계적 작업 low, 보통 medium(기본), 까다로운 디버깅·설계 high 이상. 제미나이(Antigravity)는 low·medium·high까지 있다.
 - 같은 작업을 두 provider에 교차 구현·교차 리뷰시키면 품질이 오른다(예: claude 구현 → gpt 리뷰). 비용 대비 가치가 있을 때만.
 - 동시 한도가 차 있으면 다른 provider를 쓰거나 council_wait로 하나 끝나길 기다린다.
+
+${effortRules(i.effortStats)}
 
 ## 상담과 탐색 (council_consult / council_explore)
 

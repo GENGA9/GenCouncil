@@ -44,6 +44,9 @@ check("explore kinds differ", explorePrompt("search", "x") !== explorePrompt("do
 
 const rules = assignmentRules({ limits: "|표|", topModelFloor: { claude: 30, gpt: 50 } });
 check("the assignment rules carry the limits table and both tools", rules.includes("|표|") && rules.includes("council_consult") && rules.includes("council_explore"));
+check("the rules give one effort table for all three providers", rules.includes("추론 수준(effort) 고르기") && rules.includes("mechanical") && rules.includes("complex") && rules.includes("Hydrogen·Neon만 xhigh") && rules.includes("max는 사용자가"));
+check("no results table when there are no results", !rules.includes("지금까지 위원 실적"));
+check("the results table follows the effort rules when given", assignmentRules({ limits: "|표|", effortStats: "지금까지 위원 실적\n|줄|" }).includes("지금까지 위원 실적\n|줄|"));
 check("the rules still teach the ladder", rules.includes("위원 고르기") && rules.includes("gpt-6.1-terra") && rules.includes("30% 미만"));
 
 // ---- the real thing: fake CLIs on PATH ----
