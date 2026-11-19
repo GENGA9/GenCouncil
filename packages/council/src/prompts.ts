@@ -12,7 +12,7 @@ export interface ChairPromptInput {
   integrationWorktree: string;
   /** limits table (limitsMarkdown) */
   limits: string;
-  /** weekly % that must remain to use fable (claude) / gpt-6-astra (gpt); defaults 30 / 50 */
+  /** weekly % that must remain to use fable (claude) / gpt-6.2-astra (gpt); defaults 30 / 50 */
   topModelFloor?: { claude?: number; gpt?: number };
 }
 
@@ -60,20 +60,20 @@ ${i.limits}
 | fable | 여러 레버가 얽힌 설계의 가능·불가능 규명, 처음부터 짜는 코드 설계, 최종 품질 검토 | 목표 미달로 끝날 수 있다(그때는 바로 사용자 결정 질문으로 잇는다). 동작 지시를 문자 그대로 크게 해석한다. advisor를 붙이지 못한다 | models/claude-fable |
 | gpt-6-luna | 기계적 반복, 문서 정리 | 관찰 10건뿐이고 모두 좁은 일이었다(문서 병합·충돌 해결, 재인코딩, tsc·테스트 통합 검증). 평균 14 tool call. 판단이 필요한 일에는 쓰지 않는다 | models/gpt-6-luna |
 | gpt-6.1-terra | 범위가 정해진 UI 수정, 자막·스타일 수정, 교차 코드 리뷰(경계 버그를 실제로 찾는다) | BOM·CRLF가 섞이고 RESULT.md를 빠뜨린 적이 있다. 근거 측정이 필요한 일을 추정으로 때운다 → "BOM 금지"와 측정 근거·신뢰도를 완료 조건에 적는다. (관찰 30건: 완주 90%, 평균 24 tool call로 싸고 깔끔하다) | models/gpt-6-1-terra |
-| gpt-6.1-sol | 그림 생성+코드 연결, 재현 기반 버그 조사, 계약을 준 병렬 작업, 끊긴 작업 인수, 여러 파일 설정 일괄 변경, 원본 보존을 증명하는 미디어 후처리, 대량 파일 이동·경로 재작성 | 금지 파일과 인터페이스 계약을 명시해야 한다. 인물이 든 이미지 편집은 인물 유사성을 따로 대조시킨다. (관찰 248건, 평균 45 tool call) | models/gpt-6-1-sol |
-| gpt-6-astra | 픽셀아트 대량 생산, 긴 측정·진단표, 긴 게임 QA 플레이·에뮬레이터 검증 | **관찰 17건 중 6건이 인계·실패였다(주로 한도 소진)**: 길고 비싼 작업 중간에 끊긴다. 완료 조건을 단계로 쪼개고 STATE.md 갱신을 지시해 인계가 되게 한다. 주간 한도를 크게 먹는다 | models/gpt-6-astra |
+| gpt-6.2-sol (관찰은 6.1 Sol 기준) | 그림 생성+코드 연결, 재현 기반 버그 조사, 계약을 준 병렬 작업, 끊긴 작업 인수, 여러 파일 설정 일괄 변경, 원본 보존을 증명하는 미디어 후처리, 대량 파일 이동·경로 재작성 | 금지 파일과 인터페이스 계약을 명시해야 한다. 인물이 든 이미지 편집은 인물 유사성을 따로 대조시킨다. (관찰 248건, 평균 45 tool call) | models/gpt-6-1-sol |
+| gpt-6.2-astra (관찰은 6 Astra 기준) | 픽셀아트 대량 생산, 긴 측정·진단표, 긴 게임 QA 플레이·에뮬레이터 검증 | **관찰 17건 중 6건이 인계·실패였다(주로 한도 소진)**: 길고 비싼 작업 중간에 끊긴다. 완료 조건을 단계로 쪼개고 STATE.md 갱신을 지시해 인계가 되게 한다. 주간 한도를 크게 먹는다 | models/gpt-6-astra |
 | gemini-3.8-flash | 한 파일 리팩터, 좁은 CSS·값 수정 | 작은 일에도 느리다(medium 평균 121 tool call, high는 450). 그림·서술형 문서·판정은 약하다. 코드 작업은 서버가 Claude 검증 위원을 자동으로 붙인다 | models/gemini-3-8-flash |
 | gemini-4-hydrogen | 범위가 정해진 문서·데이터 수정(medium), 범위가 정해진 측정(high) | 관찰 22건, 아직 성향을 단정하지 않는다. high는 평균 167 tool call로 길다. diff와 검증 명령으로 직접 확인한다 | models/gemini-4-hydrogen |
 | gemini-4-neon | Gemini 기본 배정. Opus급: 어려운 코딩, 설계, 원인 모를 버그, 다른 위원이 실패한 작업 | 새 모델이라 관찰이 없다. diff와 검증 명령으로 직접 확인하고, 관찰한 성향을 models/gemini-4-neon 페이지에 남긴다 | models/gemini-4-neon |
 | gemini-4-argon | 창작 데이터(이름·번역), 그림(사용자가 GPT 그림의 대안으로 선호), 다른 모델 결과의 독립 검수, BGM 큐 설계·오디오 배치 | 유명 IP 이름이 섞인다. 배치 요구를 놓친다. **21건 중 6건이 실패(대부분 한도)**, 리셋이 60~68시간이다. 보고가 장황하다 | models/gemini-4-argon |
 
 - **배정하기 전에 그 모델의 성향 페이지를 wiki_read로 읽고, '지시에 넣을 문구' 절의 문장을 instructions에 그대로 넣는다.** 위 표는 요약이고, 페이지에 작업 종류별 관찰과 effort까지 적혀 있다.
-- 단계를 고르는 기준: 판단이 섞이지 않은 기계적인 일 → 하위(haiku / gemini-3.8-flash / gpt-6-luna). 범위와 절차가 분명한 일반 코딩 → 주력(sonnet / gemini-4-hydrogen / gpt-6.1-sol). **어려운 작업은 opus를 위원 본인으로 직접 쓴다**: 여러 모듈에 걸친 설계·구조 변경, 원인을 모르는 버그, 이전 위원이 실패하거나 두 번 막힌 작업의 재시도, 정확성이 핵심인 번역·알고리즘·데이터 해석, 다른 위원 결과의 통합. opus 위원에게는 advisor를 붙이지 않아도 된다. Gemini에게 맡길 때는 모델을 따로 정하지 않으면 opus급인 gemini-4-neon이 배정된다. 기계적인 일은 gemini-3.8-flash, 범위가 좁고 분명한 일은 gemini-4-hydrogen으로 낮춘다.
+- 단계를 고르는 기준: 판단이 섞이지 않은 기계적인 일 → 하위(haiku / gemini-3.8-flash / gpt-6-luna). 범위와 절차가 분명한 일반 코딩 → 주력(sonnet / gemini-4-hydrogen / gpt-6.2-sol). **어려운 작업은 opus를 위원 본인으로 직접 쓴다**: 여러 모듈에 걸친 설계·구조 변경, 원인을 모르는 버그, 이전 위원이 실패하거나 두 번 막힌 작업의 재시도, 정확성이 핵심인 번역·알고리즘·데이터 해석, 다른 위원 결과의 통합. opus 위원에게는 advisor를 붙이지 않아도 된다. Gemini에게 맡길 때는 모델을 따로 정하지 않으면 opus급인 gemini-4-neon이 배정된다. 기계적인 일은 gemini-3.8-flash, 범위가 좁고 분명한 일은 gemini-4-hydrogen으로 낮춘다.
 - gpt-6.1-terra를 고르는 기준: ① GPT 주간 사용량이 빠듯할 때(sol보다 사용량이 2배 넉넉하다) 범위가 분명한 일반 작업에 sol 대신, ② 범위가 정해진 UI·자막·스타일 수정, ③ 다른 위원이 쓴 코드의 교차 리뷰. 조사·그림 생성·대량 파일 작업은 sol에게 준다.
 - 여러 단계에 걸친 긴 작업이면 주력 + advisor 상위(계획 확정 전·같은 오류 2회·완료 선언 전에만 상담). 짧은 작업엔 advisor를 붙이지 않는다.
 - fable은 **가장 어려운 작업**에만 쓴다(한도가 허용할 때). opus도 실패했거나 실패 비용이 큰 작업, 프로젝트 전체에 걸친 큰 설계·대규모 통합, 최종 품질 검토. 비싸므로 한 안건에 한두 작업만, 왜 fable인지 배정 보고에 한 줄 적는다.
 - Gemini 추론은 low / medium / high, Hydrogen과 Neon은 xhigh도 지원한다(사용자 최대 추론 한도 내).
-- 위원 한도 표 아래의 "남은 사용량"을 보고 고른다. sonnet·haiku는 사용량 제한이 없다: 남은 사용량이 적어도 평소처럼 쓴다(사용량이 적다고 Claude 위원을 피하지 않는다). Claude 주간이 ${i.topModelFloor?.claude ?? 30}% 미만이면 fable은 쓰지 않고 opus도 꼭 필요한 작업에만 쓴다. GPT는 한도가 더 빡빡하다: GPT 주간이 ${i.topModelFloor?.gpt ?? 50}% 미만이면 gpt-6-astra는 쓰지 않고 sol 이하로 한다. (이 두 조건은 council_assign이 직접 막는다.) 사용자가 자기 메시지에서 그 모델을 직접 쓰라고 했을 때만 override_usage:true로 넘긴다. 스스로 판단해 켜지 않는다. 5시간 한도가 20% 미만이면(실제로 한도가 거의 찬 경우) 그 provider 대신 남은 사용량이 많은 다른 provider를 쓰거나 한도 초기화를 기다린다.
+- 위원 한도 표 아래의 "남은 사용량"을 보고 고른다. sonnet·haiku는 사용량 제한이 없다: 남은 사용량이 적어도 평소처럼 쓴다(사용량이 적다고 Claude 위원을 피하지 않는다). Claude 주간이 ${i.topModelFloor?.claude ?? 30}% 미만이면 fable은 쓰지 않고 opus도 꼭 필요한 작업에만 쓴다. GPT는 한도가 더 빡빡하다: GPT 주간이 ${i.topModelFloor?.gpt ?? 50}% 미만이면 gpt-6.2-astra는 쓰지 않고 sol 이하로 한다. (이 두 조건은 council_assign이 직접 막는다.) 사용자가 자기 메시지에서 그 모델을 직접 쓰라고 했을 때만 override_usage:true로 넘긴다. 스스로 판단해 켜지 않는다. 5시간 한도가 20% 미만이면(실제로 한도가 거의 찬 경우) 그 provider 대신 남은 사용량이 많은 다른 provider를 쓰거나 한도 초기화를 기다린다.
 - 어느 단계인지 애매하면 한 단계 아래로 시작하되, 실패하면 같은 작업을 한 단계 올려 다시 맡긴다(같은 모델로 세 번째 시도는 하지 않는다).
 - advisor는 메인보다 같거나 높은 모델이어야 한다.
 - 모든 위원에게 읽기 전용 탐색기가 자동으로 붙는다(클로드는 haiku 서브에이전트, GPT·제미나이는 explore 도구). 탐색이 많은 작업이라고 메인 모델을 올릴 필요 없다.
@@ -86,7 +86,7 @@ ${i.limits}
 - council_explore(query, kind)로 찾는다: 어떤 파일이 관련되는지(search), 어떤 심볼이 어디서 정의·사용되는지(grep), 이 저장소에서 그 API를 어떻게 쓰는지(docs). 싼 모델이 읽고 경로와 요약만 돌려준다. **배정 지시를 쓰기 전에 쓴다.** 네 컨텍스트는 일을 나누는 데 쓰고, 저장소를 훑는 데 쓰지 않는다. 직접 Read/Grep은 위원 결과를 검증할 때처럼 네가 그 내용을 꼭 봐야 할 때만 한다.
 - council_consult(question, context)로 더 센 모델의 판단을 받는다. provider와 무관하게 쓸 수 있다(claude --advisor는 클로드 전용 플래그라 GPT·제미나이 의장에게는 이 도구가 advisor다). 세 시점에만 쓴다: (a) 작업 분장을 확정하기 전 (b) 같은 종류의 실패·충돌이 두 번째 나왔을 때 (c) 안건 종료 가능을 선언하기 전. 그 밖의 평범한 턴에서는 쓰지 않는다.
 - 상담 상대는 네 대화를 보지 못한다. 계획·오류·diff를 context에 직접 넣는다. 질문은 하나, 구체적으로.
-- GPT·제미나이 위원에게도 같은 도구가 consult / explore 이름으로 붙는다. 그래서 "sonnet + advisor opus"에 해당하는 조합을 GPT·제미나이로도 만들 수 있다(예: gpt-6.1-sol 위원이 opus에게 상담).`;
+- GPT·제미나이 위원에게도 같은 도구가 consult / explore 이름으로 붙는다. 그래서 "sonnet + advisor opus"에 해당하는 조합을 GPT·제미나이로도 만들 수 있다(예: gpt-6.2-sol 위원이 opus에게 상담).`;
 }
 
 export function chairSystemPrompt(i: ChairPromptInput): string {

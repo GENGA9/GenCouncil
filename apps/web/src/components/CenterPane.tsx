@@ -10,7 +10,7 @@ import { GridSpinner } from "./GridSpinner";
 /** chair models per CLI; the chair runs on whatever CLI its account belongs to */
 const CHAIR_MODELS: Record<string, string[]> = {
   claude: ["", "opus", "sonnet", "fable", "haiku"],
-  gpt: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6.1-terra", "gpt-6-luna"],
+  gpt: ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.1-terra", "gpt-6-luna"],
   gemini: ["gemini-4-argon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-3.8-flash"],
 };
 const CHAIR_EFFORTS: Record<string, string[]> = {

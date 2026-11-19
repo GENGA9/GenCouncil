@@ -211,6 +211,7 @@ check("no usage data: plain table", !council.limitsMarkdown().includes("남은 �
 const { checkTopModelUsage } = await import("@gencouncil/council");
 const throws = (fn) => { try { fn(); return false; } catch (e) { return /주간 사용량/.test(e.message); } };
 check("astra refused under 50% GPT weekly", throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 40)));
+check("6.2 astra held back too", throws(() => checkTopModelUsage("gpt", "gpt-6.2-astra", 40)));
 check("astra allowed at 60%", !throws(() => checkTopModelUsage("gpt", "gpt-6-astra", 60)));
 check("sol never held back", !throws(() => checkTopModelUsage("gpt", "gpt-6.1-sol", 5)));
 check("fable refused under 30% Claude weekly", throws(() => checkTopModelUsage("claude", "fable", 25)) && !throws(() => checkTopModelUsage("claude", "opus", 5)));

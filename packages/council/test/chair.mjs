@@ -130,12 +130,12 @@ const chairTok = new Chair(council, { councilUrl: "http://127.0.0.1:1/mcp/p/a", 
 const rt = await import("@gencouncil/council");
 council.project.chair.account = "gpt";
 check("chair provider follows the account", chairTok.provider() === "gpt");
-check("claude model swapped for the provider default", chairTok.model() === "gpt-6.1-sol" && rt.chairModelFor("gpt", "gpt-6-astra") === "gpt-6-astra");
+check("claude model swapped for the provider default", chairTok.model() === "gpt-6.2-sol" && rt.chairModelFor("gpt", "gpt-6-astra") === "gpt-6-astra");
 const g1 = await chairTok.turn("GPT 의장 첫 턴", () => {});
 const cArgs = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8").replace(/"/g, ""); // arguments reach a batch file quoted
 const cIn = fs.readFileSync(path.join(rec, "codex-stdin.txt"), "utf8");
 check("gpt chair reply and thread id", !g1.isError && g1.text === "gpt chair reply" && g1.sessionId === "t-9", JSON.stringify(g1));
-check("codex runs read-only with council + memory MCP", /exec --json/.test(cArgs) && cArgs.includes("sandbox_mode='read-only'") && cArgs.includes("mcp_servers.council.url") && cArgs.includes("mcp_servers.gencouncil.command") && cArgs.includes("-m gpt-6.1-sol"), cArgs);
+check("codex runs read-only with council + memory MCP", /exec --json/.test(cArgs) && cArgs.includes("sandbox_mode='read-only'") && cArgs.includes("mcp_servers.council.url") && cArgs.includes("mcp_servers.gencouncil.command") && cArgs.includes("-m gpt-6.2-sol"), cArgs);
 check("council token reaches codex through env", fs.readFileSync(path.join(rec, "codex-env.txt"), "utf8").includes("token=tok-1"));
 check("first gpt turn carries the full chair prompt", cIn.includes("<의장_지침>") && cIn.includes("GPT 의장 첫 턴"));
 await chairTok.turn("GPT 의장 둘째 턴", () => {});

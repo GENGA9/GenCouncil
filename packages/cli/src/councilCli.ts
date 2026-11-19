@@ -44,7 +44,7 @@ function parseLimit(spec: string): [LimitKey, { maxMembers: number; maxModel?: s
 
 export const COUNCIL_HELP = `council commands
   project add <name> --path <folder> [--chair-model m] [--chair-effort e] [--autonomy full|edits]
-                     [--limit claude=3,opus,high] [--limit gpt=2,gpt-6.1-sol,high] [--limit gemini-web=1] ...
+                     [--limit claude=3,opus,high] [--limit gpt=2,gpt-6.2-sol,high] [--limit gemini-web=1] ...
                      any folder works: a git repo is used directly, other folders get a private shadow repo
                      " 제작위원회" is appended to the name. default chair: opus
   project list | project show <project> | project guidelines <project>   (prints path to edit)

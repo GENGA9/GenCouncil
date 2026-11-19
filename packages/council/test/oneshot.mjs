@@ -19,8 +19,8 @@ check("gpt and gemini ids map to their own provider", providerOfModel("gpt-6.1-t
 check("an unknown id maps to nothing", providerOfModel("gpt-9-nope") === undefined);
 
 check("the explorer runs on the cheapest rung", explorerModel("claude") === "haiku" && explorerModel("gpt") === "gpt-6-luna" && explorerModel("gemini") === "gemini-3.8-flash");
-check("a consult takes the strongest rung the limit allows", strongestWithin("claude", "opus") === "opus" && strongestWithin("gpt", "gpt-6.1-sol") === "gpt-6.1-sol");
-check("no limit means the top of the ladder", strongestWithin("claude", undefined) === "fable" && strongestWithin("gpt", undefined) === "gpt-6-astra");
+check("a consult takes the strongest rung the limit allows", strongestWithin("claude", "opus") === "opus" && strongestWithin("gpt", "gpt-6.1-sol") === "gpt-6.2-sol" && strongestWithin("gpt", "gpt-6.2-sol") === "gpt-6.2-sol");
+check("no limit means the top of the ladder", strongestWithin("claude", undefined) === "fable" && strongestWithin("gpt", undefined) === "gpt-6.2-astra");
 check("a full model id as the limit still resolves", strongestWithin("claude", "claude-opus-5-5") === "opus", strongestWithin("claude", "claude-opus-5-5"));
 
 // ---- who gets the tools: claude keeps its native --advisor/--agents ----

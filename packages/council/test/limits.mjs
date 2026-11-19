@@ -43,7 +43,10 @@ const rejects = (p, re) => p.then(() => false, (e) => re.test(e.message));
 // ---- ladders ----
 const lim = normalizeLimits({ claude: { maxMembers: 1, maxModel: "sonnet", maxEffort: "medium" }, gpt: { maxMembers: 0 }, "gemini-web": { maxMembers: 1 } });
 check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 2 && tierOf("gpt", "gpt-6.1-terra") === 1 && tierOf("gemini", "gemini-3.8-flash-high") === 0 && tierOf("gemini", "gemini-2.5-pro") === 3 && tierOf("gemini", "gemini-4-neon-xhigh") === 2);
-check("default model is the workhorse within limit", resolveModel("claude", undefined, lim.claude) === "sonnet" && resolveModel("gpt", undefined, normalizeLimits({}).gpt) === "gpt-6.1-sol");
+check("default model is the workhorse within limit", resolveModel("claude", undefined, lim.claude) === "sonnet" && resolveModel("gpt", undefined, normalizeLimits({}).gpt) === "gpt-6.2-sol");
+check("6.2 Sol and Astra share the old rungs", tierOf("gpt", "gpt-6.2-sol") === 2 && tierOf("gpt", "gpt-6.2-astra") === 3 && tierOf("gpt", "gpt-6-astra") === 3);
+check("an old 6.1 Sol limit loads as 6.2 Sol and still allows 6.1 Sol by name", normalizeLimits({ gpt: { maxMembers: 1, maxModel: "gpt-6.1-sol" } }).gpt.maxModel === "gpt-6.2-sol" && resolveModel("gpt", "gpt-6.1-sol", normalizeLimits({}).gpt) === "gpt-6.1-sol");
+check("6.2 Astra stays above a Sol limit", (() => { try { resolveModel("gpt", "gpt-6.2-astra", normalizeLimits({}).gpt); return false; } catch { return true; } })());
 check("model above limit rejected", throws(() => resolveModel("claude", "opus", lim.claude), /above the user's limit/));
 check("unknown model rejected", throws(() => resolveModel("claude", "gpt-6", lim.claude), /unknown claude model/));
 check("default effort medium", resolveEffort("claude", undefined, lim.claude) === "medium");

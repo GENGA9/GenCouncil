@@ -46,8 +46,9 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
   gpt: [
     { id: "gpt-6-luna", label: "GPT-6 Luna", note: "빠르고 저렴. 쉬운 작업", match: /luna|mini/i },
     { id: "gpt-6.1-terra", label: "GPT-6.1 Terra", note: "균형형. Sol보다 사용량 2배, 일반 작업", match: /terra/i },
-    { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", note: "주력. 코딩·일상 작업", match: /sol/i },
-    { id: "gpt-6-astra", label: "GPT-6 Astra", note: "최상위. 가장 어려운 작업", match: /astra|pro/i },
+    // 6.2 is the current generation; the older gpt-6.1-sol / gpt-6-astra still resolve to the same rungs
+    { id: "gpt-6.2-sol", label: "GPT-6.2 Sol", note: "주력. 코딩·일상 작업 (6.1 Sol의 새 세대)", match: /sol/i },
+    { id: "gpt-6.2-astra", label: "GPT-6.2 Astra", note: "최상위. 가장 어려운 작업 (6 Astra의 새 세대)", match: /astra|pro/i },
   ],
 };
 
@@ -83,7 +84,7 @@ export type Limits = Record<LimitKey, ProviderLimit>;
 export const DEFAULT_LIMITS: Limits = {
   claude: { maxMembers: 3, maxModel: "fable", maxEffort: "high", topModelMinWeeklyLeft: 30 },
   gemini: { maxMembers: 2, maxModel: "gemini-4-argon", maxEffort: "high" },
-  gpt: { maxMembers: 2, maxModel: "gpt-6.1-sol", maxEffort: "high", topModelMinWeeklyLeft: 50 },
+  gpt: { maxMembers: 2, maxModel: "gpt-6.2-sol", maxEffort: "high", topModelMinWeeklyLeft: 50 },
   "gemini-web": { maxMembers: 1 },
   aistudio: { maxMembers: 1 },
   chatgpt: { maxMembers: 0 },
@@ -155,7 +156,7 @@ export class LimitError extends Error {}
  */
 export const TOP_MODEL_WEEKLY_FLOOR: Array<{ provider: CliProvider; match: RegExp; label: string; minWeeklyLeft: number }> = [
   { provider: "claude", match: /fable|mythos/i, label: "fable", minWeeklyLeft: 30 },
-  { provider: "gpt", match: /astra/i, label: "gpt-6-astra", minWeeklyLeft: 50 },
+  { provider: "gpt", match: /astra/i, label: "gpt-6.2-astra", minWeeklyLeft: 50 },
 ];
 
 /** throws when model is a top model and the provider's best account has too little weekly allowance left */
@@ -169,7 +170,7 @@ export function checkTopModelUsage(provider: CliProvider, model: string | undefi
 }
 
 /** the default rung when the chair names no model (Gemini defaults to Neon, its Opus-rank model) */
-export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-neon", gpt: "gpt-6.1-sol" };
+export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-neon", gpt: "gpt-6.2-sol" };
 
 /** default = the "workhorse" clamped to the limit */
 export function resolveModel(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): string {

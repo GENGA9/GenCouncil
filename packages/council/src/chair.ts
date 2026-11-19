@@ -106,7 +106,7 @@ interface ChairLaunch {
 }
 
 /** chair model when the project names none (or one from another provider) */
-export const CHAIR_DEFAULT_MODEL: Record<CliProvider, string> = { claude: "opus", gpt: "gpt-6.1-sol", gemini: "gemini-4-neon" };
+export const CHAIR_DEFAULT_MODEL: Record<CliProvider, string> = { claude: "opus", gpt: "gpt-6.2-sol", gemini: "gemini-4-neon" };
 
 /** the chair's model for a provider: the configured one when it belongs to that provider, else the default */
 export function chairModelFor(provider: CliProvider, model: string | undefined): string {
