@@ -35,10 +35,12 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
     { id: "opus", label: "Opus", note: "어려운 설계·디버깅, advisor", match: /opus/i },
     { id: "fable", label: "Fable", note: "최상위. 가장 어려운 장기 작업", match: /fable|mythos/i },
   ],
-  // Antigravity CLI (agy). The driver adds the effort suffix (Hydrogen also supports xhigh).
+  // Antigravity CLI (agy). The driver adds the effort suffix (Hydrogen and Neon also support xhigh).
   gemini: [
     { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", note: "빠른 범용. 단순 수정·반복", match: /flash/i },
     { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", note: "주력. 빠른 코딩·에이전트 작업, Argon급 지능", match: /hydrogen/i, maxEffort: "xhigh" },
+    // Neon ranks with Claude Opus: the default Gemini pick for real work
+    { id: "gemini-4-neon", label: "Gemini 4 Neon", note: "기본 배정. Opus급, 어려운 코딩·설계·디버깅(xhigh 지원)", match: /neon/i, maxEffort: "xhigh" },
     { id: "gemini-4-argon", label: "Gemini 4 Argon", note: "최상위. 긴 맥락 분석·리서치·설계", match: /argon|pro/i },
   ],
   gpt: [
@@ -166,8 +168,8 @@ export function checkTopModelUsage(provider: CliProvider, model: string | undefi
     throw new LimitError(`${rule.label}은(는) ${provider} 주간 사용량이 ${floor}% 이상 남았을 때만 쓴다 (지금 ${weeklyLeft}% 남음). 한 단계 낮은 모델을 고른다. 사용자가 이 모델을 명시했다면 override_usage:true로 다시 배정한다.`);
 }
 
-/** the default rung when the chair names no model */
-export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-hydrogen", gpt: "gpt-6.1-sol" };
+/** the default rung when the chair names no model (Gemini defaults to Neon, its Opus-rank model) */
+export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-neon", gpt: "gpt-6.1-sol" };
 
 /** default = the "workhorse" clamped to the limit */
 export function resolveModel(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): string {

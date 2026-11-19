@@ -99,7 +99,7 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
 | 종류 | 실행 | 모델 단계 (낮음 → 높음) | 추론 |
 |------|------|------------------------|------|
 | 클로드 | Claude Code CLI | haiku · sonnet · opus · fable | low ~ max |
-| 제미나이 CLI | Antigravity CLI (`agy`) | gemini-3.8-flash · gemini-4-hydrogen (주력) · gemini-4-argon | low ~ high (Hydrogen만 xhigh 지원) |
+| 제미나이 CLI | Antigravity CLI (`agy`) | gemini-3.8-flash · gemini-4-hydrogen · gemini-4-neon (기본, Opus급) · gemini-4-argon (최상위) | low ~ high (Hydrogen·Neon은 xhigh 지원) |
 | GPT | Codex CLI | gpt-6-luna · gpt-6.1-terra · gpt-6.1-sol · gpt-6-astra | low ~ max |
 | 웹 제미나이 / AI Studio / ChatGPT 웹 | 릴레이 (사람이 전달) | 웹에서 고름 | - |
 

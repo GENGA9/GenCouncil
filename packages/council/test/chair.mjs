@@ -116,7 +116,7 @@ fs.writeFileSync(
     'findstr "^" > "%GC_REC%\\agy-stdin.txt"',
     'echo url=%GENCOUNCIL_COUNCIL_URL% role=%GENCOUNCIL_ROLE% > "%GC_REC%\\agy-env.txt"',
     'if not defined GC_ARGON_SPENT goto run',
-    'echo %* | findstr /c:"gemini-4-argon" >nul || goto run',
+    'echo %* | findstr /c:"gemini-4-neon" >nul || goto run',
     "echo error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59h36m39s. 1>&2",
     'echo {"event":"result","result":{"conversation_id":"c-8","status":"ERROR","response":"","error":"Individual quota reached. Resets in 59h36m39s."}}',
     "exit /b 1",
@@ -162,13 +162,13 @@ const aIn = fs.readFileSync(path.join(rec, "agy-stdin.txt"), "utf8");
 check("gemini chair reply and conversation id", !m1.isError && m1.text === "gemini chair reply" && m1.sessionId === "c-7", JSON.stringify(m1));
 check("gpt session not resumed by gemini", !aArgs.includes("--conversation"), aArgs);
 check("agy gets the prompt as stream-json on stdin", aIn.startsWith('{"event":"user","message":{"content":"<의장_지침>'), aIn.slice(0, 80));
-check("agy model carries the effort suffix", aArgs.includes("--model gemini-4-argon-"), aArgs);
+check("agy model carries the effort suffix", aArgs.includes("--model gemini-4-neon-"), aArgs);
 check("agy env points the bridge at this agenda", fs.readFileSync(path.join(rec, "agy-env.txt"), "utf8").includes("url=http://127.0.0.1:1/mcp/p/a role=member"));
 const agyMcp = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "config", "mcp_config.json"), "utf8"));
 const agySet = JSON.parse(fs.readFileSync(path.join(fakeHome, ".gemini", "antigravity-cli", "settings.json"), "utf8"));
 check("council bridge and memory registered for agy", agyMcp.mcpServers.gencouncil_council?.args?.[0]?.endsWith("bridge.js") && agyMcp.mcpServers.gencouncil?.args?.[0]?.endsWith("server.js"));
 check("their tools allowed without prompts", agySet.permissions.allow.includes("mcp(gencouncil_council/*)") && agySet.permissions.allow.includes("mcp(gencouncil/*)"));
-// Antigravity spends Argon on its own: the chair goes on with Hydrogen on the same login
+// Antigravity spends each model on its own: a spent Neon (the default) leaves Hydrogen on the same login
 process.env.GC_ARGON_SPENT = "1";
 process.env.USERPROFILE = fakeHome;
 const shown = [];
@@ -176,8 +176,8 @@ const m2 = await chairTok.turn("아르곤 한도 소진", (e) => e.kind === "tex
 process.env.USERPROFILE = realProfile;
 delete process.env.GC_ARGON_SPENT;
 const aArgs2 = fs.readFileSync(path.join(rec, "agy-args.txt"), "utf8").replace(/"/g, ""); // arguments reach a batch file quoted
-check("argon quota: same gemini login retried with hydrogen", !m2.isError && aArgs2.includes("--model gemini-4-hydrogen") && council.accounts.get("gemini").status === "ok", JSON.stringify([m2, aArgs2]));
-check("the user is told about the step down", shown.some((t) => /gemini-4-argon 한도 소진 → gemini-4-hydrogen/.test(t)), JSON.stringify(shown));
+check("neon quota: same gemini login retried with hydrogen", !m2.isError && aArgs2.includes("--model gemini-4-hydrogen") && council.accounts.get("gemini").status === "ok", JSON.stringify([m2, aArgs2]));
+check("the user is told about the step down", shown.some((t) => /gemini-4-neon 한도 소진 → gemini-4-hydrogen/.test(t)), JSON.stringify(shown));
 check("chair model now reports hydrogen", chairTok.model() === "gemini-4-hydrogen");
 council.accounts.markOk("gemini");
 council.project.chair.account = "claude";

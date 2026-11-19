@@ -42,7 +42,7 @@ const rejects = (p, re) => p.then(() => false, (e) => re.test(e.message));
 
 // ---- ladders ----
 const lim = normalizeLimits({ claude: { maxMembers: 1, maxModel: "sonnet", maxEffort: "medium" }, gpt: { maxMembers: 0 }, "gemini-web": { maxMembers: 1 } });
-check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 2 && tierOf("gpt", "gpt-6.1-terra") === 1 && tierOf("gemini", "gemini-3.8-flash-high") === 0 && tierOf("gemini", "gemini-2.5-pro") === 2);
+check("full ids map to tiers", tierOf("claude", "claude-opus-5-5") === 2 && tierOf("gpt", "gpt-6.1-sol") === 2 && tierOf("gpt", "gpt-6.1-terra") === 1 && tierOf("gemini", "gemini-3.8-flash-high") === 0 && tierOf("gemini", "gemini-2.5-pro") === 3 && tierOf("gemini", "gemini-4-neon-xhigh") === 2);
 check("default model is the workhorse within limit", resolveModel("claude", undefined, lim.claude) === "sonnet" && resolveModel("gpt", undefined, normalizeLimits({}).gpt) === "gpt-6.1-sol");
 check("model above limit rejected", throws(() => resolveModel("claude", "opus", lim.claude), /above the user's limit/));
 check("unknown model rejected", throws(() => resolveModel("claude", "gpt-6", lim.claude), /unknown claude model/));
@@ -61,7 +61,8 @@ check("terra display name", memberDisplayName({ id: "gpt-2", provider: "gpt", mo
 
 // Hydrogen is the middle workhorse; old Flash/Pro limits keep their meaning.
 check("hydrogen tier and suffix do not match argon", tierOf("gemini", "gemini-4-hydrogen") === 1 && tierOf("gemini", "gemini-4-hydrogen-xhigh") === 1);
-check("gemini workhorse is hydrogen", resolveModel("gemini", undefined, lim.gemini) === "gemini-4-hydrogen");
+check("gemini default is neon, the opus-rank model", resolveModel("gemini", undefined, lim.gemini) === "gemini-4-neon");
+check("a hydrogen limit clamps the default to hydrogen", resolveModel("gemini", undefined, { maxMembers: 1, maxModel: "gemini-4-hydrogen" }) === "gemini-4-hydrogen");
 check("flash limit clamps the workhorse", resolveModel("gemini", undefined, { maxMembers: 1, maxModel: "gemini-3.8-flash" }) === "gemini-3.8-flash");
 const hydrogenLimit = { ...lim.gemini, maxEffort: "xhigh" };
 check("hydrogen permits xhigh within user limit", resolveEffort("gemini", "xhigh", hydrogenLimit, "gemini-4-hydrogen") === "xhigh");

@@ -11,7 +11,7 @@ import { GridSpinner } from "./GridSpinner";
 const CHAIR_MODELS: Record<string, string[]> = {
   claude: ["", "opus", "sonnet", "fable", "haiku"],
   gpt: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6.1-terra", "gpt-6-luna"],
-  gemini: ["gemini-4-argon", "gemini-4-hydrogen", "gemini-3.8-flash"],
+  gemini: ["gemini-4-argon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-3.8-flash"],
 };
 const CHAIR_EFFORTS: Record<string, string[]> = {
   claude: ["", "low", "medium", "high", "xhigh", "max"],
@@ -186,7 +186,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
   const effort = state.chair.effort ?? "";
   const chairProvider = state.chair.provider ?? "claude";
   const MODELS = CHAIR_MODELS[chairProvider] ?? CHAIR_MODELS.claude;
-  const EFFORTS = chairProvider === "gemini" && /hydrogen/i.test(model)
+  const EFFORTS = chairProvider === "gemini" && /hydrogen|neon/i.test(model)
     ? [...CHAIR_EFFORTS.gemini, "xhigh"]
     : CHAIR_EFFORTS[chairProvider] ?? CHAIR_EFFORTS.claude;
   const memberById = new Map(state.members.map((m) => [m.id, m]));
@@ -199,7 +199,7 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
       <div className="chair-head">
         <div className="chair-title">
           <span className="chair-label">의장 · {PROVIDER_LABEL[chairProvider] ?? chairProvider}</span>
-          <select value={MODELS.includes(model) ? model : "custom"} onChange={(e) => e.target.value !== "custom" && onSetChair(e.target.value, chairProvider === "gemini" && effort === "xhigh" && !/hydrogen/i.test(e.target.value) ? "high" : effort)} title="의장 모델 (이 안건에만 적용)">
+          <select value={MODELS.includes(model) ? model : "custom"} onChange={(e) => e.target.value !== "custom" && onSetChair(e.target.value, chairProvider === "gemini" && effort === "xhigh" && !/hydrogen|neon/i.test(e.target.value) ? "high" : effort)} title="의장 모델 (이 안건에만 적용)">
             {MODELS.map((m) => (
               <option key={m} value={m}>{m || "기본 모델"}</option>
             ))}

@@ -38,6 +38,7 @@ check("agy model keeps explicit suffix", agyModelId("gemini-4-argon-low", "high"
 check("hydrogen high suffix", agyModelId("gemini-4-hydrogen", "high") === "gemini-4-hydrogen-high");
 check("hydrogen xhigh and max clamp", agyModelId("gemini-4-hydrogen", "xhigh") === "gemini-4-hydrogen-xhigh" && agyModelId("gemini-4-hydrogen", "max") === "gemini-4-hydrogen-xhigh");
 check("hydrogen explicit xhigh suffix kept once", agyModelId("gemini-4-hydrogen-xhigh", "low") === "gemini-4-hydrogen-xhigh");
+check("neon keeps xhigh and clamps max", agyModelId("gemini-4-neon", "xhigh") === "gemini-4-neon-xhigh" && agyModelId("gemini-4-neon", "max") === "gemini-4-neon-xhigh" && agyModelId("gemini-4-neon-low", "high") === "gemini-4-neon-low");
 check("other gemini models clamp xhigh", agyModelId("gemini-4-argon", "xhigh") === "gemini-4-argon-high" && agyModelId("gemini-3.8-flash-xhigh", "low") === "gemini-3.8-flash-high");
 
 // stream-json from a real `agy -p ... --output-format stream-json` run
@@ -65,7 +66,7 @@ check("agy failed result", makeAgyParser()('{"event":"result","result":{"status"
   const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   reg.blockModel("gemini", "gemini-4-argon", "quota", future);
-  check("a live block steps down to the model below", reg.fitModel("gemini", "gemini-4-argon") === "gemini-4-hydrogen");
+  check("a live block steps down to the model below", reg.fitModel("gemini", "gemini-4-argon") === "gemini-4-neon");
   reg.setModelBlock("gemini", "gemini-4-argon", past);
   check("a block past its reset is over", reg.fitModel("gemini", "gemini-4-argon") === "gemini-4-argon", JSON.stringify(reg.get("gemini")));
 
@@ -76,7 +77,7 @@ check("agy failed result", makeAgyParser()('{"event":"result","result":{"status"
     { group: "Gemini 4 Argon", label: "Gemini 4 Argon Weekly Limit", usedPct: 100, resetsAt: future },
   ] }]);
   check("room on the account clears the old error", reg.get("gemini").status === "ok" && !reg.get("gemini").lastError, JSON.stringify(reg.get("gemini")));
-  check("a spent per-model limit blocks that model only", reg.fitModel("gemini", "gemini-4-argon") === "gemini-4-hydrogen");
+  check("a spent per-model limit blocks that model only", reg.fitModel("gemini", "gemini-4-argon") === "gemini-4-neon");
   applyUsageToAccounts(reg, [{ provider: "gemini", account: "gemini", checkedAt: new Date().toISOString(), weekly: { usedPct: 20 }, details: [
     { group: "Gemini 4 Argon", label: "Gemini 4 Argon Weekly Limit", usedPct: 19 },
   ] }]);
