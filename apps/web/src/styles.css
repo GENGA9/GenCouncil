@@ -496,3 +496,19 @@ button.warn-btn { color: var(--warn); border-color: var(--warn); background: var
 .folder-row .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) { .folder-sum { grid-template-columns: repeat(3, minmax(0, 1fr)); } .folder-row { grid-template-columns: 90px 1fr; } .folder-row .badge { grid-column: 1 / -1; justify-self: start; } }
 .limits-name .badge { margin-left: 6px; }
+
+/* wiki: reviewing the proposals waiting to be registered */
+.wiki-curate-row button.on, .wiki-review-filter button.on { color: var(--accent); border-color: var(--accent); }
+.wiki-review { max-width: 860px; }
+.wiki-review-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wiki-review-head h1 { font-size: 20px; margin: 0; }
+.wiki-review-filter { display: flex; gap: 6px; margin: 10px 0; }
+.wiki-prop { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--panel); }
+.wiki-prop.open { border-color: var(--accent); }
+.wiki-prop-main { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; border: none; background: none; text-align: left; font-weight: 600; }
+.wiki-prop-title { flex: 1; min-width: 0; }
+.wiki-prop-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; }
+.wiki-prop-meta a { color: var(--accent); }
+.wiki-prop-body { white-space: pre-wrap; word-break: break-word; font-family: inherit; margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--event); font-size: 12.5px; line-height: 1.6; max-height: 50vh; overflow: auto; }
+.wiki-prop .wiki-actions { margin: 6px 0 0; justify-content: flex-end; }
+.badge.type-wiki { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }

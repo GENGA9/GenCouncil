@@ -134,7 +134,7 @@ export const api = {
   memoryRecent: () => call<MemoryHit[]>("GET", "/api/memory/recent"),
   memoryEntry: (id: string) => call<MemoryHit & { body: string }>("GET", `/api/memory/entry/${encodeURIComponent(id)}`),
   memoryApprove: (id: string) => call("POST", `/api/memory/entry/${encodeURIComponent(id)}/approve`),
-  memoryReject: (id: string) => call("POST", `/api/memory/entry/${encodeURIComponent(id)}/reject`, {}),
+  memoryReject: (id: string, reason?: string) => call("POST", `/api/memory/entry/${encodeURIComponent(id)}/reject`, reason ? { reason } : {}),
 };
 
 export function connectWs(onMessage: (msg: Record<string, unknown>) => void, onStatus: (up: boolean) => void): () => void {

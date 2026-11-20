@@ -42,6 +42,7 @@ const PAGES: WikiPage[] = [
 
 const hit = (id: string, title: string, type: string, status: string, extra: Partial<MemoryHit> = {}): MemoryHit => ({ id, title, type, status, tags: ["demo"], updated: now, scope: "common", ...extra });
 const PROPOSALS: MemoryHit[] = [
+  hit("wiki-1", "위키 수정: common/git/merge-conflicts — 충돌 뒤 테스트를 꼭 다시 돌린다는 단계 추가", "solution", "proposed", { source: "gpt-2", tags: ["wiki:common/git/merge-conflicts"] }),
   hit("sol-1", "Vite 개발 서버에서 고친 코드가 안 보일 때: 서비스워커 캐시", "solution", "proposed", { source: "claude-3", snippet: "서비스워커를 해제하고 캐시를 지운다…", project: "demo", scope: "project" }),
   hit("con-1", "위원 브랜치는 안건 브랜치에서만 딴다", "convention", "proposed", { source: "chair" }),
   hit("per-1", "Sol은 범위를 좁혀 주면 빠르다", "persona", "proposed", { source: "chair" }),
@@ -92,7 +93,12 @@ export function installDemoApi(models: ModelsInfo, usage: UsageSnapshot): void {
     if (path.startsWith("memory/entry/")) {
       const id = decodeURIComponent(path.split("/")[2] ?? "");
       const h = [...PROPOSALS, ...RECENT].find((x) => x.id === id);
-      if (method !== "GET") return json({ ok: true });
+      if (method !== "GET") {
+        // approve or reject: the proposal leaves the queue
+        const i = PROPOSALS.findIndex((x) => x.id === id);
+        if (i >= 0) PROPOSALS.splice(i, 1);
+        return json({ ok: true });
+      }
       return h ? json({ ...h, body: "## 문제\n\n고친 코드가 화면에 나오지 않는다.\n\n## 해결\n\n서비스워커를 해제하고 캐시를 지운다.\n\n## 적용 방법\n\n개발 서버를 볼 때마다 확인한다." }) : json({ error: "없는 기억입니다" }, 404);
     }
     if (path.startsWith("a/demo/agenda/folders")) {

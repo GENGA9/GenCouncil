@@ -268,3 +268,11 @@
 .vz .vz-skin .gem-optin.on { border-color: rgba(255, 194, 102, 0.55); }
 .vz .vz-skin .gem-title { color: #fff; }
 .app.is-vision .gem-agree, .vz .vz-skin .gem-agree { color: #f3ecd8; }
+/* the proposal review inside the vision sheet */
+.vz .vz-skin .wiki-review-head h1 { font-family: Georgia, "Times New Roman", serif; font-size: 26px; color: #fff6dd; text-shadow: 0 0 20px rgba(255, 224, 158, 0.35); }
+.vz .vz-skin .wiki-prop { border-color: var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.04); }
+.vz .vz-skin .wiki-prop.open { border-color: rgba(255, 224, 158, 0.4); }
+.vz .vz-skin button.wiki-prop-main { padding: 0; border: none; border-radius: 0; background: none; color: #eef0ff; font-size: 13.5px; }
+.vz .vz-skin .wiki-prop-body { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); color: #d9dcf5; }
+.vz .vz-skin .wiki-prop-meta a { color: #b9c6ff; }
+.vz .vz-skin .wiki-curate-row button.on, .vz .vz-skin .wiki-review-filter button.on { color: var(--gold); border-color: rgba(255, 224, 158, 0.6); }

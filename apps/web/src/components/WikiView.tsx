@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "../api";
-import type { CurateStatus, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "../types";
+import type { CurateStatus, MemoryHit, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "../types";
 
 import { buildSections, folderLabel, type Folder } from "../wikiTree";
 
@@ -106,7 +106,7 @@ function Markdown({ text, onLink }: { text: string; onLink: (p: string) => void 
 }
 
 /** Proposal processing registers into the wiki; the full check is Fable reviewing the wiki's changes. */
-function CurateBar({ notify, onDone }: { notify: (m: string) => void; onDone: () => void }) {
+function CurateBar({ notify, onDone, onReview, reviewing, version }: { notify: (m: string) => void; onDone: () => void; onReview: () => void; reviewing: boolean; version: number }) {
   const [status, setStatus] = useState<WikiStatus | null>(null);
   const [curate, setCurate] = useState<CurateStatus | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -135,6 +135,10 @@ function CurateBar({ notify, onDone }: { notify: (m: string) => void; onDone: ()
     void loadStatus();
     return () => window.clearTimeout(t);
   }, []);
+  // a proposal was rejected in the review: the counts change
+  useEffect(() => {
+    if (version) void loadStatus();
+  }, [version]);
 
   const start = async (kind: "register" | "review") => {
     if (
@@ -159,7 +163,10 @@ function CurateBar({ notify, onDone }: { notify: (m: string) => void; onDone: ()
     <div className="wiki-curate">
       <div className="wiki-curate-row">
         <span className="small">
-          등록 대기 <strong>{status?.proposals ?? "…"}</strong> 제안
+          등록 대기 <strong>{status?.proposals ?? "…"}</strong> 제안{" "}
+          <button className={`ghost small ${reviewing ? "on" : ""}`} onClick={onReview} title="제안을 하나씩 읽고, 위키에 넣지 않을 것은 반려합니다">
+            {reviewing ? "제안 닫기" : "제안 검토"}
+          </button>
           {(status?.unmigrated ?? 0) > 0 && <> · 위키로 옮길 기억 <strong>{status!.unmigrated}</strong></>}
           {" · "}점검 뒤 바뀐 페이지 <strong>{status?.changed ?? "…"}</strong>
           {status?.lastReview && <span className="muted"> (지난 점검 {new Date(status.lastReview).toLocaleDateString()})</span>}
@@ -189,6 +196,118 @@ function CurateBar({ notify, onDone }: { notify: (m: string) => void; onDone: ()
   );
 }
 
+const KIND: Record<string, string> = { solution: "해결책", tool: "도구", convention: "규약", account: "계정", persona: "모델 성향", project: "프로젝트" };
+
+/** "위키 수정: common/git/x — 무엇" -> { path: "common/git/x", change: "무엇" } */
+function proposalTarget(h: MemoryHit): { path?: string; change: string } {
+  const path = h.tags.find((t) => t.startsWith("wiki:"))?.slice(5);
+  const m = h.title.match(/^위키 수정: (\S+) — (.*)$/);
+  return { path: path ?? m?.[1], change: m ? m[2] : h.title };
+}
+
+/**
+ * Proposals waiting for the wiki: from members and the chair (wiki_propose: a fix to a page) and
+ * from shared memory (memory_propose: a new fact). Read each one; reject what should not go in.
+ * What is left goes into the wiki when "제안 처리" runs.
+ */
+function ProposalReview({ notify, onOpenPage, onChanged, onClose }: { notify: (m: string) => void; onOpenPage: (p: string) => void; onChanged: () => void; onClose: () => void }) {
+  const [list, setList] = useState<MemoryHit[] | null>(null);
+  const [open, setOpen] = useState<Record<string, string | null>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "wiki" | "memory">("all");
+  useEffect(() => {
+    api.memoryProposals().then(
+      (l) => setList([...l].sort((a, b) => String(b.updated).localeCompare(String(a.updated)))),
+      (e) => notify((e as Error).message),
+    );
+  }, []);
+  const toggle = async (id: string) => {
+    if (id in open) {
+      setOpen(({ [id]: _, ...rest }) => rest);
+      return;
+    }
+    setOpen((o) => ({ ...o, [id]: null }));
+    try {
+      const e = await api.memoryEntry(id);
+      setOpen((o) => ({ ...o, [id]: e.body }));
+    } catch (e) {
+      setOpen((o) => ({ ...o, [id]: `(읽지 못했습니다: ${(e as Error).message})` }));
+    }
+  };
+  const reject = async (h: MemoryHit) => {
+    const reason = prompt(`'${proposalTarget(h).change}' 제안을 반려할까요?\n이유를 적으면 함께 남습니다(비워도 됩니다).`, "");
+    if (reason === null) return;
+    setBusy(h.id);
+    try {
+      await api.memoryReject(h.id, reason.trim() || undefined);
+      setList((l) => (l ?? []).filter((x) => x.id !== h.id));
+      notify("제안을 반려했습니다. 위키에 반영되지 않습니다.");
+      onChanged();
+    } catch (e) {
+      notify((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const shown = (list ?? []).filter((h) => filter === "all" || (filter === "wiki") === Boolean(proposalTarget(h).path));
+  const wikiCount = (list ?? []).filter((h) => proposalTarget(h).path).length;
+  return (
+    <div className="wiki-review">
+      <div className="wiki-review-head">
+        <h1>등록 대기 제안 {list ? list.length : "…"}</h1>
+        <button className="ghost small" onClick={onClose}>닫기</button>
+      </div>
+      <p className="small muted">
+        위원·의장이 낸 위키 수정 제안과 공유 기억 제안입니다. 위키에 넣지 않을 것은 반려하세요. 남겨 둔 제안은 "제안 처리 (위키 등록)"를 누를 때 알맞은 페이지에 합쳐집니다.
+      </p>
+      {list && list.length > 0 && (
+        <div className="wiki-review-filter">
+          <button className={`ghost small ${filter === "all" ? "on" : ""}`} onClick={() => setFilter("all")}>전체 {list.length}</button>
+          <button className={`ghost small ${filter === "wiki" ? "on" : ""}`} onClick={() => setFilter("wiki")}>위키 수정 {wikiCount}</button>
+          <button className={`ghost small ${filter === "memory" ? "on" : ""}`} onClick={() => setFilter("memory")}>기억 {list.length - wikiCount}</button>
+        </div>
+      )}
+      {!list && <div className="muted small">불러오는 중…</div>}
+      {list && list.length === 0 && <div className="muted wiki-empty">기다리는 제안이 없습니다.</div>}
+      {shown.map((h) => {
+        const t = proposalTarget(h);
+        const body = open[h.id];
+        return (
+          <div key={h.id} className={`wiki-prop ${h.id in open ? "open" : ""}`}>
+            <button className="wiki-prop-main" onClick={() => void toggle(h.id)}>
+              <span className={`badge ${t.path ? "type-wiki" : "type-" + h.type}`}>{t.path ? "위키 수정" : (KIND[h.type] ?? h.type)}</span>
+              <span className="wiki-prop-title">{t.change}</span>
+              <span className="wiki-caret">{h.id in open ? "▾" : "▸"}</span>
+            </button>
+            <div className="wiki-prop-meta small muted">
+              {t.path && (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onOpenPage(t.path!);
+                  }}
+                >
+                  {t.path}
+                </a>
+              )}
+              {h.source && <span>제안: {h.source}</span>}
+              {h.project && <span>{h.project}</span>}
+              <span>{new Date(h.updated).toLocaleString()}</span>
+            </div>
+            {h.id in open && (body === null ? <div className="muted small">읽는 중…</div> : <pre className="wiki-prop-body">{body}</pre>)}
+            <div className="wiki-actions">
+              <button className="ghost small danger" disabled={busy === h.id} onClick={() => void reject(h)}>
+                {busy === h.id ? "반려하는 중…" : "반려"}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void; onOpenMemory?: () => void }) {
   const [pages, setPages] = useState<WikiPageMeta[]>([]);
   const [q, setQ] = useState("");
@@ -196,6 +315,8 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
   const [page, setPage] = useState<WikiPage | null>(null);
   const [edit, setEdit] = useState<{ path: string; title: string; summary: string; body: string; isNew: boolean } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [version, setVersion] = useState(0);
 
   const reload = async () => {
     try {
@@ -221,6 +342,7 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
     try {
       setEdit(null);
       setShowHistory(false);
+      setReviewing(false);
       setPage(await api.wikiPage(p));
     } catch (e) {
       notify((e as Error).message);
@@ -264,7 +386,7 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
   const list = hits ?? null;
 
   return (
-    <div className={`center-inner wiki ${page || edit ? "has-page" : ""}`}>
+    <div className={`center-inner wiki ${page || edit || reviewing ? "has-page" : ""}`}>
       <div className="chair-head">
         <div className="chair-title">Gen Wiki <span className="small muted">위원·의장·사용자가 함께 보는 정리된 문서 · {pages.length}쪽</span></div>
         <span className="wiki-curate-actions">
@@ -276,7 +398,7 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
           <button className="ghost small" onClick={() => setEdit({ path: "common/", title: "", summary: "", body: "", isNew: true })}>새 페이지</button>
         </span>
       </div>
-      <CurateBar notify={notify} onDone={() => void reload()} />
+      <CurateBar notify={notify} onDone={() => void reload()} onReview={() => setReviewing((v) => !v)} reviewing={reviewing} version={version} />
       <div className="wiki-layout">
         <nav className="wiki-nav">
           <input className="wiki-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="위키 검색" />
@@ -344,6 +466,10 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
           )}
         </nav>
         <article className="wiki-page">
+          {reviewing ? (
+            <ProposalReview notify={notify} onOpenPage={(p) => void open(p)} onChanged={() => setVersion((v) => v + 1)} onClose={() => setReviewing(false)} />
+          ) : (
+          <>
           {/* only where the list and the page cannot be side by side (the vision sheet on a phone) */}
           {(page || edit) && (
             <button
@@ -408,6 +534,8 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
             </>
           ) : (
             <div className="muted wiki-empty">왼쪽에서 페이지를 고르세요.</div>
+          )}
+          </>
           )}
         </article>
       </div>
