@@ -106,9 +106,9 @@ export function installDemoApi(models: ModelsInfo, usage: UsageSnapshot): void {
     if (path === "accounts" && method === "GET") return json(DEMO_ACCOUNTS.map((a) => (a.provider === "gemini" && !gemini.enabled ? { ...a, status: "disabled" } : a)));
     if (path === "usage") return json(withDetails);
     if (path === "models") return json({ ...models, efforts: ["low", "medium", "high", "xhigh", "max"], defaults });
-    if (/^projects\/[^/]+\/guidelines$/.test(path)) return method === "GET" ? json({ text: "# 업무 분장 가이드라인\n\n- 설계·어려운 디버깅: Opus\n- 주력 구현: Sonnet, Sol\n- 문서·기계적 정리: Terra, Flash\n", path: "D:\\PROJECT\\demo\\.gencouncil\\guidelines.md" }) : json({ ok: true });
+    if (/^projects\/[^/]+\/guidelines$/.test(path)) return method === "GET" ? json({ text: "# 업무 분장 가이드라인\n\n- 설계·어려운 디버깅: Opus\n- 주력 구현: Sonnet, Sol\n- 문서·기계적 정리: Terra, Flash\n", path: "D:\\work\\demo\\.gencouncil\\guidelines.md" }) : json({ ok: true });
     if (/^projects\/[^/]+\/settings$/.test(path)) return json({});
-    if (path === "fs") return json({ path: "D:\\PROJECT", parent: "D:\\", roots: [{ name: "D:", path: "D:\\" }], entries: [{ name: "demo", path: "D:\\PROJECT\\demo", git: true }, { name: "other", path: "D:\\PROJECT\\other" }] });
+    if (path === "fs") return json({ path: "D:\\work", parent: "D:\\", roots: [{ name: "D:", path: "D:\\" }], entries: [{ name: "demo", path: "D:\\work\\demo", git: true }, { name: "other", path: "D:\\work\\other" }] });
     return json({ error: "데모에는 없는 기능입니다" }, 404);
   };
 }

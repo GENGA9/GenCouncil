@@ -19,7 +19,7 @@
 폰의 Telegram으로 의장과 대화하고, 원할 때 의장에게 결과를 받는다. @BotFather로 봇을 만들고 봇에 메시지를 한 번 보낸 뒤:
 
 ```bash
-gencouncil web telegram --token <봇 토큰> --chat <내 chat id> --agenda rf-project-제작위원회/밸런스-안건
+gencouncil web telegram --token <봇 토큰> --chat <내 chat id> --agenda my-game-제작위원회/밸런스-안건
 ```
 
 (chat id는 `https://api.telegram.org/bot<토큰>/getUpdates`의 `message.chat.id`.) `gencouncil web`을 다시 띄우면 봇이 연결된다. **안건별 자동 전송은 기본 켜짐이다.** 텔레그램이 연결돼 있으면 새 안건의 의장 답변·위원 완료·시안·안건 종료 알림과 "결정 대기" 질문(선택 버튼 포함)이 모두 자동으로 온다. 끄면 "결정 대기" 질문만 온다(질문은 꺼도 항상 온다). 꺼진 안건에서 텔레그램으로 받고 싶을 때는 의장에게 "텔레그램으로 보내 줘"(예: "이 시안 텔레그램으로 보내 줘", "방금 질문 텔레그램으로도 물어봐")라고 하면 의장이 `council_telegram` 도구로 글·파일(사진은 사진으로, PDF 등은 문서로, 50MB 초과는 이름만)·질문 선택 버튼을 보낸다. 그 밖에는 보내지 않고, 텔레그램에서 쓴 글에 답할 때도 "텔레그램으로 답해 줘"라고 해야 한다. **안건별 자동 전송 버튼:** 안건 화면 위쪽("안건 종료" 옆)에 텔레그램 아이콘(종이비행기) 버튼이 있다. 텔레그램이 연결돼 있으면 켜짐(파란색, 기본)으로 그 안건의 모든 알림(의장 답변, 위원 완료/실패, 시안 사진·파일, 릴레이 대기, 의장 계정 전환, 안건 종료 메시지)이 텔레그램으로 자동 전송되고, 눌러 끄면(회색) "결정 대기" 질문만 온다. 텔레그램이 연결되지 않았으면 꺼짐 모양으로 비활성 표시된다("텔레그램이 연결되어 있지 않습니다"). 설정은 안건의 `agenda.json`(`telegramAuto`)에 저장되고 서버 재시작이 필요 없다: 값이 없으면 켜짐, `false`일 때만 꺼짐. 텔레그램에서도 그 안건 토픽(DM이면 `/agenda`로 고른 안건)에서 `/auto on`, `/auto off`, `/auto`(상태)로 같은 설정을 바꾼다. 서버 전체 `gencouncil web telegram --auto on`은 "안건 설정보다 우선하는 강제 켜짐"이다(모든 안건이 켜짐, 버튼 잠김). 없애려면 `--auto off`(서버 재시작 필요) — 그러면 안건별 설정(기본 켜짐)으로 돌아간다. 기존 설정에 `--auto`가 없어도 안건은 기본 켜짐이다. 받는 것: `/list` `/agenda <project/slug>` `/status` `/auto`, 그 외 텍스트는 그 안건의 의장에게 `[텔레그램] ` 표시를 붙여 전달된다(`/status`·`/list` 결과와 "의장에게 전달했습니다" 같은 접수 답은 항상 온다). 설정된 chat id 외의 메시지는 무시한다. 사진·영상·파일을 첨부하고 캡션으로 지시할 수 있다(20MB 이하, 연달아 보낸 것은 묶어서 전달: 마지막 메시지 뒤 4초 안에 온 글·첨부를 한 번에 의장에게 보내고, 의장이 처리 중이면 끝날 때까지 최대 30분 기다렸다 전달한다). 의장이 질문을 선택 버튼과 함께 보낸 경우(`ask`) 버튼을 눌러 답할 수 있다. 끄려면 `gencouncil web telegram --off`.
@@ -68,7 +68,7 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
 
 ## 제작위원회 만들기
 
-- **이름**: 프로젝트 이름만 적으면 " 제작위원회"가 자동으로 붙는다 (`RF PROJECT` → `RF PROJECT 제작위원회`).
+- **이름**: 프로젝트 이름만 적으면 " 제작위원회"가 자동으로 붙는다 (`MY GAME` → `MY GAME 제작위원회`).
 - **폴더**: git 저장소가 아니어도 된다. "폴더 선택"으로 PC의 폴더를 고른다.
   - git 저장소(최상위, 커밋 있음)면 그 저장소에서 바로 worktree로 작업한다.
   - 그 밖의 폴더는 그 폴더 안에 **로컬 git**을 만든다(원격 없음, 어디에도 올라가지 않음). 사본은 만들지 않고 그 폴더에서 바로 작업한다.
@@ -263,21 +263,21 @@ npm run dev --workspace @gencouncil/web   # Vite 개발 서버(5173) → 7700으
 ### 사용
 
 ```bash
-gencouncil project add "RF PROJECT 제작위원회" --repo D:\PROJECT\RF --chair-model claude-opus-5-5 --chair-effort high
+gencouncil project add "MY GAME 제작위원회" --repo D:\work\my-game --chair-model claude-opus-5-5 --chair-effort high
 ```
 
 ```bash
-gencouncil agenda add rf-project-제작위원회 "밸런스 안건" --goal "목표 1" --goal "목표 2"
+gencouncil agenda add my-game-제작위원회 "밸런스 안건" --goal "목표 1" --goal "목표 2"
 ```
 
 ```bash
-gencouncil council chat rf-project-제작위원회 밸런스-안건
+gencouncil council chat my-game-제작위원회 밸런스-안건
 ```
 
 채팅에서 그냥 말하면 의장에게 전달된다. 위원이 끝나면 `[council event]`가 자동으로 의장에게 들어가고 의장이 검토·머지한다. REPL 명령: `/status` `/tasks` `/members` `/log <id>` `/merge <id>` `/stop <id>` `/reset` `/quit`. 채팅을 닫으면 실행 중인 위원은 중지된다.
 
 ```bash
-gencouncil council finish rf-project-제작위원회 밸런스-안건     # 안건 브랜치를 베이스에 머지, worktree 정리
+gencouncil council finish my-game-제작위원회 밸런스-안건     # 안건 브랜치를 베이스에 머지, worktree 정리
 ```
 
 의장 없이 위원 하나만 직접 돌려 보려면:

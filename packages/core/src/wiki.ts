@@ -32,7 +32,7 @@ export function defaultWikiDir(): string {
 }
 
 export interface WikiPageMeta {
-  /** e.g. "projects/h3_studio/video-jobs" (no .md) */
+  /** e.g. "projects/video_studio/video-jobs" (no .md) */
   path: string;
   title: string;
   /** one line: what the page answers */
@@ -71,7 +71,7 @@ const MAX_TOC_CHARS = 8_000;
 /** pages longer than this are read by outline and section */
 export const LONG_PAGE = 3_000;
 
-/** "Projects/H3_studio/Video Jobs.md" -> "projects/h3_studio/video-jobs"; throws on anything outside the layout */
+/** "Projects/Video_studio/Video Jobs.md" -> "projects/video_studio/video-jobs"; throws on anything outside the layout */
 export function normalizeWikiPath(p: string): string {
   const parts = p
     .replace(/\\/g, "/")
@@ -96,7 +96,7 @@ export function normalizeWikiPath(p: string): string {
   return parts.join("/");
 }
 
-/** the folder a page sits in ("common", "common/comfyui", "projects/h3_studio", ...) */
+/** the folder a page sits in ("common", "common/comfyui", "projects/video_studio", ...) */
 function sectionOf(p: string): string {
   return p.split("/").slice(0, -1).join("/");
 }

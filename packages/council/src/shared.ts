@@ -6,7 +6,7 @@
  *
  * - Local-git projects always have `_shared/` at the folder root.
  * - Any project can list more folders in `.gencouncil-shared` at its root (one relative path per
- *   line, `#` comments), e.g. `output/abyss_revenge/video`.
+ *   line, `#` comments), e.g. `output/first_film/video`.
  * - Local-git projects also get a pre-commit hook that keeps NEW big media out of commits
  *   (the file stays on disk and is added to the exclude list), so renders saved elsewhere
  *   can't grow the repository again. New projects get it from the start; a project that already

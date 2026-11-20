@@ -78,11 +78,11 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
   };
   return (
     <Modal title="제작위원회 추가" onClose={onClose} wide>
-      <label>프로젝트 이름<input value={name} onChange={(e) => setName(e.target.value)} placeholder="RF PROJECT" autoFocus /></label>
+      <label>프로젝트 이름<input value={name} onChange={(e) => setName(e.target.value)} placeholder="MY GAME" autoFocus /></label>
       {name.trim() && <div className="small muted name-preview">→ {withSuffix(name)}</div>}
       <label>작업 폴더
         <span className="folder-row">
-          <input value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={"D:\\PROJECT\\RF"} />
+          <input value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={"D:\\work\\my-game"} />
           <button className="ghost" type="button" onClick={() => setPicking(true)}>폴더 선택</button>
         </span>
       </label>

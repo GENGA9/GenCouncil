@@ -22,7 +22,7 @@ await store.init();
 const wiki = new WikiStore();
 await wiki.init();
 const v1 = store.write({ title: "ComfyUI 메모리 비우기", type: "tool", body: "/free 를 부른다" });
-const v2 = store.write({ title: "H3 영상 잡 순서", type: "solution", body: "jobs.json 먼저", project: "h3_studio" });
+const v2 = store.write({ title: "영상 잡 순서", type: "solution", body: "jobs.json 먼저", project: "video_studio" });
 const p1 = store.propose({ title: "ComfyUI 큐 확인", type: "tool", body: "/queue 가 비었는지 본다" });
 const editProp = store.propose({ title: "위키 수정: common/comfyui — 포트가 바뀜", type: "solution", body: "이제 8189", tags: ["wiki:common/comfyui"] });
 
@@ -30,7 +30,7 @@ const editProp = store.propose({ title: "위키 수정: common/comfyui — 포�
 const inbox = selectWikiInbox(store, 3);
 check("batch takes proposals first", inbox.proposals.length === 2 && inbox.proposals[0].meta.id === p1.meta.id);
 check("batch fills with pre-wiki memory and counts the rest", inbox.entries.length === 1 && inbox.remaining === 1, `${inbox.entries.length}/${inbox.remaining}`);
-const rp = wikiRegisterPrompt([{ key: "h3_studio", name: "H3" }], selectWikiInbox(store), wiki.renderToc());
+const rp = wikiRegisterPrompt([{ key: "video_studio", name: "Video" }], selectWikiInbox(store), wiki.renderToc());
 check("register prompt lists every item and says how to mark them", [v1, v2, p1, editProp].every((e) => rp.includes(e.meta.id)) && rp.includes("memory_to_wiki"));
 check("wiki edit proposals are shown with their page", rp.includes(`${editProp.meta.id} [위키 수정 제안 → common/comfyui]`));
 
@@ -41,11 +41,11 @@ check("first review sees every page", ch.files.length === 1 && ch.files[0].path 
 saveWikiReviewed(ch.head);
 ch = await wikiChanges();
 check("nothing changed right after a review", ch.files.length === 0);
-await wiki.write("projects/h3_studio/video-jobs", { title: "H3 영상 잡", summary: "순서", body: "jobs.json을 먼저 만든다" }, "claude-1");
+await wiki.write("projects/video_studio/video-jobs", { title: "영상 잡", summary: "순서", body: "jobs.json을 먼저 만든다" }, "claude-1");
 fs.appendFileSync(path.join(wiki.dir, "common", "comfyui.md"), "- 사용자가 파일을 직접 고침\n");
 ch = await wikiChanges();
-check("review sees tool edits and hand edits since the last check", ch.files.map((f) => f.path).sort().join(",") === "common/comfyui,projects/h3_studio/video-jobs", JSON.stringify(ch.files));
-const rv = wikiReviewPrompt([{ key: "h3_studio", name: "H3" }], ch, wiki.renderToc(), wiki.list(), 3);
+check("review sees tool edits and hand edits since the last check", ch.files.map((f) => f.path).sort().join(",") === "common/comfyui,projects/video_studio/video-jobs", JSON.stringify(ch.files));
+const rv = wikiReviewPrompt([{ key: "video_studio", name: "Video" }], ch, wiki.renderToc(), wiki.list(), 3);
 check("review prompt has both parts: change review and cleanup", rv.includes("1부") && rv.includes("2부") && rv.includes("직접 고침") && rv.includes("최대 3개"));
 const quiet = wikiReviewPrompt([], { ...ch, files: [], diff: "" }, "", wiki.list(), 3);
 check("with no changes the review still does the cleanup", quiet.includes("1부는 건너뛰고 2부만"));
@@ -118,7 +118,7 @@ c.close();
 // ---- members drill down: a long page shows its outline first, then one section ----
 const longBody = "## 언제 쓰나\n" + "설명 문장. ".repeat(600) + "\n## 방법\n- /queue 확인 뒤 /prompt\n## 주의할 점\n- 생성 중 /free 금지";
 await wiki.write("common/comfyui/long-guide", { title: "긴 안내", summary: "긴 페이지", body: longBody }, "editor");
-const mem = rpc({ GENCOUNCIL_ROLE: "member", GENCOUNCIL_AGENT: "test-member", GENCOUNCIL_PROJECT: "h3_studio" });
+const mem = rpc({ GENCOUNCIL_ROLE: "member", GENCOUNCIL_AGENT: "test-member", GENCOUNCIL_PROJECT: "video_studio" });
 await mem.send("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } });
 const mcall = async (name, args) => (await mem.send("tools/call", { name, arguments: args })).result.content[0].text;
 const outline = await mcall("wiki_read", { path: "common/comfyui/long-guide" });

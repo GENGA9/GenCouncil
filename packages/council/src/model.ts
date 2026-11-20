@@ -12,7 +12,7 @@ export type ProjectMode = "git" | "folder";
 
 export const COUNCIL_SUFFIX = "제작위원회";
 
-/** "RF PROJECT" -> "RF PROJECT 제작위원회" (unchanged if it already ends with it) */
+/** "MY GAME" -> "MY GAME 제작위원회" (unchanged if it already ends with it) */
 export function councilName(name: string): string {
   const n = name.trim();
   return n.endsWith(COUNCIL_SUFFIX) ? n : `${n} ${COUNCIL_SUFFIX}`;

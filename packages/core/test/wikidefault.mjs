@@ -34,13 +34,20 @@ const PERSONAL = [
   ["a private address", /\b(?:10|100|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/],
   ["an email", /[A-Za-z0-9._%+-]+@(?!local\b)[A-Za-z0-9-]+\.[A-Za-z.]{2,}/],
   ["a NAS", /\bNAS\b|synology|volume1/i],
-  ["a project of the user", /h3[_-]?studio|h3-web-ui|reinforce_project|sns_project|abyss|심연의 복수/i],
   ["a link to a project page", /\]\(projects\//],
   ["a memory id", /\b(?:sol|conv|tool|conv|acc|per)-20\d{6}-/],
   ["an account id", /\bgenga\d/i],
   ["a key or token", /sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|ghp_[A-Za-z0-9]{30,}|\d{8,10}:[A-Za-z0-9_-]{35}/],
   ["a sources line", /^sources:/m],
 ];
+// Words only this PC knows (its own project names, people, places), one per line, kept outside the
+// repo in ~/.gencouncil/private-terms.txt: a public repo must not list them even in a test.
+const termsFile = path.join(process.env.USERPROFILE ?? process.env.HOME ?? os.homedir(), ".gencouncil", "private-terms.txt");
+const terms = fs.existsSync(termsFile) ? fs.readFileSync(termsFile, "utf8").split(/\r?\n/).map((t) => t.trim()).filter((t) => t && !t.startsWith("#")) : [];
+const escape = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+if (terms.length) PERSONAL.push([`a private word (${terms.length} listed in private-terms.txt)`, new RegExp(terms.map(escape).join("|"), "i")]);
+else console.log("(no private-terms.txt on this PC: only the generic checks run)");
+
 for (const [what, re] of PERSONAL) {
   const bad = pages.filter((p) => re.test(p.text)).map((p) => p.path);
   check(`no page has ${what}`, bad.length === 0, bad.join(", "));

@@ -28,9 +28,9 @@ const WORTH = `위키에 올릴 가치 기준: "앞으로 다른 일을 하다�
 - 버린다(일회성): 증상 하나와 그 수정이 짝인 기록(그 수정은 이미 코드에 있다), 함수·파일 하나의 위치, 그 작업의 결과와 수치, 끝난 작업의 경위.`;
 
 const PAGE_RULES = `위키 구조와 쓰는 법
-- 경로: common/<페이지>(어느 프로젝트에서나 쓰는 도구·절차·환경), models/<페이지>(모델 하나의 성향), projects/<프로젝트키>/<페이지>(한 프로젝트의 구조·규칙·절차). 페이지 이름은 영문 소문자와 하이픈(예: common/comfyui, common/windows-shell, models/claude-sonnet, projects/h3_studio/video-jobs).
+- 경로: common/<페이지>(어느 프로젝트에서나 쓰는 도구·절차·환경), models/<페이지>(모델 하나의 성향), projects/<프로젝트키>/<페이지>(한 프로젝트의 구조·규칙·절차). 페이지 이름은 영문 소문자와 하이픈(예: common/comfyui, common/windows-shell, models/claude-sonnet, projects/video_studio/video-jobs).
 - 한 페이지 = 한 주제(도구 하나, 절차 하나, 시스템 하나, 모델 하나). 항목 하나에 페이지 하나가 아니다: 같은 주제의 항목들을 한 페이지에 모은다. 서로 다른 주제를 한 페이지에 묶지도 않는다.
-- 계층: 위원·의장은 위키 전체를 보지 않고 맨 위에서 wiki_toc로 한 단계씩 내려가며 찾는다. 그래서 한 폴더에 바로 든 페이지는 12개 안팎으로 유지한다. 넘으면 주제 폴더로 나눈다: common/<주제>/<페이지>, projects/<프로젝트키>/<주제>/<페이지>(주제 폴더는 한 단계까지, models/는 나누지 않는다). 예: common/comfyui/sam3-mask, common/windows/junction, projects/h3_studio/video/chain-jobs.
+- 계층: 위원·의장은 위키 전체를 보지 않고 맨 위에서 wiki_toc로 한 단계씩 내려가며 찾는다. 그래서 한 폴더에 바로 든 페이지는 12개 안팎으로 유지한다. 넘으면 주제 폴더로 나눈다: common/<주제>/<페이지>, projects/<프로젝트키>/<주제>/<페이지>(주제 폴더는 한 단계까지, models/는 나누지 않는다). 예: common/comfyui/sam3-mask, common/windows/junction, projects/video_studio/video/chain-jobs.
 - 주제 폴더에는 index 페이지(<폴더>/index)를 둔다: summary 한 줄이 "이 폴더에 무엇이 있나"이고, 본문은 폴더 안 페이지 각각 한 줄 안내. 폴더를 볼 때 이 한 줄이 보이므로 갈래를 고르는 단서가 된다.
 - 페이지 summary는 목록에서 이 페이지를 열지 말지 정하는 한 줄이다: 무엇을 할 때 보는 페이지인지 구체적으로.
 - 본문: 맨 위에 2~3줄 개요, 그다음 "## 언제 쓰나 / ## 방법 / ## 주의할 점" 같은 절(주제에 맞게). 긴 페이지는 읽는 쪽이 목차를 보고 필요한 절만 읽으므로, 절 제목을 짧고 구체적으로 쓰고 한 절이 한 가지를 다루게 한다. models/ 페이지는 "## 잘하는 일 / ## 약한 일 / ## 지시에 넣을 문구".

@@ -339,7 +339,7 @@ export async function createServer(store: MemoryStore, wiki: WikiStore = new Wik
         "Gen Wiki를 한 단계씩 내려가며 본다. path 없이 부르면 맨 위(common/, models/, 이 프로젝트의 projects/<프로젝트>/), " +
         "폴더 경로를 주면 그 폴더의 하위 폴더(쪽수)와 페이지(제목·한 줄 요약)만 보여 준다. 필요한 갈래만 따라 내려가고, 찾을 말이 분명하면 wiki_search가 더 빠르다.",
       inputSchema: {
-        path: z.string().optional().describe("볼 폴더 (예: common, common/comfyui, projects/h3_studio). 없으면 맨 위"),
+        path: z.string().optional().describe("볼 폴더 (예: common, common/comfyui, projects/video_studio). 없으면 맨 위"),
         project: z.string().optional().describe("이 프로젝트의 페이지를 함께 보여 준다 (기본: 내 프로젝트)"),
       },
     },
@@ -369,7 +369,7 @@ export async function createServer(store: MemoryStore, wiki: WikiStore = new Wik
       title: "Read Gen Wiki page",
       description:
         `위키 페이지를 읽는다. 짧은 페이지(${LONG_PAGE}자 이하)는 통째로, 긴 페이지는 먼저 목차(## 절 제목과 글자 수)만 준다. ` +
-        "그다음 필요한 절만 section으로 읽는다(예: section: \"방법\"). 통째로 꼭 필요하면 full: true. path 예: common/comfyui, projects/h3_studio/video-jobs",
+        "그다음 필요한 절만 section으로 읽는다(예: section: \"방법\"). 통째로 꼭 필요하면 full: true. path 예: common/comfyui, projects/video_studio/video-jobs",
       inputSchema: {
         path: z.string().min(1),
         section: z.string().optional().describe("읽을 ## 절 제목(앞부분만 맞아도 된다)"),

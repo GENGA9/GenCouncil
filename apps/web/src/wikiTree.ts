@@ -2,7 +2,7 @@
 // tested: packages/web test (apps/web/test/wikitree.mjs) runs it against a real page list.
 import type { WikiPageMeta } from "./types";
 
-/** folder path -> label: "common/comfyui" -> "공용 · comfyui", "projects/h3_studio/video" -> "프로젝트 · h3_studio · video" */
+/** folder path -> label: "common/comfyui" -> "공용 · comfyui", "projects/video_studio/video" -> "프로젝트 · video_studio · video" */
 export const SECTION_LABEL = (s: string): string => {
   const [top, ...rest] = s.split("/");
   const head = top === "common" ? "공용" : top === "models" ? "모델" : top === "projects" ? "프로젝트" : top;
@@ -16,10 +16,10 @@ export type Group = Folder & { subs: Folder[]; total: number };
 
 /**
  * One group per project (or common area), with its deeper folders nested inside — not one group per
- * folder. A project that organises its pages ("projects/h3_studio/storyboard", ".../video", …) was
+ * folder. A project that organises its pages ("projects/video_studio/storyboard", ".../video", …) was
  * otherwise spread over as many sibling rows as it had folders, which reads as several projects of
- * the same name; two of h3_studio's read the same thing once the index titles were cut to fit.
- * The group is the first two path segments ("common/git", "projects/h3_studio"), anything deeper is
+ * the same name; two of video_studio's read the same thing once the index titles were cut to fit.
+ * The group is the first two path segments ("common/git", "projects/video_studio"), anything deeper is
  * a folder inside it. Order follows the page list, which the server sorts by folder then title.
  */
 export function buildSections(pages: WikiPageMeta[]): Group[] {
@@ -44,7 +44,7 @@ export function buildSections(pages: WikiPageMeta[]): Group[] {
 }
 
 /**
- * What a folder's row says. A group keeps the path prefix ("프로젝트 · h3_studio · 심연의 복수 …") so it
+ * What a folder's row says. A group keeps the path prefix ("프로젝트 · video_studio · 첫 작품 …") so it
  * can be told from other projects; a folder nested inside one already sits under that name, so it
  * shows its own title only — repeating the project there is what made two rows read alike.
  */

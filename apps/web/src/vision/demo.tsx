@@ -89,7 +89,7 @@ const OVERVIEW: Overview = {
     {
       id: "demo",
       name: "데모 제작위원회",
-      repo: "D:\\PROJECT\\demo",
+      repo: "D:\\work\\demo",
       baseBranch: "main",
       localGit: true,
       chair: { model: "opus", effort: "high" },
