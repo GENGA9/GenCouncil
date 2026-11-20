@@ -7,6 +7,7 @@ import { AgendaCard, Composer, Console, type Report } from "../vision/Console";
 import { ChairMenu, HouseMenu, MEMBER_STATUS_KO, Popover, WorkerMenu } from "../vision/Menus";
 import { CROWN, SLIDE, VisionRenderer, type VisionEvent } from "../vision/renderer";
 import { VisionSheet, type SheetAt, type SheetTab } from "../vision/Sheet";
+import { UsageMini } from "../vision/UsageMini";
 import { TALL_CARD_BOTTOM, TALL_LABEL, tallFloor } from "../vision/scene";
 import { buildScene, HOUSE_NAME, isActive, laddersFrom, STAGES, stagesOf, TINT, type HouseId, type Rgb, type Scene, type TintId, type WorkerNode } from "../vision/scene";
 import { ModeSwitch } from "./ModeSwitch";
@@ -478,7 +479,29 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
   }, [state, ask, chat, busy]);
 
   const workers = scene ? [...scene.houses.flatMap((h) => h.workers), ...scene.relays] : [];
-  const labels = useMemo(() => (scene ? placeLabels(scene, [...scene.houses.flatMap((h) => h.workers), ...scene.relays]) : new Map<string, Placed>()), [scene]);
+  // the usage widget under the title card: on a tall stage member labels keep out from under it
+  const useEl = useRef<HTMLElement>(null);
+  const [useRect, setUseRect] = useState<Rect | undefined>(undefined);
+  useLayoutEffect(() => {
+    const el = useEl.current;
+    const host = stage.current;
+    if (!el || !host) return;
+    const measure = () => {
+      const a = el.getBoundingClientRect();
+      const b = host.getBoundingClientRect();
+      const r: Rect = [a.left - b.left - 4, a.top - b.top - 4, a.right - b.left + 4, a.bottom - b.top + 4];
+      setUseRect((cur) => (cur && cur.every((v, i) => Math.abs(v - r[i]) < 1) ? cur : r));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
+  const labels = useMemo(
+    () => (scene ? placeLabels(scene, [...scene.houses.flatMap((h) => h.workers), ...scene.relays], scene.portrait ? useRect : undefined) : new Map<string, Placed>()),
+    [scene, useRect],
+  );
   // a wide stage only: on a tall one the chair's words are the panel over the input
   const chairAt = useMemo(() => (scene && !scene.portrait ? chairSpot(scene) : null), [scene]);
   const pasts = scene ? scene.houses.flatMap((h) => h.past.map((p) => ({ ...p, house: h.id }))) : [];
@@ -656,6 +679,9 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
             </div>
           </div>
           {(narrow || !logOpen) && <AgendaCard {...card} />}
+          <span className="vz-use-wrap" ref={useEl as unknown as React.Ref<HTMLSpanElement>}>
+            <UsageMini usage={usage} onOpen={() => openSheet({ tab: "settings" })} />
+          </span>
         </header>
 
         {scene && (

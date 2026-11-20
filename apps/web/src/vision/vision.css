@@ -379,3 +379,23 @@
 .vz .vz-chip.co { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; }
 .vz-chip.co i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
 .vz-chip.co.on i { background: #1c1406; box-shadow: none; }
+
+/* what each company has left: small, 30% see-through, in the top-left corner under the title card */
+.vz-use-wrap { align-self: flex-start; display: block; }
+.vz .vz-use { display: flex; flex-direction: column; gap: 5px; width: 132px; padding: 7px 9px 8px; border-radius: 11px; text-align: left; background: rgba(10, 12, 28, 0.55); border: 1px solid var(--line); backdrop-filter: blur(8px); opacity: 0.7; transition: opacity 0.25s, border-color 0.25s; }
+.vz .vz-use:hover, .vz .vz-use:focus-visible { opacity: 1; border-color: rgba(255, 224, 158, 0.4); }
+.vz-use-row { display: grid; grid-template-columns: 44px 1fr 26px; align-items: center; gap: 6px; }
+.vz-use-name { font-size: 8.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--c); }
+.vz-use-bars { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vz-use-bar { display: block; height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.vz-use-bar.thin { height: 2px; }
+.vz-use-bar i { display: block; height: 100%; border-radius: 999px; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.vz-use-row.low .vz-use-bar i { background: #ff7676; box-shadow: 0 0 6px #ff7676; }
+.vz-use-pct { font-size: 9px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+.vz-use-row.low .vz-use-pct { color: #ff9a9a; }
+.vz-use-note { grid-column: 2 / 4; font-size: 9px; color: var(--dim); }
+.vz-use-row.off .vz-use-name { opacity: 0.5; }
+@container stage (max-width: 700px) {
+  .vz .vz-use { width: 116px; padding: 6px 8px 7px; gap: 4px; }
+  .vz-use-row { grid-template-columns: 40px 1fr 24px; gap: 5px; }
+}
