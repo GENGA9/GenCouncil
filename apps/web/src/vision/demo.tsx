@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { VisionView } from "../components/VisionView";
+import { FolderTidyModal } from "../components/Modals";
 import "../styles.css";
 import type { ChatItem, Member, ModelsInfo, Overview, RuntimeState, Task, UsageSnapshot } from "../types";
 import type { ChairActions, MemberActions, ProjectActions } from "./actions";
@@ -129,6 +130,7 @@ function Demo() {
   const [chairSet, setChairSet] = useState({ model: "claude-opus-5-5", effort: "high" });
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
+  const [tidy, setTidy] = useState(false);
   const [chat, setChat] = useState<ChatItem[]>(() => [
     say("user", "결제 시스템을 새 구조로 옮기자. 회귀 없이 배포 가능한 상태까지."),
     say("assistant", "결제 모듈은 Opus에게, 테스트는 Sonnet에게 맡겼습니다. 동시성 버그는 Sol이 high로 보고 있고, 결과가 오면 제가 합칠지 판단하겠습니다."),
@@ -169,6 +171,7 @@ function Demo() {
       limits: { claude: { maxMembers: 3, maxModel: "opus" }, gpt: { maxMembers: 3, maxModel: "gpt-6.2-sol" }, gemini: { maxMembers: 2, maxModel: "gemini-4-argon" } },
       active: {},
       mode: "git",
+      folders: 23,
     };
   }, [selected, members, busy, chairSet]);
 
@@ -221,6 +224,7 @@ function Demo() {
     onMergeBase: async () => note("메인에 반영했습니다 (데모)"),
     onDismissFinish: async () => undefined,
     onFinish: async () => note("안건 종료 (데모)"),
+    onTidyFolders: () => setTidy(true),
   };
   const memberActions: MemberActions = {
     onOpen: (id) => note(`${id}의 로그 창 (데모)`),
@@ -278,6 +282,7 @@ function Demo() {
         members={memberActions}
         projects={projects}
       />
+      {tidy && <FolderTidyModal agendaKey="demo/agenda" onClose={() => setTidy(false)} onDone={note} />}
       {toast && <div className="toast" style={{ zIndex: 50 }}>{toast}</div>}
     </>
   );

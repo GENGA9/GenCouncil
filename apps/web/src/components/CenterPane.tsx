@@ -18,6 +18,8 @@ export const CHAIR_EFFORTS: Record<string, string[]> = {
   gpt: ["", "low", "medium", "high", "xhigh", "max"],
   gemini: ["", "low", "medium", "high"],
 };
+/** this many member folders on disk and the folder button asks to be pressed */
+export const FOLDERS_MANY = 10;
 export const PROVIDER_LABEL: Record<string, string> = { claude: "클로드", gpt: "GPT", gemini: "제미나이" };
 export const CLI_PROVIDERS = ["claude", "gpt", "gemini"];
 const STATUS_KO: Record<Task["status"], string> = { todo: "대기", doing: "진행", review: "검토", done: "완료", blocked: "막힘" };
@@ -99,10 +101,11 @@ interface Props {
   onDelete: () => Promise<void>;
   onApproveFinish: () => Promise<void>;
   onMergeBase: () => Promise<void>;
+  onTidyFolders: () => void;
   onDismissFinish: () => Promise<void>;
 }
 
-export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onResume, onDismissResume, onFinish, onDelete, onApproveFinish, onDismissFinish, onMergeBase }: Props) {
+export function CenterPane({ state, chat, firstTurn, loading, project, onSend, onSetChair, onReset, onSetAutonomy, onRetrospect, onResume, onDismissResume, onFinish, onDelete, onApproveFinish, onDismissFinish, onMergeBase, onTidyFolders }: Props) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -251,6 +254,11 @@ export function CenterPane({ state, chat, firstTurn, loading, project, onSend, o
           <button className="ghost small" onClick={onReset} title="의장 세션을 새로 시작 (state.md 유지)">세션 초기화</button>
           <button className="ghost small" onClick={onRetrospect} disabled={busy || firstTurn} title="의장이 교훈·모델 성향을 공유 기억에 기록하고 제안을 검토">회고</button>
           <button className="ghost small" onClick={() => void onMergeBase()} disabled={state.agenda.status === "closed"} title="안건을 닫지 않고 지금까지의 결과를 메인(베이스 브랜치)에 합칩니다">메인 반영</button>
+          {(state.folders ?? 0) > 0 && (
+            <button className={`small ${(state.folders ?? 0) >= FOLDERS_MANY ? "warn-btn" : "ghost"}`} onClick={onTidyFolders} title="위원 작업 폴더가 쌓인 것을 확인하고, 아무도 쓰지 않는 폴더를 지웁니다 (브랜치는 남음)">
+              폴더 {state.folders}
+            </button>
+          )}
           <button className={`small ${allDone ? "primary" : "ghost"}`} onClick={onFinish} disabled={state.agenda.status === "closed"}>안건 종료</button>
           <button className="ghost small danger" onClick={onDelete} disabled={busy} title="이 안건을 지웁니다. 대화 기록은 프로젝트의 deleted 폴더로 옮겨집니다">삭제</button>
         </div>

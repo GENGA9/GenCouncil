@@ -1,7 +1,7 @@
 // What opens when something in the picture is touched: the chair's controls, a house's ladder and
 // finished members, a working member's card. The same actions as the workshop, laid out as cards.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CHAIR_EFFORTS, CHAIR_MODELS, CLI_PROVIDERS, PROVIDER_LABEL, TelegramAutoButton } from "../components/CenterPane";
+import { CHAIR_EFFORTS, CHAIR_MODELS, CLI_PROVIDERS, FOLDERS_MANY, PROVIDER_LABEL, TelegramAutoButton } from "../components/CenterPane";
 import { familyOf, memberName, prettyModel } from "../model";
 import type { Member, ProjectOv, RuntimeState, UsageSnapshot } from "../types";
 import type { ChairActions, MemberActions, ProjectActions } from "./actions";
@@ -214,6 +214,7 @@ export function ChairMenu({ state, project, firstTurn, chair, onStop, onClose, o
         <button onClick={run(chair.onRetrospect)} disabled={busy || firstTurn} title="교훈·모델 성향을 공유 기억에 기록"><i>✎</i>회고</button>
         <button onClick={run(chair.onMergeBase)} disabled={closed} title="안건을 닫지 않고 지금까지의 결과를 메인에 합칩니다"><i>⇪</i>메인 반영</button>
         <button className={allDone ? "gold" : ""} onClick={run(chair.onFinish)} disabled={closed}><i>✓</i>안건 종료</button>
+        <button className={(state.folders ?? 0) >= FOLDERS_MANY ? "warn" : ""} onClick={run(chair.onTidyFolders)} disabled={!state.folders} title="쌓인 위원 작업 폴더 정리 (브랜치는 남음)"><i>▣</i>폴더 {state.folders ?? 0}</button>
         <button onClick={run(() => onWorkshop())}><i>▤</i>작업실</button>
         <button className="danger" onClick={run(chair.onDelete)} disabled={busy}><i>✕</i>삭제</button>
       </div>

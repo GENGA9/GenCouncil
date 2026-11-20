@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
-import type { Limits, ProjectOv } from "../types";
+import type { FolderReport, Limits, ProjectOv } from "../types";
 import { FolderPicker } from "./FolderPicker";
 import { LimitsEditor, useModels } from "./LimitsEditor";
 
@@ -389,6 +389,83 @@ export function HandoverModal({ agendaKey, memberId, accounts, onClose, onDone }
       <div className="modal-actions">
         <button className="ghost" onClick={onClose}>취소</button>
         <button className="primary" onClick={submit}>이어받기</button>
+      </div>
+    </Modal>
+  );
+}
+
+const FOLDER_KIND: Record<FolderReport["folders"][number]["kind"], string> = {
+  busy: "작업 중",
+  parked: "재사용 대기",
+  free: "머지됨 · 정리",
+  unmerged: "머지 전 · 정리 (브랜치에 보관)",
+  dirty: "커밋 안 된 변경 · 남김",
+};
+const gb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${mb}MB`);
+
+/**
+ * Member folders of a long agenda: what is on disk and what a tidy removes. Nothing is removed until
+ * the user presses the button; branches always stay, and work not merged yet comes back when needed.
+ */
+export function FolderTidyModal({ agendaKey, onClose, onDone }: { agendaKey: string; onClose: () => void; onDone: (msg: string) => void }) {
+  const [report, setReport] = useState<FolderReport | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.folders(agendaKey).then(setReport, (e) => setErr((e as Error).message));
+  }, [agendaKey]);
+  const c = report?.counts;
+  const est = report?.perFolderMb !== undefined && report.removable ? gb(report.perFolderMb * report.removable) : undefined;
+  const tidy = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await api.tidyFolders(agendaKey);
+      onDone(`위원 폴더 ${r.removed}개를 정리했습니다${est ? ` (약 ${est})` : ""}. 재사용 대기 ${r.kept}개${r.dirty.length ? `, 커밋 안 된 변경이 있는 ${r.dirty.length}개` : ""}${r.locked.length ? `, 사용 중이라 못 지운 ${r.locked.length}개` : ""}는 남겼습니다.`);
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="위원 폴더 정리" onClose={onClose} wide>
+      <p className="small muted">
+        위원마다 저장소의 작업 파일을 통째로 꺼낸 폴더가 하나씩 생깁니다. 안건이 길어지면 이 폴더가 쌓여 디스크를 많이 차지합니다. 정리는 아무도 쓰지 않는 폴더만 지우고, <b>브랜치는 지우지 않습니다</b>. 머지 전 결과도 브랜치에 그대로 있어 나중에 머지할 수 있고, 이어받기·검증을 하면 폴더를 브랜치에서 다시 꺼냅니다. 위원 노트와 캡처는 먼저 보관합니다.
+      </p>
+      {!report && !err && <div className="muted small">폴더를 확인하는 중… (폴더가 많으면 수십 초 걸립니다)</div>}
+      {c && (
+        <>
+          <div className="folder-sum">
+            <div><b>{report!.folders.length}</b><span>전체</span></div>
+            <div className="go"><b>{report!.removable}</b><span>정리할 폴더{est ? ` · 약 ${est}` : ""}</span></div>
+            <div><b>{c.parked}</b><span>재사용 대기</span></div>
+            <div><b>{c.busy}</b><span>작업 중</span></div>
+            <div className={c.dirty ? "warn" : ""}><b>{c.dirty}</b><span>변경 남음</span></div>
+          </div>
+          {report!.perFolderMb !== undefined && <div className="small muted">폴더 하나를 재 보니 약 {gb(report!.perFolderMb)}였습니다. 정리할 양은 그 크기로 어림한 값입니다.</div>}
+          {c.dirty > 0 && <div className="small warn-text">커밋하지 않은 변경이 남은 폴더는 지우지 않습니다. 필요한 변경이면 그 위원을 이어받게 하거나 직접 커밋하세요.</div>}
+          <div className="folder-list">
+            {report!.folders.map((f) => (
+              <div key={f.name} className={`folder-row ${f.kind}`}>
+                <span className="mono">{f.name}</span>
+                <span className="small muted">{f.members.map((m) => `${m.id}${m.merged ? " (머지)" : ` (${m.status})`}`).join(", ")}</span>
+                <span className={`badge ${f.kind === "dirty" ? "warn" : f.kind === "free" || f.kind === "unmerged" ? "ok" : ""}`}>
+                  {FOLDER_KIND[f.kind]}
+                  {f.changed ? ` ${f.changed}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {err && <div className="err">{err}</div>}
+      <div className="modal-actions">
+        <button className="ghost" onClick={onClose}>닫기</button>
+        <button className="primary" disabled={!report || !report.removable || busy} onClick={() => void tidy()}>
+          {busy ? "정리하는 중…" : report ? `${report.removable}개 정리` : "정리"}
+        </button>
       </div>
     </Modal>
   );

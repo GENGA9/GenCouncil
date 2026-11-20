@@ -95,6 +95,13 @@ export function installDemoApi(models: ModelsInfo, usage: UsageSnapshot): void {
       if (method !== "GET") return json({ ok: true });
       return h ? json({ ...h, body: "## 문제\n\n고친 코드가 화면에 나오지 않는다.\n\n## 해결\n\n서비스워커를 해제하고 캐시를 지운다.\n\n## 적용 방법\n\n개발 서버를 볼 때마다 확인한다." }) : json({ error: "없는 기억입니다" }, 404);
     }
+    if (path.startsWith("a/demo/agenda/folders")) {
+      const kinds: string[] = ["busy", "busy", "busy", "parked", "parked", "parked", "parked", ...Array(9).fill("free"), ...Array(6).fill("unmerged"), "dirty"];
+      const folders = kinds.map((kind, i) => ({ name: `claude-${i + 1}`, members: [{ id: `claude-${i + 1}`, status: kind === "busy" ? "running" : "done", merged: kind === "free" || kind === "parked" }], kind, ...(kind === "dirty" ? { changed: 3 } : {}) }));
+      const counts = { busy: 3, parked: 4, free: 9, unmerged: 6, dirty: 1 };
+      if (method === "POST") return json({ removed: 15, kept: 4, busy: 3, dirty: ["claude-23"], locked: [] });
+      return json({ folders, counts, removable: 15, perFolderMb: 2033 });
+    }
     if (path === "settings/gemini") {
       if (method === "PUT") {
         const b = JSON.parse(String(init?.body ?? "{}")) as { enabled?: boolean; accept?: boolean };

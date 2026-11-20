@@ -177,7 +177,7 @@ export function Film({ models, usage }: { models: ModelsInfo; usage: UsageSnapsh
   }, [fire]);
 
   const nothing = async () => undefined;
-  const chair: ChairActions = { onSetChair: nothing, onSetAutonomy: nothing, onReset: nothing, onRetrospect: nothing, onResume: nothing, onDismissResume: nothing, onDelete: nothing, onApproveFinish: nothing, onMergeBase: nothing, onDismissFinish: nothing, onFinish: nothing };
+  const chair: ChairActions = { onSetChair: nothing, onSetAutonomy: nothing, onReset: nothing, onRetrospect: nothing, onResume: nothing, onDismissResume: nothing, onDelete: nothing, onApproveFinish: nothing, onMergeBase: nothing, onDismissFinish: nothing, onFinish: nothing, onTidyFolders: () => undefined };
   const memberActions: MemberActions = { onOpen: () => undefined, onMerge: nothing, onStop: nothing, onRelay: () => undefined, onHandover: () => undefined };
   const projects: ProjectActions = { onNewProject: () => undefined, onNewAgenda: () => undefined, onGuidelines: () => undefined, onSettings: () => undefined };
 

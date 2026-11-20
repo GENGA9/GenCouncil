@@ -13,6 +13,8 @@ export interface ChairActions {
   onMergeBase: () => Promise<void>;
   onDismissFinish: () => Promise<void>;
   onFinish: () => Promise<void>;
+  /** open the member folder tidy */
+  onTidyFolders: () => void;
 }
 
 export interface MemberActions {

@@ -149,6 +149,63 @@ export interface CouncilState {
   mode: "git" | "folder";
   source?: string;
   localGit: boolean;
+  /** member folders on disk (the integration folder not counted): a long agenda piles them up */
+  folders: number;
+}
+
+/** one member folder in a tidy report */
+export interface FolderInfo {
+  /** folder name, e.g. "claude-12" */
+  name: string;
+  members: Array<{ id: string; status: MemberRecord["status"]; merged: boolean }>;
+  /**
+   * busy: someone is working in it; parked: free, kept for the next member to reuse; free: merged and
+   * nothing left, removed by a tidy; unmerged: finished work not merged yet, removed by a tidy (the
+   * branch keeps it and the folder comes back when needed); dirty: changes nobody committed, never removed
+   */
+  kind: "busy" | "parked" | "free" | "unmerged" | "dirty";
+  /** dirty only: how many files changed or new */
+  changed?: number;
+}
+
+export interface FolderReport {
+  folders: FolderInfo[];
+  counts: Record<FolderInfo["kind"], number>;
+  /** what a tidy would remove */
+  removable: number;
+  /** a measured folder's size, to estimate what a tidy frees (undefined when nothing could be measured) */
+  perFolderMb?: number;
+}
+
+/** size of a folder's own files (links into shared folders and .git not followed), within a time budget */
+function folderSizeMb(dir: string, budgetMs = 6000): number | undefined {
+  const until = Date.now() + budgetMs;
+  let bytes = 0;
+  const walk = (d: string): boolean => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return true;
+    }
+    for (const e of entries) {
+      if (Date.now() > until) return false;
+      if (e.name === ".git") continue;
+      const p = path.join(d, e.name);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(p);
+      } catch {
+        continue;
+      }
+      if (st.isSymbolicLink()) continue;
+      if (st.isDirectory()) {
+        if (!walk(p)) return false;
+      } else bytes += st.size;
+    }
+    return true;
+  };
+  return walk(dir) ? Math.round(bytes / 1048576) : undefined;
 }
 
 /** merged member folders kept per agenda for new members to reuse; the rest are removed */
@@ -428,6 +485,7 @@ export class Council extends EventEmitter {
       mode: this.project.mode ?? "git",
       source: this.project.source,
       localGit: Boolean(this.project.localGit),
+      folders: this.folderGroups().length,
     };
   }
 
@@ -953,6 +1011,7 @@ ${rows.join("\n")}`;
     if (prev.handoverTo) throw new Error(`member ${memberId} was already handed over to ${prev.handoverTo}`);
     // check before changing any record, so a failed handover leaves nothing half-done
     if (prev.worktreeReleased) throw new Error(`member ${memberId}: 결과가 이미 안건 브랜치에 합쳐져 작업 폴더를 정리했거나 다른 위원에게 넘겼습니다. 이어서 할 일은 새로 배정하세요.`);
+    await this.restoreTidiedFolder(prev);
     if (!fs.existsSync(path.join(prev.worktree, ".council"))) throw new Error(`member ${memberId}: 작업 폴더가 없습니다 (${prev.worktree})`);
     const max =this.project.members.maxHandovers ?? 2;
     if (!opts.resume && this.handoverCount(prev) >= max) throw new Error(`task ${prev.taskId} already handed over ${max} times`);
@@ -1068,6 +1127,7 @@ ${rows.join("\n")}`;
     if (prev.verifiedBy) throw new Error(`member ${memberId} is already being checked by ${prev.verifiedBy}`);
     if (prev.status !== "done") throw new Error(`member ${memberId} is ${prev.status}; only finished work can be checked`);
     if (prev.worktreeReleased) throw new Error(`member ${memberId}: 결과가 이미 안건 브랜치에 합쳐져 작업 폴더를 정리했거나 다른 위원에게 넘겼습니다. 검증은 합친 결과를 새로 배정해 하세요.`);
+    await this.restoreTidiedFolder(prev);
     if (!fs.existsSync(path.join(prev.worktree, ".council"))) throw new Error(`member ${memberId}: 작업 폴더가 없습니다 (${prev.worktree})`);
     const limits = this.limits();
     const pick = this.chooseAccount("claude", undefined, []);
@@ -1658,7 +1718,7 @@ ${rows.join("\n")}`;
     for (const m of this.members()) groups.set(m.worktree, [...(groups.get(m.worktree) ?? []), m]);
     const integration = path.resolve(this.store.integrationWorktree());
     return [...groups]
-      .filter(([w, ms]) => path.resolve(w) !== integration && !ms.some((m) => m.worktreeReleased) && fs.existsSync(w))
+      .filter(([w, ms]) => path.resolve(w) !== integration && !ms.some((m) => m.worktreeReleased || m.worktreeTidied) && fs.existsSync(w))
       .map(([worktree, members]) => ({ worktree, members, ended: members.map((m) => m.endedAt ?? m.startedAt).sort().pop() ?? "" }))
       .sort((a, b) => b.ended.localeCompare(a.ended));
   }
@@ -1767,6 +1827,114 @@ ${rows.join("\n")}`;
     }
     if (removed) this.log(`removed ${removed} merged member worktree(s), kept ${kept} for reuse`);
     return removed;
+  }
+
+  /** what a folder is to a tidy (see FolderInfo.kind; parked is decided by the caller) */
+  private async folderKind(worktree: string, ms: MemberRecord[]): Promise<{ kind: Exclude<FolderInfo["kind"], "parked">; changed?: number }> {
+    if (ms.some((m) => this.running.has(m.id) || m.status === "starting" || m.status === "running" || m.status === "waiting")) return { kind: "busy" };
+    try {
+      const status = (await git(worktree, ["status", "--porcelain"])).split("\n").filter((l) => l.trim());
+      // the council's own notes are archived before a removal; anything else would be lost
+      const changed = status.filter((l) => !/^\?\? \.council\//.test(l) && !/^\?\? "?\.council\/?"?$/.test(l));
+      if (changed.length) return { kind: "dirty", changed: changed.length };
+      const ahead = (await logRange(this.project.repo, this.store.agenda().branch, ms[0].branch)).length;
+      return { kind: ms.some((m) => m.merged) && ahead === 0 ? "free" : "unmerged" };
+    } catch {
+      // git could not read it (a half-removed folder): treat it like changes, never remove it blind
+      return { kind: "dirty" };
+    }
+  }
+
+  /** every member folder of this agenda and what a tidy would do with it */
+  async folderReport(keep = PARKED_FOLDERS): Promise<FolderReport> {
+    const groups = this.folderGroups();
+    const kinds = new Array<{ kind: Exclude<FolderInfo["kind"], "parked">; changed?: number }>(groups.length);
+    // a few at a time: a long agenda has dozens of folders, each a git status
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, groups.length) }, async () => {
+        while (next < groups.length) {
+          const i = next++;
+          kinds[i] = await this.folderKind(groups[i].worktree, groups[i].members);
+        }
+      }),
+    );
+    let parked = 0;
+    const folders: FolderInfo[] = groups.map((g, i) => {
+      let kind: FolderInfo["kind"] = kinds[i].kind;
+      // the newest free folders stay for new members to move into
+      if (kind === "free" && parked < keep) {
+        parked++;
+        kind = "parked";
+      }
+      return { name: path.basename(g.worktree), members: g.members.map((m) => ({ id: m.id, status: m.status, merged: Boolean(m.merged) })), kind, ...(kinds[i].changed ? { changed: kinds[i].changed } : {}) };
+    });
+    const counts = { busy: 0, parked: 0, free: 0, unmerged: 0, dirty: 0 } as FolderReport["counts"];
+    for (const f of folders) counts[f.kind]++;
+    const sample = groups.find((_, i) => folders[i].kind === "free" || folders[i].kind === "unmerged") ?? groups[0];
+    return { folders, counts, removable: counts.free + counts.unmerged, perFolderMb: sample ? folderSizeMb(sample.worktree) : undefined };
+  }
+
+  /**
+   * Remove every member folder nobody needs: merged ones beyond the few kept for reuse, and finished
+   * work not merged yet (its branch keeps it; the folder comes back for a handover or a check).
+   * Folders someone works in and folders with uncommitted changes are never touched. Notes and
+   * shots are archived first, branches are never deleted.
+   */
+  async tidyFolders(keep = PARKED_FOLDERS): Promise<{ removed: number; kept: number; busy: number; dirty: string[]; locked: string[] }> {
+    const report = await this.folderReport(keep);
+    const byName = new Map(this.folderGroups().map((g) => [path.basename(g.worktree), g]));
+    let removed = 0;
+    const locked: string[] = [];
+    for (const f of report.folders) {
+      if (f.kind !== "free" && f.kind !== "unmerged") continue;
+      const g = byName.get(f.name);
+      if (!g || this.claimed.has(g.worktree)) continue;
+      this.claimed.add(g.worktree);
+      try {
+        // things may have moved since the report: look again right before removing
+        const now = await this.folderKind(g.worktree, g.members);
+        if (now.kind !== f.kind) continue;
+        if (f.kind === "free") this.releaseFolder(g.worktree);
+        else this.tidyFolder(g.worktree);
+        await removeWorktree(this.project.repo, g.worktree);
+        if (fs.existsSync(g.worktree)) locked.push(f.name);
+        else removed++;
+      } finally {
+        this.claimed.delete(g.worktree);
+      }
+    }
+    if (removed) this.log(`folder tidy: removed ${removed} member folder(s), kept ${report.counts.parked} for reuse${locked.length ? `, ${locked.length} in use` : ""}`);
+    return { removed, kept: report.counts.parked, busy: report.counts.busy, dirty: report.folders.filter((f) => f.kind === "dirty").map((f) => f.name), locked };
+  }
+
+  /** Archive a folder whose work is not merged yet and mark its members so the folder can come back. */
+  private tidyFolder(worktree: string): void {
+    this.archiveCouncilFiles(worktree);
+    const shots = this.archiveShots(worktree);
+    const members = this.members();
+    for (const m of members) {
+      if (m.worktree !== worktree) continue;
+      m.worktreeTidied = new Date().toISOString();
+      if (m.shots) m.shots = m.shots.map((s) => shots.get(s) ?? s);
+    }
+    this.saveMembers(members);
+  }
+
+  /** A folder a tidy removed comes back from its branch, with its notes, before a handover or a check. */
+  private async restoreTidiedFolder(prev: MemberRecord): Promise<void> {
+    if (!prev.worktreeTidied || fs.existsSync(prev.worktree)) return;
+    await ensureWorktree(this.project.repo, prev.worktree, prev.branch, this.store.agenda().branch);
+    const archived = this.archiveDir(prev.worktree);
+    const council = path.join(prev.worktree, ".council");
+    fs.mkdirSync(council, { recursive: true });
+    if (fs.existsSync(archived)) for (const f of fs.readdirSync(archived)) if (f.endsWith(".md")) fs.copyFileSync(path.join(archived, f), path.join(council, f));
+    this.linkSharedInto(prev.worktree);
+    const members = this.members();
+    for (const m of members) if (m.worktree === prev.worktree) m.worktreeTidied = undefined;
+    this.saveMembers(members);
+    prev.worktreeTidied = undefined;
+    this.log(`brought back ${path.basename(prev.worktree)}'s folder from its branch`);
   }
 
   /** Copy .council/shots/ next to the archived notes. Returns old path -> archived path. */

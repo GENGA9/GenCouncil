@@ -1,4 +1,4 @@
-import type { Account, Attachment, CurateStatus, GeminiOptIn, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "./types";
+import type { Account, Attachment, CurateStatus, FolderReport, GeminiOptIn, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -125,6 +125,8 @@ export const api = {
   telegram: () => call<{ configured: boolean; user?: string; autoNotify: boolean }>("GET", "/api/telegram"),
   setTelegramAuto: (key: string, on: boolean) => call<{ ok: boolean; telegramAuto: boolean }>("POST", `${a(key)}/telegram-auto`, { on }),
   dismissFinish: (key: string) => call<{ ok: boolean }>("POST", `${a(key)}/finish/dismiss`),
+  folders: (key: string) => call<FolderReport>("GET", `${a(key)}/folders`),
+  tidyFolders: (key: string) => call<{ removed: number; kept: number; busy: number; dirty: string[]; locked: string[] }>("POST", `${a(key)}/folders/tidy`),
   mergeBase: (key: string) => call<{ ok: boolean; output: string; notIncluded: string[] }>("POST", `${a(key)}/merge-base`),
   retrospect: (key: string) => call<{ ran: boolean; isError: boolean; text: string }>("POST", `${a(key)}/retrospect`),
   memorySearch: (q: string, all: boolean) => call<MemoryHit[]>("GET", `/api/memory/search?q=${encodeURIComponent(q)}&all=${all ? 1 : 0}`),

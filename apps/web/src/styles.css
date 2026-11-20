@@ -481,4 +481,18 @@ button.tg-auto:disabled.on { opacity: 1; }
 .gem-agree { margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--warn); background: var(--warn-soft); color: var(--text); font-size: 13px; line-height: 1.5; align-items: flex-start; }
 .gem-agree input { margin-top: 3px; }
 .limits-row.space-off { opacity: 0.55; }
+
+/* member folder tidy */
+button.warn-btn { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+.folder-sum { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0 8px; }
+.folder-sum > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--event); }
+.folder-sum b { font-size: 20px; }
+.folder-sum span { font-size: 11px; color: var(--muted); }
+.folder-sum .go { border-color: var(--ok); }
+.folder-sum .warn { border-color: var(--warn); }
+.folder-list { margin-top: 10px; max-height: 42vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.folder-row { display: grid; grid-template-columns: 120px 1fr auto; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.folder-row:last-child { border-bottom: none; }
+.folder-row .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) { .folder-sum { grid-template-columns: repeat(3, minmax(0, 1fr)); } .folder-row { grid-template-columns: 90px 1fr; } .folder-row .badge { grid-column: 1 / -1; justify-self: start; } }
 .limits-name .badge { margin-left: 6px; }

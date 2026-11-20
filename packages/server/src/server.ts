@@ -623,6 +623,17 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     rt.council.clearWaiting();
     return { ok: true };
   });
+  // member folders: what a long agenda has piled up, and a tidy that removes the ones nobody needs
+  on("GET", "/api/a/:id/:slug/folders", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    return rt.council.folderReport();
+  });
+  on("POST", "/api/a/:id/:slug/folders/tidy", async ({ params }) => {
+    const rt = await getRuntime(params.id, params.slug);
+    const r = await rt.council.tidyFolders();
+    broadcast({ type: "state", key: `${params.id}/${params.slug}` });
+    return r;
+  });
   on("POST", "/api/a/:id/:slug/merge-base", async ({ params }) => {
     const rt = await getRuntime(params.id, params.slug);
     let out: string;

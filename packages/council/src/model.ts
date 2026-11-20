@@ -196,6 +196,11 @@ export interface MemberRecord {
   merged?: boolean;
   /** when the folder left this member after its work was merged: removed, or reused by a new member (the branch stays) */
   worktreeReleased?: string;
+  /**
+   * when a folder tidy removed this member's folder while its work was not merged yet. The branch
+   * and the notes (archive/) stay, so a handover or a check checks the folder out again.
+   */
+  worktreeTidied?: string;
   error?: string;
   /** cut off by an app shutdown / agenda close; can be resumed */
   interrupted?: boolean;

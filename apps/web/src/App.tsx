@@ -12,7 +12,7 @@ import { VisionView } from "./components/VisionView";
 import { reloadGemini } from "./components/GeminiOptIn";
 import type { ChairActions, MemberActions, ProjectActions } from "./vision/actions";
 import type { VisionEvent } from "./vision/renderer";
-import { GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
+import { FolderTidyModal, GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
 import type { Attachment, ChatItem, Member, Overview, RuntimeState, TranscriptEntry, UploadHooks, UsageSnapshot } from "./types";
 
 const MEMORY_KEY = "__memory__";
@@ -70,6 +70,7 @@ export function App() {
     | { kind: "member"; id: string }
     | { kind: "relay"; id: string }
     | { kind: "handover"; id: string }
+    | { kind: "folders"; key: string }
   >(null);
   const [toast, setToast] = useState("");
   const uploaded = useRef(new WeakMap<File, Attachment>());
@@ -485,6 +486,9 @@ export function App() {
       void refreshState(selected);
       void refreshOverview();
     },
+    onTidyFolders: () => {
+      if (selected) setModal({ kind: "folders", key: selected });
+    },
     onFinish: async () => {
       if (!selected || !confirm("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?")) return;
       if (!confirm("안건을 종료할까요? 의장이 회고(교훈·모델 성향을 공유 기억에 제안)를 먼저 하고, 안건 브랜치를 베이스 브랜치에 합친 뒤 닫습니다.")) return;
@@ -627,6 +631,16 @@ export function App() {
           site={state?.members.find((m) => m.id === modal.id)?.site}
           onClose={() => setModal(null)}
           onDone={(m) => { notify(m); void refreshState(selected); }}
+        />
+      )}
+      {modal?.kind === "folders" && (
+        <FolderTidyModal
+          agendaKey={modal.key}
+          onClose={() => setModal(null)}
+          onDone={(m) => {
+            notify(m);
+            void refreshState(modal.key);
+          }}
         />
       )}
       {modal?.kind === "handover" && selected && (

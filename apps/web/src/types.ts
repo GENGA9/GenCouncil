@@ -172,6 +172,20 @@ export interface Member {
   endedAt?: string;
 }
 
+/** one member folder of an agenda, and what a tidy does with it */
+export interface FolderInfo {
+  name: string;
+  members: Array<{ id: string; status: Member["status"]; merged: boolean }>;
+  kind: "busy" | "parked" | "free" | "unmerged" | "dirty";
+  changed?: number;
+}
+export interface FolderReport {
+  folders: FolderInfo[];
+  counts: Record<FolderInfo["kind"], number>;
+  removable: number;
+  perFolderMb?: number;
+}
+
 export interface RuntimeState {
   key: string;
   project: { id: string; name: string; repo: string; baseBranch: string };
@@ -187,6 +201,8 @@ export interface RuntimeState {
   active: Record<string, number>;
   mode: "git" | "folder";
   source?: string;
+  /** member folders on disk (absent on an older server) */
+  folders?: number;
   /** work cut off by an app shutdown or agenda close */
   resume?: {
     members: Array<{ id: string; provider: string; model?: string; taskId: string; taskTitle: string }>;
