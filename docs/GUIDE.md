@@ -170,7 +170,7 @@ Antigravity처럼 폴더를 직접 편집하는 도구는 위원 worktree(`.work
 ## 3단계: 웹 UI + 모바일
 
 ```bash
-gencouncil web            # http://localhost:7700 (기본: 모든 인터페이스에 바인딩, 토큰 필요)
+gencouncil web            # http://localhost:7700 (기본: 이 PC 안 127.0.0.1에만 열림, 토큰 필요)
 ```
 
 ```bash
@@ -225,8 +225,8 @@ gencouncil web token      # 접속 토큰 (처음 실행 때 ~/.gencouncil/serve
 ### 폰에서 쓰기 (Tailscale)
 
 1. PC와 폰에 Tailscale을 설치해 같은 tailnet에 넣는다.
-2. PC에서 `gencouncil web`. 시작 로그에 `http://<pc>.<tailnet>.ts.net:7700` 주소가 뜬다. 폰 브라우저에서 열고 토큰을 입력하면 바로 쓸 수 있다.
-3. 홈 화면에 **PWA로 설치**하려면 HTTPS가 필요하다. PC에서 한 번만:
+2. PC에서 `gencouncil web`. 서버는 기본으로 이 PC 안(127.0.0.1)에만 열리므로, 다른 기기는 `tailscale serve`가 만든 HTTPS 주소로 들어온다(시작 로그에 주소와 처음 한 번 실행할 명령이 뜬다).
+3. PC에서 한 번만 실행한다. 이 주소는 홈 화면에 **PWA로 설치**할 때 필요한 HTTPS도 갖춘다:
 
 ```bash
 tailscale serve --bg 7700
@@ -234,7 +234,7 @@ tailscale serve --bg 7700
 
    그러면 `https://<pc>.<tailnet>.ts.net` 로 접속되고(인증서는 Tailscale이 발급), 브라우저 메뉴의 "홈 화면에 추가"가 독립 앱으로 설치된다. 서비스워커는 앱 셸만 캐시하고 API/WS는 캐시하지 않는다.
 
-보안: API·WebSocket·MCP 경로는 모두 토큰이 있어야 한다(쿠키 또는 `Authorization: Bearer`). 정적 UI만 토큰 없이 내려간다. 집 Wi-Fi에 노출하고 싶지 않으면 `gencouncil web --host 127.0.0.1` 로 띄우고 `tailscale serve`로만 내보낸다.
+보안: API·WebSocket·MCP 경로는 모두 토큰이 있어야 한다(쿠키 또는 `Authorization: Bearer`). 정적 UI만 토큰 없이 내려간다. 기본값(127.0.0.1)이면 집 Wi-Fi에도 열리지 않고 `tailscale serve`로만 나간다. 같은 네트워크의 다른 기기에서 바로 열어야 하면 `gencouncil web --host 0.0.0.0`으로 띄운다(그만큼 노출 범위가 넓어진다).
 
 ### 개발
 
