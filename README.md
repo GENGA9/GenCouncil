@@ -2,10 +2,10 @@
 
 # ✦ GenCouncil
 
-**Claude · GPT · Gemini를 한 팀으로 묶는 멀티 AI 개발 공의회**
+**Claude · GPT · Gemini를 한 팀으로 묶는 로컬 멀티 AI 오케스트레이터**
 
-의장 AI가 일을 나눠 각 회사의 알맞은 모델에게 맡기고, 결과를 검토해 하나로 합칩니다.<br>
-A multi-AI council: a chair model splits the work across Claude, GPT and Gemini members and merges what they deliver.
+의장 AI가 일을 나눠 각 회사의 알맞은 모델에게 동시에 맡기고, 결과를 검토해 하나로 합칩니다.<br>
+A local multi-AI orchestrator: a chair model splits the work across Claude, GPT and Gemini members, runs them in parallel and merges what they deliver.
 
 <img src="docs/media/gencouncil-mobile.gif" width="300" alt="GenCouncil 시각화 모드: 의장을 Opus로 바꾸고, 지시를 보내자 다섯 모델에게 일이 나뉘는 장면">
 
@@ -17,7 +17,12 @@ A multi-AI council: a chair model splits the work across Claude, GPT and Gemini 
 
 ## 무엇인가요
 
-AI 코딩 도구는 각자 잘하는 일이 다릅니다. 빠르고 싼 모델, 꼼꼼한 모델, 어려운 설계를 끝까지 풀어내는 모델이 따로 있습니다. GenCouncil은 이들을 **"제작위원회"** 로 묶어 한 프로젝트에서 같이 일하게 합니다.
+GenCouncil은 내 PC에서 도는 **멀티 AI 오케스트레이터**입니다. AI 코딩 도구는 각자 잘하는 일이 다릅니다. 빠르고 싼 모델, 꼼꼼한 모델, 어려운 설계를 끝까지 풀어내는 모델이 따로 있습니다. GenCouncil은 이들을 **"제작위원회"** 로 묶고, 누가 무엇을 언제 맡을지 조율해 한 프로젝트에서 같이 일하게 합니다.
+
+오케스트레이션은 두 층으로 나뉩니다.
+
+- **판단은 AI가**: 의장 모델이 일을 쪼개고, 작업마다 회사 · 모델 · 추론 수준을 고르고, 결과를 검토해 합칠지 다시 시킬지 정합니다.
+- **실행 관리는 GenCouncil이**: 위원 프로세스 실행과 중지, worktree 격리, 사용자가 정한 한도 지키기, 계정 · 한도 소진 시 이어받기, 진행 상황과 보고를 의장에게 전달하는 일은 서버가 맡습니다.
 
 - **의장(Chair)** 은 사용자와 대화하며 목표를 정하고, 일을 작업 단위로 쪼개, 작업마다 가장 알맞은 회사·모델·추론 수준을 골라 **위원(Member)** 에게 맡깁니다.
 - **위원** 은 각자 독립된 git worktree와 브랜치에서 일하고, 끝나면 결과를 보고합니다. 여러 위원이 동시에 일해도 서로의 파일을 건드리지 않습니다.
