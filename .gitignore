@@ -5,3 +5,10 @@ dist/
 *.log
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
+
+# personal notes that must never be pushed (wiki classification lists private page titles)
+private/
+
+# local tooling and large media kept out of the public repo
+.claude/
+promo/*.mp4
