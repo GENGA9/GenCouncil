@@ -14,6 +14,9 @@ if (process.platform !== "win32") {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-chair-"));
 process.env.GENCOUNCIL_HOME = path.join(tmp, "home");
+
+// these checks run Gemini members as a user who switched Gemini (Antigravity CLI) on would
+(await import("@gencouncil/council")).setGeminiEnabled(true, true);
 const bin = path.join(tmp, "bin");
 fs.mkdirSync(bin);
 fs.writeFileSync(

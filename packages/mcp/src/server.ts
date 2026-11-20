@@ -498,7 +498,7 @@ export async function serveStdio(): Promise<void> {
   const store = new MemoryStore({ watch: true });
   await store.init();
   const wiki = new WikiStore();
-  await wiki.init();
+  await wiki.init({ seed: true });
   const server = await createServer(store, wiki);
   const transport = new StdioServerTransport();
   await server.connect(transport);

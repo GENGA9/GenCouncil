@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { api } from "../api";
 import type { Limits, ModelsInfo } from "../types";
+import { useGemini } from "./GeminiOptIn";
 
 const LABEL: Record<string, string> = {
   claude: "클로드",
@@ -23,7 +24,9 @@ export function useModels(): ModelsInfo | null {
 /** Per-provider caps: how many at once, the highest model and the highest effort the chair may use. */
 export function LimitsEditor({ value, onChange }: { value: Limits; onChange: (v: Limits) => void }) {
   const models = useModels();
+  const gemini = useGemini();
   if (!models) return <div className="muted small">모델 목록 불러오는 중…</div>;
+  const geminiOff = gemini?.enabled === false;
   const set = (key: string, patch: Partial<Limits[string]>) => onChange({ ...value, [key]: { ...value[key], ...patch } });
   return (
     <div className="limits">
@@ -37,8 +40,11 @@ export function LimitsEditor({ value, onChange }: { value: Limits; onChange: (v:
         const l = value[p.id] ?? models.defaults[p.id];
         return (
           <Fragment key={p.id}>
-          <div className="limits-row">
-            <span className={`limits-name fam-${p.id}`}>{LABEL[p.id] ?? p.id}</span>
+          <div className={`limits-row ${p.id === "gemini" && geminiOff ? "space-off" : ""}`} title={p.id === "gemini" && geminiOff ? "공간 설정에서 꺼져 있어 이 한도와 상관없이 쓰지 않습니다 (계정 화면에서 켤 수 있음)" : undefined}>
+            <span className={`limits-name fam-${p.id}`}>
+              {LABEL[p.id] ?? p.id}
+              {p.id === "gemini" && geminiOff && <span className="badge">꺼짐</span>}
+            </span>
             <input type="number" min={0} max={20} value={l.maxMembers} onChange={(e) => set(p.id, { maxMembers: Number(e.target.value) })} />
             <select value={l.maxModel ?? ""} disabled={l.maxMembers === 0} onChange={(e) => set(p.id, { maxModel: e.target.value })}>
               {p.models.map((m) => (
@@ -83,6 +89,7 @@ export function LimitsEditor({ value, onChange }: { value: Limits; onChange: (v:
           </div>
         );
       })}
+      {geminiOff && <div className="small muted">제미나이(안티그래비티)는 공간 전체에서 꺼져 있어, 여기 한도와 상관없이 쓰지 않습니다. 켜려면 계정 화면에서 위험 고지를 읽고 직접 켜세요.</div>}
       <div className="small muted">0명이면 그 종류는 쓰지 않습니다. 의장이 이 한도 안에서 작업마다 모델·추론 수준·advisor를 고릅니다.</div>
     </div>
   );

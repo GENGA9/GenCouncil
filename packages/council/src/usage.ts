@@ -6,6 +6,7 @@
  * Every reader is best effort; a failure becomes an `error` string for the UI.
  */
 import { spawn } from "node:child_process";
+import { geminiEnabled } from "./optin.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -167,6 +168,8 @@ export function parseAgyUsage(text: string): UsageData {
 }
 
 export async function geminiUsage(home?: string): Promise<UsageData> {
+  // reading the quota runs agy too
+  if (!geminiEnabled()) return { error: "꺼짐 (설정에서 켤 수 있음)" };
   const exe = findExecutable("agy");
   if (!exe) return { error: "Antigravity CLI(agy) 없음" };
   const env = { ...process.env, ...(home ? { HOME: home, USERPROFILE: home } : {}) };

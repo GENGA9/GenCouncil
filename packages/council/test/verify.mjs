@@ -8,6 +8,9 @@ import { AgendaStore, Council, ProjectRegistry, drivers, memberEventText } from 
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-verify-"));
 process.env.GENCOUNCIL_HOME = path.join(tmp, "home");
+
+// these checks run Gemini members as a user who switched Gemini (Antigravity CLI) on would
+(await import("@gencouncil/council")).setGeminiEnabled(true, true);
 const repo = path.join(tmp, "repo");
 fs.mkdirSync(repo);
 const sh = (args, cwd = repo) => execFileSync("git", args, { cwd, encoding: "utf8" });

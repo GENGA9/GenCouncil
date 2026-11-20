@@ -3,6 +3,7 @@ import { familyColorByName } from "../model";
 import type { AgendaOv, Overview, UsageSnapshot } from "../types";
 import { THEME_LABEL, useTheme } from "../theme";
 import { GridSpinner } from "./GridSpinner";
+import { ModeSwitch, type Mode } from "./ModeSwitch";
 import { UsagePanel } from "./UsagePanel";
 
 interface Props {
@@ -21,6 +22,8 @@ interface Props {
   live?: { key: string; chairBusy: boolean; families: string[] };
   /** usage pushed over the websocket */
   usage?: UsageSnapshot | null;
+  mode: Mode;
+  onMode: (mode: Mode) => void;
 }
 
 /** spinner color for an agenda: the chair (claude) when it is thinking, else the first running family */
@@ -57,7 +60,7 @@ function readOpenArchives(): string[] {
   }
 }
 
-export function LeftPane({ overview, selected, memoryKey, wikiKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live, usage }: Props) {
+export function LeftPane({ overview, selected, memoryKey, wikiKey, accountsKey, wsUp, onSelect, onNewProject, onNewAgenda, onGuidelines, onSettings, live, usage, mode, onMode }: Props) {
   const ts = overview?.server.tailscale;
   const [theme, cycleTheme] = useTheme();
   const [openArchives, setOpenArchives] = useState<string[]>(readOpenArchives);
@@ -82,6 +85,7 @@ export function LeftPane({ overview, selected, memoryKey, wikiKey, accountsKey, 
           <span className={`dot ${wsUp ? "up" : ""}`} title={wsUp ? "실시간 연결됨" : "연결 끊김"} />
         </span>
       </div>
+      <ModeSwitch mode={mode} onChange={onMode} />
 
       <div className="tree">
         {overview?.projects.length === 0 && <div className="muted small">프로젝트가 없습니다. 아래에서 추가하세요.</div>}

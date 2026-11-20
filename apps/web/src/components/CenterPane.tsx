@@ -8,18 +8,18 @@ const fmtSize = (n: number) => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)}G
 import { GridSpinner } from "./GridSpinner";
 
 /** chair models per CLI; the chair runs on whatever CLI its account belongs to */
-const CHAIR_MODELS: Record<string, string[]> = {
+export const CHAIR_MODELS: Record<string, string[]> = {
   claude: ["", "opus", "sonnet", "fable", "haiku"],
   gpt: ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.1-terra", "gpt-6-luna"],
   gemini: ["gemini-4-argon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-3.8-flash"],
 };
-const CHAIR_EFFORTS: Record<string, string[]> = {
+export const CHAIR_EFFORTS: Record<string, string[]> = {
   claude: ["", "low", "medium", "high", "xhigh", "max"],
   gpt: ["", "low", "medium", "high", "xhigh", "max"],
   gemini: ["", "low", "medium", "high"],
 };
-const PROVIDER_LABEL: Record<string, string> = { claude: "클로드", gpt: "GPT", gemini: "제미나이" };
-const CLI_PROVIDERS = ["claude", "gpt", "gemini"];
+export const PROVIDER_LABEL: Record<string, string> = { claude: "클로드", gpt: "GPT", gemini: "제미나이" };
+export const CLI_PROVIDERS = ["claude", "gpt", "gemini"];
 const STATUS_KO: Record<Task["status"], string> = { todo: "대기", doing: "진행", review: "검토", done: "완료", blocked: "막힘" };
 
 /** Telegram paper-plane logo (circle with the plane); on = Telegram blue filled, off = grey outline */
@@ -41,7 +41,7 @@ let telegramInfo: Promise<TelegramInfo> | undefined;
 const loadTelegramInfo = () => (telegramInfo ??= api.telegram().catch((): TelegramInfo => ({ configured: false, autoNotify: false })));
 
 /** Per-agenda switch for sending every notification to Telegram automatically (on by default; pending questions always go). Disabled and shown off while Telegram is not connected. */
-function TelegramAutoButton({ agendaKey, on, closed, onError }: { agendaKey: string; on: boolean; closed: boolean; onError: (msg: string) => void }) {
+export function TelegramAutoButton({ agendaKey, on, closed, onError }: { agendaKey: string; on: boolean; closed: boolean; onError: (msg: string) => void }) {
   const [info, setInfo] = useState<TelegramInfo | null>(null);
   const [pending, setPending] = useState<boolean | null>(null);
   useEffect(() => {

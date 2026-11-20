@@ -115,6 +115,15 @@ export function NewProjectModal({ onClose, onCreate }: { onClose: () => void; on
 }
 
 export function ProjectSettingsModal({ project, onClose, onSaved }: { project: ProjectOv; onClose: () => void; onSaved: (msg: string) => void }) {
+  return (
+    <Modal title={`${project.name} 설정`} onClose={onClose} wide>
+      <ProjectSettingsForm project={project} onClose={onClose} onSaved={onSaved} />
+    </Modal>
+  );
+}
+
+/** The fields of a project's settings. In a modal `onClose` closes it after saving; inline there is none. */
+export function ProjectSettingsForm({ project, onClose, onSaved }: { project: ProjectOv; onClose?: () => void; onSaved: (msg: string) => void }) {
   const models = useModels();
   const [name, setName] = useState(project.name.replace(/\s*제작위원회$/, ""));
   const [folder, setFolder] = useState(project.repo);
@@ -142,7 +151,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
         members: { autonomy, limits, verifyGeminiFlash: verifyFlash },
       });
       onSaved(r.scanSummary ? `설정을 저장했습니다. ${r.scanSummary}` : "설정을 저장했습니다. 의장의 다음 턴부터 적용됩니다.");
-      onClose();
+      onClose?.();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -150,7 +159,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
     }
   };
   return (
-    <Modal title={`${project.name} 설정`} onClose={onClose} wide>
+    <>
       <label>프로젝트 이름<input value={name} onChange={(e) => setName(e.target.value)} /></label>
       {name.trim() && <div className="small muted name-preview">→ {withSuffix(name)}</div>}
       <label>작업 폴더
@@ -189,11 +198,11 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: { project: P
       {limits && <LimitsEditor value={limits} onChange={setLimits} />}
       {err && <div className="err">{err}</div>}
       <div className="modal-actions">
-        <button className="ghost" onClick={onClose}>취소</button>
+        {onClose && <button className="ghost" onClick={onClose}>취소</button>}
         <button className="primary" onClick={save} disabled={busy || !name.trim() || !folder.trim()}>{busy ? "저장 중…" : "저장"}</button>
       </div>
       {picking && <FolderPicker start={folder || undefined} onClose={() => setPicking(false)} onPick={(p) => { setFolder(p); setPicking(false); }} />}
-    </Modal>
+    </>
   );
 }
 
@@ -222,23 +231,53 @@ export function NewAgendaModal({ projectId, onClose, onCreate }: { projectId: st
 }
 
 export function GuidelinesModal({ projectId, onClose, notify }: { projectId: string; onClose: () => void; notify: (m: string) => void }) {
-  const [text, setText] = useState("");
-  const [file, setFile] = useState("");
-  useEffect(() => {
-    api.guidelines(projectId).then((r) => {
-      setText(r.text);
-      setFile(r.path);
-    });
-  }, [projectId]);
   return (
     <Modal title="업무 분장 가이드라인" onClose={onClose} wide>
+      <GuidelinesForm projectId={projectId} onClose={onClose} notify={notify} />
+    </Modal>
+  );
+}
+
+/** The guidelines editor. In a modal `onClose` closes it after saving; inline there is none. */
+export function GuidelinesForm({ projectId, onClose, notify }: { projectId: string; onClose?: () => void; notify: (m: string) => void }) {
+  const [text, setText] = useState("");
+  const [file, setFile] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    api.guidelines(projectId).then(
+      (r) => {
+        if (!alive) return;
+        setText(r.text);
+        setFile(r.path);
+        setLoaded(true);
+      },
+      (e) => alive && notify((e as Error).message),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [projectId]);
+  const save = async () => {
+    try {
+      await api.saveGuidelines(projectId, text);
+      notify("가이드라인 저장. 의장의 다음 턴부터 반영됩니다.");
+      onClose?.();
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  };
+  return (
+    <>
       <div className="small muted mono">{file}</div>
       <textarea className="editor" rows={22} value={text} onChange={(e) => setText(e.target.value)} />
       <div className="modal-actions">
-        <button className="ghost" onClick={onClose}>닫기</button>
-        <button className="primary" onClick={async () => { await api.saveGuidelines(projectId, text); notify("가이드라인 저장. 의장의 다음 턴부터 반영됩니다."); onClose(); }}>저장</button>
+        {onClose && <button className="ghost" onClick={onClose}>닫기</button>}
+        {/* never save over the file with the empty text of a load that has not come back */}
+        <button className="primary" disabled={!loaded} onClick={() => void save()}>저장</button>
       </div>
-    </Modal>
+    </>
   );
 }
 

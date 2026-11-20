@@ -115,11 +115,19 @@ export interface UsageSnapshot {
   items: AccountUsage[];
 }
 
+/** Gemini through Antigravity CLI: off until the user accepts the terms risk */
+export interface GeminiOptIn {
+  enabled: boolean;
+  acceptedAt?: string;
+}
+
 export interface Overview {
   projects: ProjectOv[];
   memory: { verified: number; proposed: number };
   accounts: Account[];
   server: { host: string; port: number; tailscale: Tailscale };
+  /** absent on a server older than the setting */
+  gemini?: GeminiOptIn;
 }
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "blocked";

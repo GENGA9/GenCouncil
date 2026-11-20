@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { AccountUsage, UsageSnapshot, UsageWindow } from "../types";
+import { useGemini } from "./GeminiOptIn";
 
 const ORDER: Array<{ id: AccountUsage["provider"]; label: string; color: string }> = [
   { id: "claude", label: "Claude", color: "var(--c-claude)" },
@@ -9,7 +10,7 @@ const ORDER: Array<{ id: AccountUsage["provider"]; label: string; color: string 
 ];
 
 /** "2시간 10분 후" / "3일 후" */
-function until(iso?: string): string {
+export function until(iso?: string): string {
   if (!iso) return "";
   const ms = new Date(iso).getTime() - Date.now();
   if (!Number.isFinite(ms)) return "";
@@ -62,6 +63,7 @@ export function UsagePanel({ pushed }: { pushed?: UsageSnapshot | null }) {
   }, [pushed]);
 
   const items = snap?.items ?? [];
+  const geminiOff = useGemini()?.enabled === false;
   return (
     <div className="usage-panel">
       <div className="usage-head small muted">
@@ -76,7 +78,7 @@ export function UsagePanel({ pushed }: { pushed?: UsageSnapshot | null }) {
           return (
             <div key={p.id} className="usage-acct">
               <div className="usage-name" style={{ color: p.color }}>{p.label}</div>
-              <div className="muted usage-err">{snap ? "계정 없음" : "확인 중…"}</div>
+              <div className="muted usage-err">{p.id === "gemini" && geminiOff ? "꺼짐" : snap ? "계정 없음" : "확인 중…"}</div>
             </div>
           );
         }

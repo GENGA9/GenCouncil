@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { assertGeminiEnabled, GEMINI_OFF, geminiEnabled } from "./optin.js";
 import path from "node:path";
 import os from "node:os";
 import { WikiStore } from "@gencouncil/core";
@@ -264,6 +265,11 @@ export class Chair {
       const store = this.council.store;
       store.appendTranscript({ role: "user", text: shownText ?? message, ...(attachments.length ? { attachments } : {}) });
       let account = this.currentAccount();
+      if (account.provider === "gemini" && !geminiEnabled()) {
+        const text = `이 안건의 의장은 제미나이(안티그래비티) 계정 ${account.id}로 정해져 있는데 제미나이가 꺼져 있습니다. 의장 카드에서 Claude나 GPT로 바꾸세요. ${GEMINI_OFF}`;
+        store.appendTranscript({ role: "assistant", text, isError: true });
+        return { text, isError: true };
+      }
       const tried: string[] = [];
       let res: Awaited<ReturnType<Chair["runOnce"]>> | undefined;
       for (let attempt = 0; attempt <= MAX_ACCOUNT_SWITCHES; attempt++) {
@@ -448,6 +454,7 @@ export class Chair {
    * memory server registered there pick this agenda from the process env. The prompt goes on stdin.
    */
   private agyLaunch(message: string, resume: string | undefined, account: Account): ChairLaunch {
+    assertGeminiEnabled();
     const store = this.council.store;
     const accountEnv = this.council.accounts.env(account);
     ensureAgyCouncil(accountEnv.USERPROFILE ?? os.homedir());

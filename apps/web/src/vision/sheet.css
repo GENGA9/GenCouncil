@@ -1,0 +1,270 @@
+/* The workshop's pages opened over the picture: wiki, memory, accounts, settings.
+   The first half is the sheet and the settings page, laid out for this mode. The second half
+   ("the skin") dresses the workshop's own components and dialogs in the night sky's colours. */
+
+/* ---- the two buttons beside the mode switch ---- */
+.vz-nav { display: flex; align-items: center; gap: 8px; }
+.vz-dock { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--ink); border: 1px solid var(--line); backdrop-filter: blur(10px); }
+.vz .vz-dock button { position: relative; display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 12px; color: var(--dim); white-space: nowrap; transition: color 0.2s, background 0.25s, box-shadow 0.25s; }
+.vz .vz-dock button i { font-style: normal; color: var(--gold); opacity: 0.8; }
+.vz .vz-dock button:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.vz .vz-dock button:active { transform: scale(0.94); }
+.vz .vz-dock button.on { color: #fff7e2; background: linear-gradient(135deg, rgba(255, 224, 158, 0.26), rgba(150, 130, 255, 0.24)); box-shadow: inset 0 0 0 1px rgba(255, 224, 158, 0.42); }
+.vz-dock em { position: absolute; right: -5px; top: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px; font-style: normal; font-size: 9px; font-weight: 600; line-height: 15px; text-align: center; color: #1c1406; background: #ffc266; box-shadow: 0 0 10px rgba(255, 194, 102, 0.6); }
+.vz-id { row-gap: 10px; }
+/* a phone has no room for the name beside the switches: the mark alone */
+@container stage (max-width: 480px) {
+  .vz-brand-name { display: none; }
+  .vz-brand .vz-mark { margin-right: 0; font-size: 14px; }
+  .vz-id { gap: 10px; flex-wrap: nowrap; }
+  .vz-nav { gap: 6px; min-width: 0; }
+  .vz .mode-switch button { padding: 5px 11px; }
+  .vz .vz-dock button { padding: 5px 10px; gap: 5px; }
+}
+
+/* ---- the sheet ---- */
+.vz-sheet-back { position: absolute; inset: 0; z-index: 9; background: radial-gradient(120% 90% at 50% 40%, rgba(5, 6, 14, 0.5), rgba(5, 6, 14, 0.84)); animation: vz-fade 0.3s both; }
+.vz-sheet {
+  position: absolute; z-index: 10; inset: 22px; margin: auto; max-width: 1240px; max-height: 920px;
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden; border-radius: 26px; user-select: text;
+  background:
+    radial-gradient(70% 55% at 0% 0%, rgba(150, 130, 255, 0.17), transparent 62%),
+    radial-gradient(60% 45% at 100% 0%, rgba(255, 224, 158, 0.1), transparent 62%),
+    linear-gradient(172deg, rgba(22, 24, 52, 0.975), rgba(8, 9, 22, 0.985));
+  border: 1px solid rgba(255, 224, 158, 0.24);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.75), 0 0 90px rgba(150, 130, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  animation: vz-sheet-open 0.38s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+@keyframes vz-sheet-open { from { opacity: 0; transform: translateY(26px) scale(0.975); } to { opacity: 1; transform: none; } }
+.vz-sheet-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 13px 14px 12px 16px; border-bottom: 1px solid var(--line); }
+.vz-tabs { display: flex; gap: 2px; padding: 3px; min-width: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.vz .vz-tabs button { flex: none; display: flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px; font-size: 13px; color: var(--dim); white-space: nowrap; transition: color 0.2s, background 0.25s, box-shadow 0.25s; }
+.vz .vz-tabs button i { font-style: normal; color: var(--gold); opacity: 0.65; }
+.vz .vz-tabs button:hover { color: #fff; }
+.vz .vz-tabs button.on { color: #fff7e2; background: linear-gradient(135deg, rgba(255, 224, 158, 0.26), rgba(150, 130, 255, 0.24)); box-shadow: inset 0 0 0 1px rgba(255, 224, 158, 0.42), 0 0 18px rgba(255, 224, 158, 0.14); }
+.vz .vz-tabs button.on i { opacity: 1; }
+.vz-tabs em { font-style: normal; font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: var(--dim); }
+.vz-tabs em.warn { background: rgba(255, 194, 102, 0.2); color: #ffc266; }
+.vz .vz-sheet-close { flex: none; margin-left: auto; width: 32px; height: 32px; border-radius: 50%; font-size: 12px; color: var(--dim); background: rgba(255, 255, 255, 0.07); transition: background 0.2s, transform 0.2s; }
+.vz .vz-sheet-close:hover { color: #fff; background: rgba(255, 255, 255, 0.16); transform: rotate(90deg); }
+.vz-sheet-body { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: vz-fade 0.32s both; }
+.vz-sheet-body > .center-inner { flex: 1; height: auto; }
+
+/* ---- settings ---- */
+.vz-set { flex: 1; min-height: 0; display: flex; }
+.vz-set-rail { flex: none; width: 248px; padding: 16px 12px; display: flex; flex-direction: column; gap: 3px; border-right: 1px solid var(--line); background: rgba(0, 0, 0, 0.14); overflow-y: auto; scrollbar-width: thin; }
+.vz-set-rail-title { margin: 16px 10px 5px; font-size: 10px; letter-spacing: 0.24em; color: var(--dim); }
+.vz .vz-set-rail button { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 12px; text-align: left; font-size: 13px; color: #d9dcf5; transition: background 0.2s, color 0.2s, box-shadow 0.2s; }
+.vz .vz-set-rail button:hover { background: rgba(255, 255, 255, 0.07); }
+.vz .vz-set-rail button.on { color: #fff7e2; background: linear-gradient(90deg, rgba(255, 224, 158, 0.2), rgba(150, 130, 255, 0.1)); box-shadow: inset 0 0 0 1px rgba(255, 224, 158, 0.34); }
+.vz-set-rail button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vz-set-rail button > i:not(.vz-live) { flex: none; width: 8px; font-style: normal; font-size: 11px; color: var(--gold); text-align: center; }
+.vz-set-rail button > em { flex: none; font-style: normal; font-size: 10px; color: var(--dim); }
+.vz .vz-set-rail button.vz-set-add { margin-top: 10px; justify-content: center; color: var(--dim); border: 1px dashed rgba(255, 255, 255, 0.2); }
+.vz .vz-set-rail button.vz-set-add:hover { color: #fff; border-color: rgba(255, 224, 158, 0.5); }
+.vz-set-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 24px 34px 40px; scrollbar-width: thin; animation: vz-fade 0.3s both; }
+.vz-set-pane > * { max-width: 880px; }
+.vz-set-head { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-bottom: 18px; }
+.vz-set-head h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 28px; font-weight: 600; color: #fff6dd; text-shadow: 0 0 22px rgba(255, 224, 158, 0.35); overflow-wrap: anywhere; }
+.vz-set-head p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dim); overflow-wrap: anywhere; }
+.vz-set-head p.mono { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+.vz-set-sec { margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
+.vz-set-sec > h3 { margin: 0; display: flex; align-items: center; gap: 10px; min-height: 24px; font-size: 10px; font-weight: 600; letter-spacing: 0.24em; text-transform: none; color: var(--dim); }
+.vz .vz-set-refresh { width: 24px; height: 24px; border-radius: 50%; font-size: 13px; letter-spacing: 0; color: var(--dim); background: rgba(255, 255, 255, 0.07); }
+.vz .vz-set-refresh:hover:not(:disabled) { color: #fff; background: rgba(255, 255, 255, 0.16); }
+.vz-usage-when { font-weight: 400; letter-spacing: 0.04em; opacity: 0.8; }
+.vz-usage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.vz-usage-card { display: flex; flex-direction: column; gap: 11px; padding: 14px 16px 15px; border-radius: 18px; background: linear-gradient(160deg, color-mix(in srgb, var(--c) 15%, rgba(255, 255, 255, 0.03)), rgba(255, 255, 255, 0.03) 70%); border: 1px solid color-mix(in srgb, var(--c) 36%, rgba(255, 255, 255, 0.08)); box-shadow: 0 0 30px color-mix(in srgb, var(--c) 9%, transparent); }
+.vz-usage-card > b { font-size: 12px; font-weight: 600; letter-spacing: 0.24em; color: var(--c); }
+.vz-usage-none, .vz-usage-reset { font-size: 11px; color: var(--dim); }
+.vz-usage-reset { font-size: 10px; }
+.vz-usage-details { margin-top: 2px; font-size: 11px; color: var(--dim); }
+.vz-usage-details summary { cursor: pointer; padding: 2px 0; }
+.vz-usage-details summary:hover { color: #fff; }
+.vz-usage-group { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.vz-bar.wide em { width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vz-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.vz .vz-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding: 14px 16px; border-radius: 18px; text-align: left; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+.vz .vz-tile:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 224, 158, 0.42); transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 22px rgba(255, 224, 158, 0.1); }
+.vz-tile i { font-style: normal; font-size: 18px; color: var(--gold); }
+.vz-tile b { font-size: 14px; font-weight: 600; }
+.vz-tile span { max-width: 100%; font-size: 11px; color: var(--dim); }
+.vz-tile span.warn { color: #ffc266; }
+.vz-set-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.vz-set-row > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vz-set-row b { font-size: 13px; font-weight: 600; }
+.vz-set-row span:not(.vz-conn) { font-size: 11px; line-height: 1.5; color: var(--dim); overflow-wrap: anywhere; }
+.vz-set-row .vz-conn { flex: none; }
+.vz-set-row .vz-pill { flex: none; white-space: nowrap; }
+.vz-seg { display: inline-flex; max-width: 100%; gap: 2px; padding: 3px; margin-bottom: 20px; border-radius: 999px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.vz .vz-seg button { flex: none; padding: 6px 16px; border-radius: 999px; font-size: 12px; color: var(--dim); white-space: nowrap; transition: color 0.2s, background 0.25s; }
+.vz .vz-seg button:hover { color: #fff; }
+.vz .vz-seg button.on { color: #1c1406; font-weight: 600; background: linear-gradient(135deg, #ffe9b8, #ffcf7a); box-shadow: 0 0 16px rgba(255, 214, 140, 0.35); }
+.vz-set-note { margin: 0 0 12px; font-size: 12px; line-height: 1.6; color: var(--dim); }
+.vz-set-form { display: flex; flex-direction: column; }
+.vz .vz-set-form label { margin-bottom: 14px; }
+.vz .vz-set-form > .small.muted { margin: -6px 0 18px; line-height: 1.6; }
+.vz .vz-set-form > .name-preview { margin-top: -8px; }
+.vz .vz-set-form > .check-row { margin-bottom: 10px; color: #e8eaff; }
+.vz .vz-set-form > textarea.editor { margin-top: 8px; line-height: 1.6; }
+.vz .vz-set-form .modal-actions { position: sticky; bottom: -40px; margin: 14px -6px 0; padding: 14px 6px 16px; background: linear-gradient(180deg, transparent, rgba(11, 12, 28, 0.96) 38%); }
+.vz-set-agendas { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.vz-set-agendas > .vz-set-sec { align-self: stretch; margin-top: 14px; }
+.vz-set-list { align-self: stretch; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); }
+.vz .vz-set-list .vz-picker-row { padding: 10px; }
+.vz .vz-picker-row.closed .vz-picker-title { color: var(--dim); }
+
+/* a phone: the sheet is the whole screen, the settings rail a row of chips */
+.vz.narrow .vz-sheet { inset: max(8px, env(safe-area-inset-top)) 0 0 0; max-width: none; max-height: none; border-radius: 22px 22px 0 0; border-width: 1px 0 0; padding-bottom: env(safe-area-inset-bottom); animation-name: vz-sheet-in; }
+.vz.narrow .vz-sheet-head { padding: 10px 10px 10px 10px; gap: 8px; }
+.vz.narrow .vz-tabs { flex: 1; }
+.vz.narrow .vz-tabs button { flex: 1; justify-content: center; gap: 5px; padding: 8px 6px; }
+.vz.narrow .vz-set { flex-direction: column; }
+.vz.narrow .vz-set-rail { width: auto; flex-direction: row; align-items: center; gap: 6px; padding: 10px 12px; border-right: none; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.vz.narrow .vz-set-rail-title { display: none; }
+.vz.narrow .vz-set-rail button { flex: none; padding: 7px 13px; border-radius: 999px; background: rgba(255, 255, 255, 0.05); }
+.vz.narrow .vz-set-rail button > span { flex: none; overflow: visible; }
+.vz.narrow .vz-set-rail button.vz-set-add { margin-top: 0; background: none; }
+.vz.narrow .vz-set-pane { padding: 18px 16px 30px; }
+.vz.narrow .vz-set-head h2 { font-size: 23px; }
+.vz.narrow .vz-usage { grid-template-columns: 1fr; }
+.vz.narrow .vz-tiles { gap: 8px; }
+.vz.narrow .vz-tile { padding: 12px 10px; }
+.vz.narrow .vz-set-form .modal-actions { bottom: -30px; }
+@media (prefers-reduced-motion: reduce) {
+  .vz-sheet, .vz-sheet-back, .vz-sheet-body, .vz-set-pane { animation-duration: 0.01s; }
+  .vz .vz-sheet-close:hover, .vz .vz-tile:hover { transform: none; }
+}
+
+/* ================= the skin =================
+   The workshop's components (wiki, memory, accounts, the settings forms) inside the sheet, and the
+   workshop's dialogs (member log, relay, new project…) while the vision mode is on. They read their
+   colours from the workshop's variables, so most of it is giving those variables night values. */
+:is(.vz .vz-skin, .app.is-vision .modal-bg) {
+  --bg: rgba(255, 255, 255, 0.06); --panel: rgba(255, 255, 255, 0.055); --border: rgba(255, 255, 255, 0.11); --border-strong: rgba(255, 255, 255, 0.2);
+  --text: #e8eaff; --muted: rgba(214, 220, 255, 0.62); --accent: #ffe09e; --accent-soft: rgba(255, 224, 158, 0.14); --on-accent: #1c1406;
+  --ok: #46e6a8; --ok-soft: rgba(70, 230, 168, 0.14); --warn: #ffc266; --warn-soft: rgba(255, 194, 102, 0.16); --danger: #ff8f8f;
+  --run: #b6a5ff; --run-soft: rgba(150, 130, 255, 0.18); --event: rgba(255, 255, 255, 0.06);
+  --c-claude: rgb(255, 150, 104); --c-gemini: rgb(122, 152, 255); --c-gpt: rgb(62, 226, 178); --c-relay: rgb(196, 156, 255);
+  --gold: #ffe09e; --line: rgba(255, 255, 255, 0.1); --dim: rgba(214, 220, 255, 0.62);
+  color: #e8eaff; color-scheme: dark; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+/* buttons: pills, the main one gold. The flat ones (list rows, icons, tabs) keep their own shape below. */
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button:where(:not(.icon, .wiki-item, .wiki-section-title, .mem-title, .fp-item, .tabs > button)) { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); color: #e8eaff; font-size: 13px; transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button:where(:not(.icon, .wiki-item, .wiki-section-title, .mem-title, .fp-item, .tabs > button)):hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 224, 158, 0.38); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button:where(:not(.icon, .wiki-item, .wiki-section-title, .mem-title, .fp-item, .tabs > button)):active:not(:disabled) { transform: scale(0.96); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.ghost { background: transparent; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.small { padding: 4px 12px; font-size: 12px; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.primary { color: #1c1406; font-weight: 600; background: linear-gradient(135deg, #ffe9b8, #ffcf7a); border-color: transparent; box-shadow: 0 0 16px rgba(255, 214, 140, 0.28); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #fff2d2, #ffd98f); border-color: transparent; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.primary:disabled { box-shadow: none; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.danger { color: #ff9a9a; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.danger:hover:not(:disabled) { border-color: rgba(255, 120, 120, 0.55); background: rgba(255, 90, 90, 0.14); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.icon { padding: 2px 7px; border: none; border-radius: 8px; background: none; font-size: 14px; color: var(--muted); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.icon:hover { color: #fff; }
+/* fields: glass, with a violet ring when typed in */
+:is(.vz .vz-skin, .app.is-vision .modal-bg) :is(input, select, textarea) { border-radius: 11px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); color: #fff; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) :is(input, select, textarea):focus { border-color: rgba(180, 170, 255, 0.6); box-shadow: 0 0 0 3px rgba(150, 130, 255, 0.16); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) :is(input, select, textarea):disabled { opacity: 0.5; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) :is(option, optgroup) { background: #12142a; color: #e8eaff; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) input[type="checkbox"] { accent-color: #ffcf7a; box-shadow: none; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) ::placeholder { color: rgba(214, 220, 255, 0.4); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) :is(h3, h4) { margin: 18px 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: var(--dim); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) code { font-family: ui-monospace, Consolas, monospace; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) .badge { padding: 1px 8px; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) .limits-head { letter-spacing: 0.08em; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) .fp-list { border-radius: 12px; border-color: var(--line); scrollbar-width: thin; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.fp-item { display: flex; justify-content: space-between; width: 100%; padding: 9px 12px; border: none; border-bottom: 1px solid var(--line); border-radius: 0; background: none; text-align: left; color: #e8eaff; }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) button.fp-item:hover { background: rgba(255, 255, 255, 0.07); }
+:is(.vz .vz-skin, .app.is-vision .modal-bg) :is(.log, .member-detail .mem-text, .wiki-curate-result) { background: rgba(0, 0, 0, 0.32); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; color: #d9dcf5; scrollbar-width: thin; }
+
+/* the dialogs */
+.app.is-vision .modal-bg { background: radial-gradient(120% 90% at 50% 40%, rgba(5, 6, 14, 0.55), rgba(5, 6, 14, 0.86)); }
+:is(.vz .vz-skin, .app.is-vision) .modal { padding: 20px; border-radius: 22px; border: 1px solid rgba(255, 224, 158, 0.26); background: radial-gradient(70% 50% at 0% 0%, rgba(150, 130, 255, 0.16), transparent 62%), linear-gradient(168deg, rgb(26, 28, 58), rgb(9, 10, 24)); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), 0 0 50px rgba(150, 130, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.1); animation: vz-pop-in 0.28s cubic-bezier(0.2, 1.3, 0.4, 1) both; scrollbar-width: thin; }
+:is(.vz .vz-skin, .app.is-vision) .modal-head { margin-bottom: 14px; font-family: Georgia, "Times New Roman", serif; font-size: 19px; font-weight: 600; color: #fff6dd; text-shadow: 0 0 18px rgba(255, 224, 158, 0.35); }
+.app.is-vision .modal .tabs.inline { background: none; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.app.is-vision .modal .tabs.inline > button { padding: 8px 6px; border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); }
+.app.is-vision .modal .tabs.inline > button.on { color: #fff6dd; border-bottom-color: var(--gold); }
+.app.is-vision .toast { color: #fff6dd; background: rgba(22, 24, 50, 0.94); border: 1px solid rgba(255, 224, 158, 0.42); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 26px rgba(255, 224, 158, 0.14); backdrop-filter: blur(12px); }
+
+/* the head each page brings: its name, large */
+.vz .vz-skin .chair-head { flex-direction: row; align-items: flex-end; padding: 18px 22px 12px; border-bottom: none; }
+.vz .vz-skin .chair-title { flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 600; color: #fff6dd; text-shadow: 0 0 20px rgba(255, 224, 158, 0.38); }
+.vz .vz-skin .chair-title .small { font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; font-weight: 400; text-shadow: none; }
+
+/* wiki */
+.vz .vz-skin .wiki-curate { margin: 0 22px 14px; padding: 9px 12px 9px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.04); }
+.vz .vz-skin .wiki-curate strong { color: var(--gold); }
+.vz .vz-skin .wiki-layout { border-top: 1px solid var(--line); }
+.vz .vz-skin .wiki-nav { width: 292px; padding: 14px 12px; gap: 2px; border-right: 1px solid var(--line); background: rgba(0, 0, 0, 0.14); scrollbar-width: thin; }
+.vz .vz-skin input.wiki-search { margin-bottom: 10px; padding: 8px 14px; border-radius: 999px; }
+.vz .vz-skin button.wiki-section-title { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 8px; border-radius: 9px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--dim); transition: background 0.2s, color 0.2s; }
+.vz .vz-skin button.wiki-section-title:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.vz .vz-skin .wiki-caret { color: var(--gold); }
+.vz .vz-skin .wiki-count { padding: 0 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); font-size: 10px; letter-spacing: 0; }
+.vz .vz-skin button.wiki-item { padding: 6px 10px; border-radius: 9px; text-align: left; font-size: 13px; line-height: 1.45; color: #d9dcf5; transition: background 0.2s, color 0.2s; }
+.vz .vz-skin button.wiki-item:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.vz .vz-skin button.wiki-item.on { color: #fff3d2; font-weight: 600; background: linear-gradient(90deg, rgba(255, 224, 158, 0.2), rgba(255, 224, 158, 0.04)); box-shadow: inset 2px 0 0 var(--gold); }
+.vz .vz-skin button.wiki-index { font-size: 12px; font-style: italic; color: var(--dim); }
+.vz .vz-skin .wiki-page { padding: 26px 38px 60px; scrollbar-width: thin; }
+.vz .vz-skin .wiki-page > .wiki-empty { padding-top: 16vh; text-align: center; }
+.vz .vz-skin .wiki-page-head h1 { margin-bottom: 6px; font-family: Georgia, "Times New Roman", serif; font-size: 30px; color: #fff6dd; text-shadow: 0 0 22px rgba(255, 224, 158, 0.35); overflow-wrap: anywhere; }
+.vz .vz-skin .wiki-summary { margin: 12px 0; padding: 9px 14px; border-left: 2px solid var(--gold); border-radius: 0 12px 12px 0; background: linear-gradient(90deg, rgba(255, 224, 158, 0.11), transparent); color: #f3ecd8; }
+.vz .vz-skin .wiki-md { font-size: 14.5px; line-height: 1.78; color: rgba(232, 234, 255, 0.9); }
+.vz .vz-skin .wiki-md h2 { margin: 26px 0 10px; padding-bottom: 6px; font-family: Georgia, "Times New Roman", serif; font-size: 20px; letter-spacing: 0; color: #fff6dd; border-bottom: 1px solid rgba(255, 224, 158, 0.22); }
+.vz .vz-skin .wiki-md h3 { margin: 18px 0 6px; font-size: 15px; letter-spacing: 0; text-transform: none; color: #e9e4ff; }
+.vz .vz-skin .wiki-md h4 { margin: 14px 0 4px; font-size: 14px; letter-spacing: 0; color: #e9e4ff; }
+.vz .vz-skin .wiki-md a { color: #b9c6ff; text-decoration: none; border-bottom: 1px solid rgba(185, 198, 255, 0.4); }
+.vz .vz-skin .wiki-md a:hover { color: #fff; border-bottom-color: #fff; }
+.vz .vz-skin .wiki-md strong { color: #fff; }
+.vz .vz-skin .wiki-md code { background: rgba(255, 255, 255, 0.09); color: #ffe6b3; }
+.vz .vz-skin .wiki-md pre { background: rgba(0, 0, 0, 0.34); border: 1px solid var(--line); border-radius: 12px; }
+.vz .vz-skin .wiki-md pre code { background: none; color: #d9dcf5; }
+.vz .vz-skin .wiki-md blockquote { border-left-color: rgba(150, 130, 255, 0.6); }
+.vz .vz-skin .wiki-md th { background: rgba(255, 255, 255, 0.06); }
+.vz .vz-skin .wiki-edit textarea { line-height: 1.6; }
+
+/* memory, accounts */
+.vz .vz-skin .mem-search { padding: 0 22px 14px; border-bottom: 1px solid var(--line); }
+.vz .vz-skin .mem-search input:not([type="checkbox"]) { padding: 8px 14px; border-radius: 999px; }
+.vz .vz-skin .mem-body { padding: 6px 22px 30px; scrollbar-width: thin; }
+.vz .vz-skin .mem-body > * { max-width: 920px; }
+.vz .vz-skin .mem-row { margin: 0 -12px; padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; transition: background 0.2s; }
+.vz .vz-skin .mem-row:hover { background: rgba(255, 255, 255, 0.045); }
+.vz .vz-skin button.mem-title { text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.55; color: #eef0ff; transition: color 0.2s; }
+.vz .vz-skin button.mem-title:hover { color: var(--gold); }
+.vz .vz-skin .curate-bar { justify-content: flex-start; margin-top: 14px; }
+.vz .vz-skin .curate-bar h3 { margin: 0 10px 0 0; }
+.vz .vz-skin .card { padding: 14px 16px; border: 1px solid rgba(255, 224, 158, 0.3); border-radius: 16px; background: rgba(255, 255, 255, 0.05); box-shadow: 0 0 30px rgba(255, 224, 158, 0.08); }
+.vz .vz-skin .mem-text { font-size: 13px; line-height: 1.65; color: rgba(232, 234, 255, 0.88); }
+.vz .vz-skin .mem-danger { border-top: 1px dashed rgba(255, 120, 120, 0.3); }
+.vz .vz-skin .acct-row { align-items: center; }
+.vz .vz-skin .member-name { color: #fff; }
+.vz .vz-skin .member-actions { flex-wrap: wrap; }
+
+@media (max-width: 760px) {
+  .vz .vz-skin .chair-head { padding: 14px 16px 10px; }
+  .vz .vz-skin .chair-title { font-size: 21px; }
+  .vz .vz-skin .wiki-curate { margin: 0 12px 10px; }
+  .vz .vz-skin .wiki-nav { width: auto; border-right: none; border-bottom: 1px solid var(--line); }
+  .vz .vz-skin .wiki-page { padding: 18px 16px 44px; }
+  .vz .vz-skin .wiki-page-head h1 { font-size: 24px; }
+  .vz .vz-skin .mem-search { padding: 0 16px 12px; }
+  .vz .vz-skin .mem-body { padding: 6px 16px 30px; }
+  .app.is-vision .modal { padding: 16px; border-radius: 20px; }
+}
+
+/* on a phone the wiki is a list, then a page: an open page takes the whole sheet, "‹ 목록" goes back */
+.vz.narrow .vz-skin .wiki.has-page :is(.chair-head, .wiki-curate, .wiki-nav) { display: none; }
+.vz.narrow .vz-skin .wiki.has-page .wiki-layout { border-top: none; }
+.vz.narrow .vz-skin .wiki:not(.has-page) .wiki-nav { max-height: none; flex: 1; border-bottom: none; }
+.vz.narrow .vz-skin .wiki:not(.has-page) .wiki-page { display: none; }
+.vz.narrow .vz-skin button.wiki-back { display: inline-flex; margin-bottom: 12px; }
+/* the Gemini switch in the vision settings */
+.vz .vz-set-gem .gem-optin { margin: 0; padding: 14px 16px; border-radius: 16px; border-color: var(--line); background: rgba(255, 255, 255, 0.04); }
+.vz .vz-set-gem .gem-optin.on { border-color: rgba(255, 194, 102, 0.55); }
+.vz .vz-skin .gem-optin { border-radius: 16px; border-color: var(--line); background: rgba(255, 255, 255, 0.04); }
+.vz .vz-skin .gem-optin.on { border-color: rgba(255, 194, 102, 0.55); }
+.vz .vz-skin .gem-title { color: #fff; }
+.app.is-vision .gem-agree, .vz .vz-skin .gem-agree { color: #f3ecd8; }

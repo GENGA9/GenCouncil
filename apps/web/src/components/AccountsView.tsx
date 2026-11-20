@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { familyColorByName } from "../model";
 import type { Account } from "../types";
+import { GeminiOptIn, useGemini } from "./GeminiOptIn";
 
-const STATUS_KO: Record<Account["status"], string> = { ok: "사용 가능", exhausted: "한도 소진", auth: "로그인 필요", disabled: "비활성" };
+const STATUS_KO: Record<Account["status"], string> = { ok: "사용 가능", exhausted: "한도 소진", auth: "로그인 필요", disabled: "꺼짐" };
 
 const PROVIDERS: Array<{ id: string; label: string; family: string; kind: "cli" | "web"; how: string }> = [
   { id: "claude", label: "클로드 (Claude Code)", family: "claude", kind: "cli", how: "콘솔 창에서 /login" },
@@ -22,11 +23,16 @@ export function AccountsView({ notify }: { notify: (m: string) => void }) {
   const [dir, setDir] = useState("");
   const [note, setNote] = useState("");
   const reload = () => api.accounts().then(setList).catch(() => undefined);
+  const gemini = useGemini();
   useEffect(() => {
     void reload();
     const t = window.setInterval(reload, 15000);
     return () => clearInterval(t);
   }, []);
+  // switching Gemini on or off changes how its login reads
+  useEffect(() => {
+    void reload();
+  }, [gemini?.enabled]);
 
   const login = async (a: Account) => {
     try {
@@ -60,6 +66,7 @@ export function AccountsView({ notify }: { notify: (m: string) => void }) {
         <p className="small muted">
           계정을 여러 개 미리 로그인해 두면, 위원과 의장이 쓸 수 있는 계정을 자동으로 고르고 한도가 차면 다른 계정으로 넘깁니다. 계정마다 로그인이 별도 폴더(웹은 전용 Chrome 프로필)에 저장되므로 한 번만 로그인하면 됩니다. "로그인" 버튼은 이 PC 화면에 창을 엽니다.
         </p>
+        <GeminiOptIn notify={notify} />
         {PROVIDERS.map((p) => {
           const items = list.filter((a) => a.provider === p.id);
           if (!items.length) return null;
@@ -79,8 +86,8 @@ export function AccountsView({ notify }: { notify: (m: string) => void }) {
                     {a.note && <div className="small muted">{a.note}</div>}
                   </div>
                   <div className="member-actions">
-                    <button className="ghost small" onClick={() => login(a)} title={p.how}>로그인</button>
-                    {a.status !== "ok" && (
+                    {!(p.id === "gemini" && a.status === "disabled") && <button className="ghost small" onClick={() => login(a)} title={p.how}>로그인</button>}
+                    {a.status !== "ok" && a.status !== "disabled" && (
                       <button className="primary small" onClick={async () => { await api.resetAccount(a.id); notify(`${a.id} 복구`); void reload(); }}>복구</button>
                     )}
                     {a.configDir && (

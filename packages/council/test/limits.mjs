@@ -25,6 +25,9 @@ import {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-limits-"));
 process.env.GENCOUNCIL_HOME = path.join(tmp, "home");
 
+// these checks run Gemini members as a user who switched Gemini (Antigravity CLI) on would
+(await import("@gencouncil/council")).setGeminiEnabled(true, true);
+
 let failed = 0;
 const check = (name, cond, extra = "") => {
   console.log(`${cond ? "ok  " : "FAIL"} ${name}${extra ? " :: " + extra : ""}`);

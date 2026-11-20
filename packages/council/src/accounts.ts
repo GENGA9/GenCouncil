@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { gencouncilHome } from "@gencouncil/core";
 import { CLI_PROVIDERS, LADDERS, SITE_INFO, WEB_SITES, tierOf, type CliProvider, type WebSite } from "./models.js";
+import { assertGeminiEnabled, GEMINI_OFF, geminiEnabled } from "./optin.js";
 
 export type AccountProvider = CliProvider | WebSite;
 export type AccountStatus = "ok" | "exhausted" | "auth" | "disabled";
@@ -107,14 +108,26 @@ export class AccountRegistry {
     fs.writeFileSync(accountsFile(), JSON.stringify(list, null, 2) + "\n", "utf8");
   }
 
+  /**
+   * While Gemini (Antigravity CLI) is switched off, its login reads as disabled everywhere: nothing
+   * picks it, the usage check skips it, the chair sees it is off. Only how it reads: the stored
+   * status is left alone, so switching back on finds the account as it was.
+   */
+  private shown(a: Account, geminiOn: boolean): Account {
+    return a.provider === "gemini" && !geminiOn ? { ...a, status: "disabled", lastError: GEMINI_OFF } : a;
+  }
+
   list(provider?: AccountProvider): Account[] {
+    const on = geminiEnabled();
     return this.read()
       .filter((a) => !provider || a.provider === provider)
+      .map((a) => this.shown(a, on))
       .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100) || a.id.localeCompare(b.id));
   }
 
   get(id: string): Account | undefined {
-    return this.read().find((a) => a.id === id);
+    const a = this.read().find((x) => x.id === id);
+    return a && this.shown(a, geminiEnabled());
   }
 
   /** Add or update. A new account without a folder gets ~/.gencouncil/accounts/<id>. */
@@ -320,6 +333,7 @@ export function loginCommand(account: Account, registry: AccountRegistry, chrome
     case "claude":
       return { kind: "cli", exe: "claude", args: [], env, hint: "/login 을 입력해 로그인한 뒤 /exit" };
     case "gemini":
+      assertGeminiEnabled();
       return { kind: "cli", exe: "agy", args: [], env, hint: "Antigravity 창에서 이 구글 계정으로 로그인한 뒤 창을 닫으세요 (/login 으로 다시 로그인 가능)" };
     case "gpt":
       return { kind: "cli", exe: "codex", args: ["login"], env, hint: "브라우저에서 ChatGPT 계정으로 로그인하면 창이 닫힙니다" };

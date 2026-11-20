@@ -11,6 +11,7 @@
  * string rather than throwing, because a failed consult must not kill the caller's turn.
  */
 import { agyModelId, claudeModelId, makeAgyParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent } from "./drivers.js";
+import { GEMINI_OFF, geminiEnabled } from "./optin.js";
 import { LADDERS, type CliProvider } from "./models.js";
 
 /** read-only Claude Code tools for the explorer (the consult runs with no tools at all) */
@@ -71,6 +72,10 @@ export function oneShot(spec: OneShotSpec): Promise<OneShotResult> {
   const started = Date.now();
   const secs = () => Math.round((Date.now() - started) / 100) / 10;
   return new Promise((resolve) => {
+    if (spec.provider === "gemini" && !geminiEnabled()) {
+      resolve({ text: "", seconds: 0, error: GEMINI_OFF });
+      return;
+    }
     const cmd = spec.provider === "claude" ? "claude" : spec.provider === "gpt" ? "codex" : "agy";
     const args = spec.provider === "claude" ? claudeArgs(spec) : spec.provider === "gpt" ? codexArgs(spec) : agyArgs(spec);
     const parse = spec.provider === "claude" ? parseClaudeLine : spec.provider === "gpt" ? parseCodexLine : makeAgyParser();

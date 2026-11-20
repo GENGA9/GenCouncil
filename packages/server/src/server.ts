@@ -43,6 +43,8 @@ import {
   openLoginWindow,
   openWebSite,
   reapStrays,
+  geminiOptIn,
+  setGeminiEnabled,
   type AccountProvider,
   type Autonomy,
   type CliProvider,
@@ -172,7 +174,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   const memory = new MemoryStore({ watch: true });
   await memory.init();
   const wiki = new WikiStore();
-  await wiki.init();
+  // a fresh space starts with the default pages (wiki-default); an existing wiki is left as it is
+  await wiki.init({ seed: true });
   const tailscale = await detectTailscale();
 
   // ---------- runtimes ----------
@@ -298,6 +301,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       memory: { verified: memory.list({ status: "verified" }).length, proposed: memory.list({ status: "proposed" }).length },
       accounts: accounts.list(),
       server: { host: config.host, port: config.port, tailscale },
+      gemini: geminiOptIn(),
     };
   };
 
@@ -425,6 +429,18 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
 
   // ---------- accounts ----------
   on("GET", "/api/accounts", () => accounts.list());
+  // Gemini through Antigravity CLI: off until the user turns it on, and turning it on needs
+  // `accept: true` (the page showed the terms risk and the user ticked that it is their choice)
+  on("GET", "/api/settings/gemini", () => geminiOptIn());
+  on("PUT", "/api/settings/gemini", async ({ body }) => {
+    const b = await body();
+    if (typeof b.enabled !== "boolean") throw new HttpError(400, "enabled (true/false) required");
+    if (b.enabled && b.accept !== true) throw new HttpError(400, "제미나이(안티그래비티)를 켜려면 위험 고지에 동의해야 합니다.");
+    const g = setGeminiEnabled(b.enabled, b.accept === true);
+    usageCache = undefined;
+    broadcast({ type: "overview" });
+    return g;
+  });
   on("GET", "/api/usage", async ({ url }) => {
     const force = url.searchParams.get("refresh") === "1";
     if (force || !usageCache || Date.now() - usageCache.at > USAGE_TTL) await refreshUsage();

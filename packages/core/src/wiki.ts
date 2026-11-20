@@ -2,7 +2,7 @@
  * Gen Wiki: organised, editable pages that members, the chair and the user all read.
  *
  * Shared memory collects small facts as they come up; the wiki is where they settle into
- * pages a member can read top to bottom ("how H3 video jobs work", "what Sonnet is good at").
+ * pages a member can read top to bottom ("how a project's render jobs run", "what Sonnet is good at").
  * Pages are markdown files under space/wiki/, tracked in the space git repo, so every edit
  * has a history and can be undone.
  *
@@ -13,12 +13,22 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { commitAll, ensureRepo, gitLog } from "./git.js";
 import { spaceDir } from "./paths.js";
 import { makeSnippet, tokenize } from "./search.js";
 
 export function wikiDir(): string {
   return path.join(spaceDir(), "wiki");
+}
+
+/**
+ * The pages a fresh space starts with: how GenCouncil's chair and members work, model profiles, and
+ * common pitfalls of the CLIs, git, Windows, web and Python. They ship with the code
+ * (packages/core/wiki-default, next to dist/) and are copied once, into an empty wiki.
+ */
+export function defaultWikiDir(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "wiki-default");
 }
 
 export interface WikiPageMeta {
@@ -156,6 +166,26 @@ function serializePage(page: Omit<WikiPage, "section" | "chars">): string {
   return lines.join("\n") + page.body.replace(/^\n+/, "").trimEnd() + "\n";
 }
 
+/** copy every page under `from` into `to` (same relative paths), never over an existing file; returns how many */
+function copyPages(from: string, to: string): number {
+  if (!fs.existsSync(from)) return 0;
+  let n = 0;
+  const walk = (dir: string, rel: string[]) => {
+    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (d.isDirectory()) walk(path.join(dir, d.name), [...rel, d.name]);
+      else if (rel.length && d.name.endsWith(".md")) {
+        const target = path.join(to, ...rel, d.name);
+        if (fs.existsSync(target)) continue;
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.copyFileSync(path.join(dir, d.name), target);
+        n++;
+      }
+    }
+  };
+  walk(from, []);
+  return n;
+}
+
 const HOME = `# Gen Wiki
 
 위원·의장·사용자가 함께 보는 정리된 문서다. 공용 기억(memory)이 그때그때 쌓인 작은 사실이라면, 위키는 그것을 주제별로 묶어 처음부터 끝까지 읽을 수 있게 한 페이지다.
@@ -178,11 +208,35 @@ export class WikiStore {
     this.useGit = opts.git ?? true;
   }
 
-  async init(): Promise<void> {
+  /**
+   * Create the layout. With `seed`, a wiki that has no page yet (a fresh install) gets the default
+   * pages; a wiki with any page of its own is never touched.
+   */
+  async init(opts: { seed?: boolean | string } = {}): Promise<void> {
+    const fresh = this.pageCount() === 0;
     for (const s of TOP_SECTIONS) fs.mkdirSync(path.join(this.dir, s), { recursive: true });
     const home = path.join(this.dir, "README.md");
     if (!fs.existsSync(home)) fs.writeFileSync(home, HOME, "utf8");
-    if (this.useGit) await ensureRepo(this.root);
+    const from = opts.seed === true ? defaultWikiDir() : typeof opts.seed === "string" ? opts.seed : undefined;
+    const seeded = fresh && from ? copyPages(from, this.dir) : 0;
+    if (this.useGit) {
+      await ensureRepo(this.root);
+      if (seeded) await commitAll(this.root, `wiki: 기본 페이지 ${seeded}개`);
+    }
+  }
+
+  /** how many pages the wiki has (README.md is not a page) */
+  pageCount(): number {
+    let n = 0;
+    const walk = (dir: string, depth: number) => {
+      if (!fs.existsSync(dir)) return;
+      for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (d.isDirectory()) walk(path.join(dir, d.name), depth + 1);
+        else if (depth > 0 && d.name.endsWith(".md")) n++;
+      }
+    };
+    walk(this.dir, 0);
+    return n;
   }
 
   private file(p: string): string {

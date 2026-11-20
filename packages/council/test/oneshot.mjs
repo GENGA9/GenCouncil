@@ -4,7 +4,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { assignmentRules, consultPrompt, explorePrompt, explorerModel, memberHelpers, oneShot, providerOfModel, strongestWithin } from "@gencouncil/council";
+import { assignmentRules, consultPrompt, explorePrompt, explorerModel, memberHelpers, oneShot, providerOfModel, setGeminiEnabled, strongestWithin } from "@gencouncil/council";
+
+// its own space, with Gemini (Antigravity CLI) switched on as a user who accepted the risk would have it
+process.env.GENCOUNCIL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-oneshot-home-"));
+setGeminiEnabled(true, true);
 
 let failed = 0;
 const check = (name, cond, extra = "") => {

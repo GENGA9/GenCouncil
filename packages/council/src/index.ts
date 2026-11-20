@@ -25,3 +25,4 @@ export * from "./wikiCurator.js";
 export * from "./shared.js";
 export * from "./bg.js";
 export * from "./effortStats.js";
+export * from "./optin.js";

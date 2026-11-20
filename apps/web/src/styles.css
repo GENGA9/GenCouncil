@@ -130,6 +130,12 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .space-title { font-weight: 700; letter-spacing: 0.08em; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 .dot.up { background: var(--ok); }
+/* visualization | workshop */
+.mode-switch { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--event); flex: none; }
+.mode-switch button { flex: 1; border: none; background: transparent; border-radius: 999px; padding: 4px 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.mode-switch button:hover { color: var(--text); }
+.mode-switch button.on { background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border); font-weight: 600; }
+.tabs button.tab-vision { flex: none; width: 46px; color: var(--run); }
 .tree { flex: 1; overflow: auto; min-height: 0; }
 .project { margin-bottom: 10px; }
 .project-row { display: flex; align-items: center; justify-content: space-between; font-weight: 600; padding: 4px 2px; }
@@ -457,3 +463,22 @@ button.tg-auto:disabled.on { opacity: 1; }
 .wiki-curate-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .wiki-curate-result { margin: 8px 0 0; padding: 8px 10px; background: var(--bg); border-radius: 8px; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
 .wiki-curate-result.error { color: var(--danger, #c0392b); }
+.wiki-back { display: none; }
+
+/* Gemini (Antigravity CLI) opt-in */
+.gem-optin { margin: 6px 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--event); }
+.gem-optin.on { border-color: var(--warn); }
+.gem-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gem-head > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gem-head > button { flex: none; white-space: nowrap; }
+.gem-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; }
+.gem-modal { width: min(600px, 100%); }
+.gem-risk { font-size: 13.5px; line-height: 1.65; }
+.gem-risk p { margin: 0 0 10px; }
+.gem-risk ul { margin: 0 0 10px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.gem-risk a { color: var(--accent); }
+.gem-risk code { font-family: var(--mono); font-size: 12px; }
+.gem-agree { margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--warn); background: var(--warn-soft); color: var(--text); font-size: 13px; line-height: 1.5; align-items: flex-start; }
+.gem-agree input { margin-top: 3px; }
+.limits-row.space-off { opacity: 0.55; }
+.limits-name .badge { margin-left: 6px; }

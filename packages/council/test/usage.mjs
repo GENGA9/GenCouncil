@@ -3,6 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 process.env.GENCOUNCIL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-usage-"));
+
+// these checks run Gemini members as a user who switched Gemini (Antigravity CLI) on would
+(await import("@gencouncil/council")).setGeminiEnabled(true, true);
 const { AccountRegistry, agyModelId, applyUsageToAccounts, makeAgyParser, parseAgyUsage, parseCodexRateLimits } = await import("@gencouncil/council");
 
 let failed = 0;

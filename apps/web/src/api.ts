@@ -1,4 +1,4 @@
-import type { Account, Attachment, CurateStatus, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "./types";
+import type { Account, Attachment, CurateStatus, GeminiOptIn, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -49,6 +49,8 @@ export const api = {
       ...(advisor !== undefined ? { advisor } : {}),
     }),
   accounts: () => call<Account[]>("GET", "/api/accounts"),
+  geminiSetting: () => call<GeminiOptIn>("GET", "/api/settings/gemini"),
+  setGemini: (enabled: boolean, accept: boolean) => call<GeminiOptIn>("PUT", "/api/settings/gemini", { enabled, accept }),
   accountLogin: (id: string) => call<{ hint: string }>("POST", `/api/accounts/${encodeURIComponent(id)}/login`),
   models: () => call<ModelsInfo>("GET", "/api/models"),
   fs: (p: string) => call<FolderListing>("GET", `/api/fs?path=${encodeURIComponent(p)}`),

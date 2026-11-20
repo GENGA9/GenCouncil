@@ -6,6 +6,7 @@
  * (CLAUDE_CONFIG_DIR / HOME+USERPROFILE for gemini).
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { assertGeminiEnabled } from "./optin.js";
 import fs from "node:fs";
 import path from "node:path";
 import type { Autonomy, Provider } from "./model.js";
@@ -221,6 +222,8 @@ const AGY_INLINE_PACKET = 20000;
 export const geminiDriver: Driver = {
   provider: "gemini",
   spawn(spec, onLine) {
+    // off until the user accepts the terms risk (optin.ts)
+    assertGeminiEnabled();
     let prompt = spec.prompt;
     if (spec.stdinText) {
       prompt +=

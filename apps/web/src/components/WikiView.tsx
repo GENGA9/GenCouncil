@@ -264,7 +264,7 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
   const list = hits ?? null;
 
   return (
-    <div className="center-inner wiki">
+    <div className={`center-inner wiki ${page || edit ? "has-page" : ""}`}>
       <div className="chair-head">
         <div className="chair-title">Gen Wiki <span className="small muted">위원·의장·사용자가 함께 보는 정리된 문서 · {pages.length}쪽</span></div>
         <span className="wiki-curate-actions">
@@ -344,6 +344,19 @@ export function WikiView({ notify, onOpenMemory }: { notify: (m: string) => void
           )}
         </nav>
         <article className="wiki-page">
+          {/* only where the list and the page cannot be side by side (the vision sheet on a phone) */}
+          {(page || edit) && (
+            <button
+              className="wiki-back ghost small"
+              onClick={() => {
+                if (edit && !confirm("편집 중인 내용을 버리고 목록으로 돌아갈까요?")) return;
+                setEdit(null);
+                setPage(null);
+              }}
+            >
+              ‹ 목록
+            </button>
+          )}
           {edit ? (
             <div className="wiki-edit">
               <label>

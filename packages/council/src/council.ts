@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { GEMINI_OFF, geminiEnabled } from "./optin.js";
 import fs from "node:fs";
 import path from "node:path";
 import { WikiStore, type EntryType, type MemoryStore } from "@gencouncil/core";
@@ -430,8 +431,10 @@ export class Council extends EventEmitter {
     };
   }
 
+  /** the project's limits, with Gemini (Antigravity CLI) at zero while it is switched off for the space */
   limits(): Limits {
-    return normalizeLimits(this.project.members.limits);
+    const l = normalizeLimits(this.project.members.limits);
+    return geminiEnabled() ? l : { ...l, gemini: { ...l.gemini, maxMembers: 0 } };
   }
 
   private limitKeyOf(m: Pick<MemberRecord, "provider" | "site">): LimitKey | undefined {
@@ -465,7 +468,8 @@ export class Council extends EventEmitter {
   }
 
   limitsMarkdown(): string {
-    const table = limitsMarkdown(this.limits(), this.activeCounts());
+    const off = geminiEnabled() ? "" : "\n\n제미나이(gemini, 안티그래비티 CLI)는 사용자가 꺼 두었다(약관상 계정 정지 위험). gemini 위원은 만들 수 없다. 제미나이가 꼭 필요하면 relay(gemini-web·aistudio)를 쓴다.";
+    const table = limitsMarkdown(this.limits(), this.activeCounts()) + off;
     const usage = this.usageProvider?.();
     if (!usage?.length) return table;
     const left = (w?: { usedPct: number }) => (w ? `${100 - w.usedPct}% 남음` : "-");
@@ -576,6 +580,7 @@ ${rows.join("\n")}`;
       const b = this.accounts.pick(fb, { exclude });
       if (b) return { provider: fb, account: b };
     }
+    if (provider === "gemini" && !geminiEnabled()) throw new LimitError(GEMINI_OFF);
     const states = this.accounts
       .list(provider)
       .map((x) => `${x.id}:${x.status}${x.resetAt ? "(reset " + x.resetAt + ")" : ""}`)
