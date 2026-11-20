@@ -12,3 +12,5 @@ private/
 # local tooling and large media kept out of the public repo
 .claude/
 promo/*.mp4
+# character art stays local (not in the public repo)
+docs/characters/
