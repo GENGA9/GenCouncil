@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { gencouncilHome } from "@gencouncil/core";
-import { CLI_PROVIDERS, LADDERS, SITE_INFO, WEB_SITES, tierOf, type CliProvider, type WebSite } from "./models.js";
+import { CLI_PROVIDERS, LADDERS, PREDECESSOR, SITE_INFO, UNSUPPORTED_RETRY_MS, WEB_SITES, tierOf, type CliProvider, type WebSite } from "./models.js";
 import { assertGeminiEnabled, GEMINI_OFF, geminiEnabled } from "./optin.js";
 
 export type AccountProvider = CliProvider | WebSite;
@@ -33,6 +33,8 @@ export interface Account {
   note?: string;
   /** Antigravity limits each model on its own: ladder model id -> when it is usable again */
   modelBlocks?: Record<string, string>;
+  /** models this login turned down as not offered: model id -> when to try it again */
+  unsupported?: Record<string, string>;
 }
 
 /** CLIs whose quota runs out per model, not per login (Antigravity: Argon can be spent while Flash still runs) */
@@ -98,6 +100,10 @@ export class AccountRegistry {
       if (a.modelBlocks) {
         for (const [m, at] of Object.entries(a.modelBlocks)) if (Date.parse(at) <= now) delete a.modelBlocks[m];
         if (!Object.keys(a.modelBlocks).length) a.modelBlocks = undefined;
+      }
+      if (a.unsupported) {
+        for (const [m, at] of Object.entries(a.unsupported)) if (Date.parse(at) <= now) delete a.unsupported[m];
+        if (!Object.keys(a.unsupported).length) a.unsupported = undefined;
       }
     }
     return list;
@@ -197,8 +203,40 @@ export class AccountRegistry {
     return this.fitModel(id, LADDERS[provider][t].id) !== undefined;
   }
 
+  /**
+   * This login turned the model down as not offered. Returns the model to run instead (the previous
+   * generation of the same rung), or undefined when there is none to fall back on.
+   */
+  markUnsupported(id: string, model: string | undefined, error: string): string | undefined {
+    const a = this.get(id);
+    if (!a || !model) return undefined;
+    this.patch(id, (x) => {
+      x.unsupported = { ...(x.unsupported ?? {}), [model]: new Date(Date.now() + UNSUPPORTED_RETRY_MS).toISOString() };
+      x.lastError = error.slice(0, 500);
+    });
+    const instead = this.offered(id, model);
+    return instead === model ? undefined : instead;
+  }
+
+  /** the model itself, or the previous generation when this login does not offer it */
+  offered(id: string, model: string): string {
+    const lacks = this.get(id)?.unsupported;
+    const out = (m: string) => {
+      const until = lacks?.[m];
+      return Boolean(until) && new Date(until as string).getTime() > Date.now();
+    };
+    if (!out(model)) return model;
+    const prev = PREDECESSOR[model];
+    return prev && !out(prev) ? prev : model;
+  }
+
   /** the model itself, or the closest lower one this account can still run; undefined when none is left */
   fitModel(id: string, model: string | undefined): string | undefined {
+    const fit = this.fitQuota(id, model);
+    return fit ? this.offered(id, fit) : fit;
+  }
+
+  private fitQuota(id: string, model: string | undefined): string | undefined {
     const a = this.get(id);
     if (!model || !a?.modelBlocks || !isCliProvider(a.provider)) return model;
     const ladder = LADDERS[a.provider];

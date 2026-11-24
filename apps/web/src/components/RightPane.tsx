@@ -110,7 +110,7 @@ export function RightPane({ state, onOpen, onMerge, onStop, onRelay, onHandover 
                 <div className="small muted">커밋 {m.commits?.length ?? 0} · 도구 호출 {m.toolCalls}</div>
                 {m.failure && (
                   <div className="small warn-text">
-                    {m.failure.kind === "quota" ? "한도 소진" : m.failure.kind === "auth" ? "로그인 필요" : "오류"}: {m.failure.message}
+                    {m.failure.kind === "quota" ? "한도 소진" : m.failure.kind === "auth" ? "로그인 필요" : m.failure.kind === "model" ? "모델 미지원" : "오류"}: {m.failure.message}
                     {m.failure.resetAt && <> · 리셋 {new Date(m.failure.resetAt).toLocaleString()}</>}
                   </div>
                 )}

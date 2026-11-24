@@ -64,14 +64,14 @@ function samplesOf(members: MemberRecord[]): Sample[] {
     let outcome: Outcome;
     if (m.status === "done") outcome = "done";
     else if (m.handoverTo) {
-      const failed = m.failure?.kind === "quota" || m.failure?.kind === "auth" ? m.failure.kind : undefined;
+      const failed = m.failure?.kind === "quota" || m.failure?.kind === "auth" || m.failure?.kind === "model" ? m.failure.kind : undefined;
       const cause = byId.get(m.handoverTo)?.handoverCause ?? failed;
       // the same work went on after a restart; and a record from before causes were written down
       // cannot tell a restart from a rescue, so it is left out rather than counted against the model
       if (cause === "resume" || cause === undefined) continue;
       outcome = cause === "manual" ? "trouble" : "cut";
     } else if (m.status === "failed" || m.status === "stopped") {
-      outcome = m.failure?.kind === "quota" || m.failure?.kind === "auth" ? "cut" : "trouble";
+      outcome = m.failure?.kind === "quota" || m.failure?.kind === "auth" || m.failure?.kind === "model" ? "cut" : "trouble";
     } else continue;
     const provider = m.provider as CliProvider;
     const minutes = (Date.parse(m.endedAt) - Date.parse(m.startedAt)) / 60000;

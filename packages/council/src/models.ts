@@ -52,6 +52,16 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
   ],
 };
 
+/**
+ * The previous generation of the same rung. A login that does not offer the new model yet
+ * (gpt-6.2-sol on a Codex signed in with a ChatGPT account) runs this one instead: same kind of
+ * work, never a lower rung and never another company.
+ */
+export const PREDECESSOR: Record<string, string> = { "gpt-6.2-sol": "gpt-6.1-sol", "gpt-6.2-astra": "gpt-6-astra" };
+
+/** how long a login is taken to lack a model before it is tried again */
+export const UNSUPPORTED_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** CLI accepts an effort setting */
 export const SUPPORTS_EFFORT: Record<CliProvider, boolean> = { claude: true, gemini: true, gpt: true };
 

@@ -294,6 +294,15 @@ export class Chair {
           account = this.council.accounts.get(account.id) ?? account;
           continue;
         }
+        if (failure.kind === "model") {
+          // this login does not offer the chair's model: the previous generation of the same rung goes on
+          const instead = this.council.accounts.markUnsupported(account.id, spent, failure.message);
+          if (!instead) break;
+          this.appendLog(`=== ${new Date().toISOString()} model ${spent} not offered by ${account.id} -> ${instead} (${failure.message})`);
+          onEvent({ kind: "text", text: `(의장 모델 ${spent}은(는) 이 계정에서 지원되지 않아 ${instead}로 이어갑니다.)` });
+          account = this.council.accounts.get(account.id) ?? account;
+          continue;
+        }
         if (failure.kind === "quota") this.council.accounts.markExhausted(account.id, failure.message, failure.resetAt);
         else this.council.accounts.markAuth(account.id, failure.message);
         tried.push(account.id);

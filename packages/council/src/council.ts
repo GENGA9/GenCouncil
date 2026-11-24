@@ -626,7 +626,7 @@ ${rows.join("\n")}`;
       const blocks = Object.entries(account.modelBlocks ?? {}).map(([m, at]) => `${m}(reset ${at})`).join(", ");
       throw new Error(`${account.id}: 이 계정은 ${model} 이하 모델 한도가 모두 찼습니다 (${blocks})`);
     }
-    if (fit !== model) this.log(`${account.id}: ${model} 한도 소진 → ${fit}로 실행`);
+    if (fit !== model) this.log(`${account.id}: ${model} 한도 소진 또는 이 계정 미지원 → ${fit}로 실행`);
     return fit;
   }
 
@@ -945,7 +945,10 @@ ${rows.join("\n")}`;
           this.accounts.markExhausted(member.account, member.failure.message, member.failure.resetAt);
       }
       if (member.account && member.failure.kind === "auth") this.accounts.markAuth(member.account, member.failure.message);
-      if (member.failure.kind !== "other" && (this.project.members.autoHandover ?? true)) {
+      // the login does not offer this model: remember it, and go on with the previous generation
+      // of the same rung on the same login. With nothing to fall back on the chair decides.
+      const noFallback = member.failure.kind === "model" && !(member.account && this.accounts.markUnsupported(member.account, member.model, member.failure.message));
+      if (member.failure.kind !== "other" && !noFallback && (this.project.members.autoHandover ?? true)) {
         try {
           handedOver = await this.handover(member.id, { reason: `${member.failure.kind}: ${member.failure.message}` });
         } catch (e) {
@@ -1026,7 +1029,8 @@ ${rows.join("\n")}`;
         pick = this.chooseAccount(wantProvider, undefined, []);
       }
     } else {
-      const modelOnly = prev.failure?.kind === "quota" && prev.account !== undefined && this.accounts.get(prev.account)?.status === "ok";
+      // only one model is out (spent, or not offered by this login): the same login can go on
+      const modelOnly = (prev.failure?.kind === "quota" || prev.failure?.kind === "model") && prev.account !== undefined && this.accounts.get(prev.account)?.status === "ok";
       const exclude = prev.account && !opts.account && !modelOnly ? [prev.account] : [];
       pick = this.chooseAccount(wantProvider, opts.account, exclude);
     }
@@ -1064,7 +1068,7 @@ ${rows.join("\n")}`;
       toolCalls: 0,
       handoverFrom: prev.id,
       // a login that ran out or stopped working is not a verdict on the work; a restart is neither
-      handoverCause: opts.resume ? "resume" : prev.failure?.kind === "quota" || prev.failure?.kind === "auth" ? prev.failure.kind : "manual",
+      handoverCause: opts.resume ? "resume" : prev.failure?.kind === "quota" || prev.failure?.kind === "auth" || prev.failure?.kind === "model" ? prev.failure.kind : "manual",
       handoverReason: opts.reason?.replace(/\s+/g, " ").trim().slice(0, 200) || undefined,
     };
     const members = this.members();

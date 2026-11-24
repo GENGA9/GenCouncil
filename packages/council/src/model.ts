@@ -118,17 +118,19 @@ export interface Task {
 
 export type MemberStatus = "starting" | "running" | "waiting" | "done" | "failed" | "stopped" | "handed_over";
 
-export type FailureKind = "quota" | "auth" | "other";
+/** model: this login does not offer the model (nothing ran) */
+export type FailureKind = "quota" | "auth" | "model" | "other";
 
 /** how hard the chair judged a task to be; past results are counted per kind (effortStats) */
 export const TASK_KINDS = ["mechanical", "routine", "complex"] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
 /**
- * Why a member took another's work over: the login ran out or stopped working (quota, auth), the
- * app was restarted mid-run (resume), or the chair or user decided to (manual).
+ * Why a member took another's work over: the login ran out, stopped working or does not offer
+ * the model (quota, auth, model), the app was restarted mid-run (resume), or the chair or user
+ * decided to (manual).
  */
-export type HandoverCause = "quota" | "auth" | "resume" | "manual";
+export type HandoverCause = "quota" | "auth" | "model" | "resume" | "manual";
 
 export interface MemberFailure {
   kind: FailureKind;

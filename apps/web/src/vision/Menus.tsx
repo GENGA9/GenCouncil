@@ -279,7 +279,7 @@ export function WorkerMenu({ member, task, actions, onClose }: { member: Member;
       {!active && member.result?.unfinished && member.result.unfinished !== "없음" && <div className="vz-quote warn">미완료: {member.result.unfinished.slice(0, 220)}</div>}
       {member.failure && (
         <div className="vz-quote warn">
-          {member.failure.kind === "quota" ? "한도 소진" : member.failure.kind === "auth" ? "로그인 필요" : "오류"}: {member.failure.message.slice(0, 220)}
+          {member.failure.kind === "quota" ? "한도 소진" : member.failure.kind === "auth" ? "로그인 필요" : member.failure.kind === "model" ? "모델 미지원" : "오류"}: {member.failure.message.slice(0, 220)}
         </div>
       )}
       {member.error && !member.failure && <div className="vz-quote warn">{member.error.slice(0, 220)}</div>}

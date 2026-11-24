@@ -163,7 +163,7 @@ export interface Member {
   diffstat?: string;
   merged?: boolean;
   error?: string;
-  failure?: { kind: "quota" | "auth" | "other"; message: string; resetAt?: string };
+  failure?: { kind: "quota" | "auth" | "model" | "other"; message: string; resetAt?: string };
   handoverFrom?: string;
   handoverTo?: string;
   relayFiles?: string[];

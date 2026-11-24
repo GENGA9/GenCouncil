@@ -17,6 +17,11 @@ export function classifyFailure(provider: CliProvider, text: string, exitCode: n
     return { kind: "quota", message: firstLine(t, /usage limit/i), resetAt: new Date(ms).toISOString() };
   }
 
+  // Codex on a ChatGPT account: "The 'gpt-6.2-sol' model is not supported when using Codex with a
+  // ChatGPT account." (400 model_not_found). Nothing ran: the same login can do the work on another model.
+  const noModel = /model\b[^\n]{0,80}\bis not supported|model_not_found|model\b[^\n]{0,80}\bdoes not exist/i;
+  if (noModel.test(t)) return { kind: "model", message: firstLine(t, noModel) };
+
   const quotaWords = [
     "usage limit",
     "rate limit",
