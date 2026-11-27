@@ -45,7 +45,55 @@ export const DEFAULT_COOLDOWN_MS: Record<CliProvider, number> = {
   claude: 5 * 60 * 60 * 1000,
   gemini: 60 * 60 * 1000,
   gpt: 5 * 60 * 60 * 1000,
+  grok: 2 * 60 * 60 * 1000,
 };
+
+/** the real home folder, also when this process already runs under a Grok profile */
+function realHome(): string {
+  return process.env.GENCOUNCIL_REAL_HOME ?? process.env.USERPROFILE ?? process.env.HOME ?? "";
+}
+
+/**
+ * A Grok process's environment: its login (GROK_HOME) and a bare profile, with the user's git identity.
+ * `profile` gives a run a profile of its own (a chair, a member with MCP servers); the default one is shared.
+ */
+export function grokEnv(configDir?: string, profile?: string): Record<string, string> {
+  const real = realHome();
+  const dir = profile ?? path.join(real, ".gencouncil", "grok-profile");
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const gitconfig = path.join(real, ".gitconfig");
+    if (fs.existsSync(gitconfig)) fs.copyFileSync(gitconfig, path.join(dir, ".gitconfig"));
+  } catch {
+    /* the profile is a convenience; grok still runs */
+  }
+  return { GROK_HOME: configDir ?? path.join(real, ".grok"), USERPROFILE: dir, HOME: dir, GENCOUNCIL_REAL_HOME: real };
+}
+
+type McpEntry = { type?: string; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string> };
+
+/**
+ * MCP servers for one Grok run. Grok reads them from the Cursor-format file in its profile
+ * (<profile>/.cursor/mcp.json), the only MCP source a bare profile has. A bearer token is never
+ * written there: the header names ${env:GENCOUNCIL_COUNCIL_TOKEN}, set in the process env.
+ * A local server gets the real home back (the profile replaced it), so the memory server finds the space.
+ */
+export function writeGrokMcp(profile: string, servers: Record<string, McpEntry>, tokenInEnv: boolean): void {
+  const real = realHome();
+  const out: Record<string, unknown> = {};
+  for (const [name, s] of Object.entries(servers)) {
+    if (s.url) {
+      const auth = tokenInEnv ? { Authorization: "Bearer ${env:GENCOUNCIL_COUNCIL_TOKEN}" } : {};
+      const headers = Object.fromEntries(Object.entries(s.headers ?? {}).filter(([k]) => k.toLowerCase() !== "authorization"));
+      out[name] = { url: s.url, headers: { ...headers, ...auth } };
+    } else if (s.command) {
+      const env: Record<string, string> = { USERPROFILE: real, HOME: real, GENCOUNCIL_HOME: process.env.GENCOUNCIL_HOME ?? path.join(real, ".gencouncil"), ...(s.env ?? {}) };
+      out[name] = { command: s.command, args: s.args ?? [], env };
+    }
+  }
+  fs.mkdirSync(path.join(profile, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(profile, ".cursor", "mcp.json"), JSON.stringify({ mcpServers: out }, null, 2), "utf8");
+}
 
 export function accountsFile(): string {
   return path.join(gencouncilHome(), "accounts.json");
@@ -68,6 +116,7 @@ const IMPLICIT: Account[] = [
   { id: "claude", provider: "claude", priority: 50, status: "ok", note: "기본 로그인 (~/.claude)" },
   { id: "gemini", provider: "gemini", priority: 50, status: "ok", note: "기본 로그인 (Antigravity, PC당 하나)" },
   { id: "gpt", provider: "gpt", priority: 50, status: "ok", note: "기본 로그인 (~/.codex)" },
+  { id: "grok", provider: "grok", priority: 50, status: "ok", note: "기본 로그인 (~/.grok, Grok Build)" },
 ];
 
 export class AccountRegistry {
@@ -330,6 +379,9 @@ export class AccountRegistry {
 
   /** Environment that routes a CLI process to this account's login. */
   env(account: Account | undefined): Record<string, string> {
+    // Grok Build picks up Claude Code's skills, plugins, hooks and MCP servers from the user profile (a
+    // Claude hook once blocked its answer): it runs with a profile of its own, its login in GROK_HOME
+    if (account?.provider === "grok") return grokEnv(account.configDir);
     if (!account?.configDir) return {};
     if (account.provider === "claude") return { CLAUDE_CONFIG_DIR: account.configDir };
     if (account.provider === "gpt") return { CODEX_HOME: account.configDir };
@@ -351,7 +403,7 @@ export interface LoginCommand {
 /** Korean label of an account kind, for messages */
 export function providerLabel(p: AccountProvider): string {
   if (isWebSite(p)) return SITE_INFO[p].label;
-  return p === "claude" ? "클로드" : p === "gpt" ? "GPT" : "제미나이(안티그래비티)";
+  return p === "claude" ? "클로드" : p === "gpt" ? "GPT" : p === "grok" ? "그록(Grok Build)" : "제미나이(안티그래비티)";
 }
 
 export function loginCommand(account: Account, registry: AccountRegistry, chromeExe?: string): LoginCommand {
@@ -375,6 +427,8 @@ export function loginCommand(account: Account, registry: AccountRegistry, chrome
       return { kind: "cli", exe: "agy", args: [], env, hint: "Antigravity 창에서 이 구글 계정으로 로그인한 뒤 창을 닫으세요 (/login 으로 다시 로그인 가능)" };
     case "gpt":
       return { kind: "cli", exe: "codex", args: ["login"], env, hint: "브라우저에서 ChatGPT 계정으로 로그인하면 창이 닫힙니다" };
+    case "grok":
+      return { kind: "cli", exe: "grok", args: ["login", "--oauth"], env, hint: "브라우저에서 SuperGrok(X) 계정으로 로그인하면 끝납니다. 7일마다 다시 로그인이 필요할 수 있어요" };
   }
   throw new Error(`no login command for ${account.provider}`);
 }

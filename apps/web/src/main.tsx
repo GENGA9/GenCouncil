@@ -13,7 +13,8 @@ createRoot(document.getElementById("root")!).render(
   </React.StrictMode>,
 );
 
-if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+// built app only: on the dev server it would keep serving the old, unhashed source files from its cache
+if (import.meta.env.PROD && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   });

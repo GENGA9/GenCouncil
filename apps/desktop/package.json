@@ -5,5 +5,8 @@
   "description": "Tauri tray wrapper for the GenCouncil web console (needs Rust; see README)",
   "scripts": {
     "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6"
   }
 }

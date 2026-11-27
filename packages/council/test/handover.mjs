@@ -50,7 +50,7 @@ check("parseReset hours", parseReset("Your limit will reset in 2 hours", 0) === 
 
 // ---- account registry ----
 const reg = new AccountRegistry();
-check("implicit accounts exist", reg.list().map((a) => a.id).sort().join() === "claude,gemini,gpt");
+check("implicit accounts exist", reg.list().map((a) => a.id).sort().join() === "claude,gemini,gpt,grok");
 reg.upsert({ id: "claude-b", provider: "claude", configDir: path.join(tmp, "claude-b"), priority: 60 });
 check("pick prefers lower priority", reg.pick("claude").id === "claude");
 reg.markExhausted("claude", "limit", new Date(Date.now() + 60_000).toISOString());

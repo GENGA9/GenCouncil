@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-mode"
+description = "Enables the desktop_mode command without any pre-configured scope."
+commands.allow = ["desktop_mode"]
+
+[[permission]]
+identifier = "deny-desktop-mode"
+description = "Denies the desktop_mode command without any pre-configured scope."
+commands.deny = ["desktop_mode"]

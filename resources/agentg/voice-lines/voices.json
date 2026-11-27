@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "status": "v2 voices (user-picked clear young female voices) saved 2026-11-25 as agentg-v2-<char>; voice_id is v2 and 535 work lines are regenerated into voice-lines/v2 (see docs/VOICE_LINES.md generation v2). Older v1 status follows: v1 generated (2026-11-25): 5 voices saved (voice_id per character), 535 work lines generated with eleven_v4 (see docs/VOICE_LINES.md generation v1). Measured v4 yin medians on the reference line: dotchan 227, gpichan 247, claudechan 266, grokchan 280, gemmini 277 (new design C; saved A/B read 345 Hz and are unused). Tags and settings are otherwise still untested starting points; ear review pending",
+  "defaults": {
+    "voice_design": {
+      "endpoint": "POST /v1/text-to-voice/design",
+      "model_id": "eleven_ttv_v3",
+      "model_id_fallback": "eleven_multilingual_ttv_v2",
+      "note": "ttv_v4 returns 422. text must be 100+ chars (else 422, no charge). design calls are free and return 3 previews. Save with POST /v1/text-to-voice; saved voices cannot be deleted with a restricted key and the account has a 30-voice slot limit, so save only 1 preview per character direction."
+    },
+    "tts": {
+      "endpoint": "POST /v1/text-to-speech/{voice_id}",
+      "model_id": "eleven_v4",
+      "output_format": "mp3_44100_128",
+      "language_code_by_lang": { "ko": "ko", "ja": "ja" },
+      "voice_settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "use_speaker_boost": true },
+      "notes": [
+        "stability for the v3/v4 family may only accept 0.0, 0.5 or 1.0 (Creative / Natural / Robust). Confirm with the first real call; if a fractional value is rejected use 0.5.",
+        "speed has no effect on clip length on v4; adjust tempo afterwards with ffmpeg atempo <= 1.15 if needed.",
+        "character-cost response header counts [tag] characters too. Sum it per call to track credits.",
+        "Max 5 concurrent requests. Turn automatic retries off.",
+        "Normalize decoded mp3 peaks to -1 dBFS before conversion."
+      ]
+    },
+    "stt_check": {
+      "endpoint": "POST /v1/speech-to-text",
+      "model_id": "scribe_v1",
+      "language_code_by_lang": { "ko": "kor", "ja": "jpn" },
+      "tag_audio_events": true
+    }
+  },
+  "v4_tags_global": {
+    "avoid": [
+      "[shouting]", "[screaming]", "[loudly]", "[commanding]", "[authoritative]",
+      "[warmly]", "[proudly]", "[arrogantly]", "[firmly]", "[resolute]",
+      "[startled]", "[alarmed]", "[shocked]", "[excited]", "[cheerfully]",
+      "[theatrical]", "[dramatically]", "[growling]", "[whispers]", "[low voice]",
+      "[evil laugh]", "[pause]"
+    ],
+    "why": [
+      "Korean eleven_v4: [arrogantly]/[firmly] raised F0 enough to sound like a different speaker; [shouting]/[screaming]/[startled]/[alarmed]/[shocked] pushed F0 far up; [loudly] adds about +40~60 Hz; [commanding] also rises on lines ending with '!'; [warmly]/[proudly] raised F0 on new Voice Design voices.",
+      "[growling] produced takes whose transcript collapsed into moaning.",
+      "[whispers] is mostly unvoiced: F0 measurement and loudness normalization break, and preset lines must stay level-matched.",
+      "[low voice] sounds like a whisper (about 100 Hz on a male voice), not usable here.",
+      "[cheerfully]/[excited] are untested for these voices and likely to raise pitch; brightness should come from the voice design and wording, not tags.",
+      "[pause] slows v4 and lengthens clips."
+    ],
+    "rules": [
+      "Tags are optional. Most preset lines use no tag; the voice itself carries the character.",
+      "Use at most one tag per line, only from the character's allowed list.",
+      "Every tagged line is an untested candidate: generate it with and without the tag and keep the take whose yin F0 median stays inside that character's untagged distribution.",
+      "Very short lines (one or two syllables) can be spoken twice in a single request. The script keeps every line at 5+ non-punctuation characters; still check takes with 10 ms RMS blocks and Whisper/scribe.",
+      "Do not judge STT mismatches on name+particle liaison alone; listen."
+    ]
+  },
+  "contrast": {
+    "principle": "Judge separation by order and gaps of v4 yin F0 medians measured on the same reference line, not by absolute bands. Target order (low to high): dotchan < gpichan < claudechan < grokchan < gemmini, with about 15 Hz or more between neighbours. Timbre and pace carry the rest of the contrast, especially where two voices sit close in pitch.",
+    "reference_line_ko": "작업이 끝났습니다. 결과를 확인해 주세요.",
+    "reference_line_ja": "作業が終わりました。結果を確認してください。",
+    "table": [
+      { "id": "dotchan", "pitch_rank": 1, "pitch": "low-medium (lowest)", "pace": "slow, measured", "timbre": "smooth, velvety, deep, steady", "energy": "very calm" },
+      { "id": "gpichan", "pitch_rank": 2, "pitch": "medium-low", "pace": "brisk, even", "timbre": "cool, crisp, clear, flat", "energy": "neutral, no emotion" },
+      { "id": "claudechan", "pitch_rank": 3, "pitch": "medium", "pace": "moderate, unhurried", "timbre": "soft, warm, rounded, slightly breathy", "energy": "gentle, reassuring" },
+      { "id": "grokchan", "pitch_rank": 4, "pitch": "medium-high", "pace": "quick, clipped", "timbre": "slightly husky, textured edge", "energy": "cool, nonchalant, sulky" },
+      { "id": "gemmini", "pitch_rank": 5, "pitch": "high-medium (highest, but adult)", "pace": "fast, lively", "timbre": "bright, clear, bouncy, smiling", "energy": "cheerful, eager" }
+    ],
+    "f0_guess_hz_untested": {
+      "note": "Personal guesses for adult female Korean v4 speech, only to sanity-check the first measurements. Replace with measured medians.",
+      "dotchan": "about 170-190",
+      "gpichan": "about 190-205",
+      "claudechan": "about 205-220",
+      "grokchan": "about 220-240",
+      "gemmini": "about 240-260 (keep near 260 or below so she does not sound like a child)"
+    }
+  },
+  "voices": [
+    {
+      "id": "claudechan",
+      "name": "클로드쨩",
+      "voice_id": "kuCHgwhYlJBpfML9O3vl",
+      "voice_id_alternatives": { "v1": "1DEAqjT0cy5aYLlySLXX" },
+      "brain": "claude-code",
+      "preset": "kind-secretary",
+      "appearance_hint": "orange hair in low buns, round thin metal glasses, amber eyes, star hairpins, white turtleneck and cardigan, holding a teacup; bookish, gentle tea-time impression",
+      "target": { "pitch_rank": 3, "pitch": "medium", "pace": "moderate", "timbre": "soft, warm, rounded" },
+      "voice_design": {
+        "description": "Adult Korean woman in her mid twenties, Korean native speaker with a natural standard Seoul accent. Medium pitch, a little on the higher side of medium, with a soft, warm, rounded, lightly sweet timbre, slightly breathy but clear and close to the microphone. The gentle, bookish softness of a quiet reader with round glasses, the warm hush of a tea-time afternoon, like someone pouring tea while listening. Moderate, unhurried pace with smooth phrasing and gently falling, rounded sentence endings. Default emotion: kind, attentive and reassuring, like a considerate personal secretary speaking quietly in a calm office. Polite and friendly, never childish, no exaggerated cuteness, no vocal fry. Clean dry studio recording, no background noise, no music.",
+        "sample_text_ko": "안녕하세요. 오늘 작업은 제가 옆에서 차근차근 챙겨 둘게요. 빌드가 끝나면 바로 알려 드리고, 문제가 생기면 같이 원인부터 살펴봐요. 너무 무리하지 마시고, 잠깐 쉬었다 하셔도 괜찮아요. 결과는 제가 깔끔하게 정리해 둘게요. 저는 여기 있을게요.",
+        "sample_text_ja": "こんにちは。今日の作業は、わたしがそばで少しずつ整えておきますね。ビルドが終わったらすぐにお知らせしますし、問題が起きたら一緒に原因から見ていきましょう。無理をしないで、少し休んでからでも大丈夫ですよ。結果はきれいにまとめておきますね。"
+      },
+      "voice_design_v2": {
+        "note": "2026-11-25 redesign: clear, bright, sweet young adult female voice (user said the v1 voices all sound muddy). The candidate the user picked (dotchan B, gpichan B, claudechan A, grokchan A, gemmini B) was saved as agentg-v2-<char> and is the voice_id above; the v1 voice id is kept in voice_id_alternatives.v1. Muddy words (husky, breathy, velvety, deep, smooth, textured, warm, rounded, dry) are removed on purpose.",
+        "description": "A young Korean woman around twenty years old, a grown young adult woman and not a child or little girl. Korean native speaker with a natural standard Seoul accent. A clear, bright, pure, sweet, crystal-clear voice with a light, clean, transparent timbre and clean, precise articulation. No rasp, no huskiness, no vocal fry, no breathiness, not deep, not nasal, not muffled. Medium pitch, a sweet, clear soprano. Moderate, unhurried pace. Kind, gentle and softly smiling, friendly and reassuring, like a considerate young secretary who is happy to help; sentence endings fall softly and kindly. Close-mic, clean studio recording, no background noise, no music.",
+        "sample_text_ko": "안녕하세요. 오늘도 제가 옆에서 천천히 도와 드릴게요. 편하게 말씀해 주세요.",
+        "contrast": "높이 중간 · 속도 보통(여유) · 억양: 부드럽게 내려가는 다정한 어미, 미소 띤 맑은 목소리"
+      },
+      "tts": {
+        "model_id": "eleven_v4",
+        "voice_settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0.2, "use_speaker_boost": true }
+      },
+      "v4_tags": {
+        "allowed": ["[gently]", "[softly]", "[calmly]", "[sighs]"],
+        "avoid_extra": ["[warmly]"],
+        "note": "The warmth must come from the voice itself. [warmly] is the obvious tag for her and is exactly the one that raised F0 on new voices; use [gently] instead."
+      }
+    },
+    {
+      "id": "gpichan",
+      "name": "지피쨩",
+      "voice_id": "H5RvYINpyHY83W5M156h",
+      "voice_id_alternatives": { "v1": "wH8UPRBkSBLgIjuETJPz" },
+      "brain": "codex",
+      "preset": "brief-reporter",
+      "appearance_hint": "silver bob with straight bangs and blue streaks, blue eyes, white oversized hooded jacket, black turtleneck, fingerless gloves; sleek, techy, minimal impression",
+      "target": { "pitch_rank": 2, "pitch": "medium-low", "pace": "brisk, even", "timbre": "cool, crisp, clear" },
+      "voice_design": {
+        "description": "Adult Korean woman in her mid twenties, Korean native speaker with a standard Seoul accent. Medium-low pitch with a cool, crisp, clear timbre and very precise articulation. Sleek, techy and minimal, like a polished product-interface voice with nothing extra in it. Slightly brisk, even pace with flat, controlled intonation and short clipped sentence endings, like a concise status announcer reading a system report. Default emotion: neutral, composed and matter-of-fact. Minimal pitch movement, no laughter, no sighs, no excitement, no breathiness. Clean dry studio recording, no background noise, no music.",
+        "sample_text_ko": "작업 완료했습니다. 테스트는 전부 통과했습니다. 빌드 끝났고, 실행 가능합니다. 머지 충돌이 하나 있습니다. 판단 필요합니다. 승인 요청입니다. 확인 후 진행합니다. 다음 작업은 배포 확인입니다. 이상입니다. 보고 마칩니다.",
+        "sample_text_ja": "作業完了です。テストは全件通過しました。ビルドが終わり、実行できます。マージ衝突が一件あります。判断が必要です。承認をお願いします。確認後に進めます。次の作業は配布の確認です。以上です。報告を終わります。"
+      },
+      "voice_design_v2": {
+        "note": "2026-11-25 redesign: clear, bright, sweet young adult female voice (user said the v1 voices all sound muddy). The candidate the user picked (dotchan B, gpichan B, claudechan A, grokchan A, gemmini B) was saved as agentg-v2-<char> and is the voice_id above; the v1 voice id is kept in voice_id_alternatives.v1. Muddy words (husky, breathy, velvety, deep, smooth, textured, warm, rounded, dry) are removed on purpose.",
+        "description": "A young Korean woman around twenty years old, a grown young adult woman and not a child or little girl. Korean native speaker with a natural standard Seoul accent. A clear, bright, pure, sweet, crystal-clear voice with a light, clean, transparent timbre and clean, precise articulation. No rasp, no huskiness, no vocal fry, no breathiness, not deep, not nasal, not muffled. Medium pitch, a little lower than a bright pop voice but crisp, clear and pure like clean glass. Brisk, even pace with tidy, controlled intonation and short, clean sentence endings: a neat, composed reporting tone, cool but clear, with no emotional flourish. Close-mic, clean studio recording, no background noise, no music.",
+        "sample_text_ko": "다음 작업은 배포 확인입니다. 확인 후 이어서 진행하겠습니다. 테스트는 모두 통과했습니다. 이상입니다.",
+        "contrast": "높이 중간보다 약간 낮음 · 속도 약간 빠름·고름 · 억양: 평탄하고 단정한 보고 톤(차갑지만 맑음)"
+      },
+      "tts": {
+        "model_id": "eleven_v4",
+        "voice_settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "use_speaker_boost": true }
+      },
+      "v4_tags": {
+        "allowed": [],
+        "avoid_extra": ["[sighs]", "[gently]", "[happy]", "[sad]"],
+        "note": "No emotion by design: never use tags for her. If a take sounds too lively, regenerate rather than adding a tag. Try stability 1.0 if 0.5 drifts."
+      }
+    },
+    {
+      "id": "gemmini",
+      "name": "젬미니",
+      "voice_id": "p6SXyu79bD5GuVXN01jE",
+      "voice_id_alternatives": {"v1": "jecM6r6kGZRAewVFQbhT", "B": "rSLAVVxnctf8uf3OIq29", "C": "VsHbFY6yzaGdctUsCyqY", "note": "v1 era: voice_id was A (the user chose A on 2026-11-25; A reads about 344 Hz on v4 reference line, child-like risk, accepted by the user). Saved but unused: B (about 350 Hz). C (about 277 Hz, previously used) kept here for rollback"},
+      "voice_design_used": {"note": "the saved voice in use (C), not the 'description' below: design call model eleven_ttv_v3, seed 4502, preview index 1 (generated_voice_id = voice_id)", "seed": 4502, "preview_index": 1, "description": "Adult Korean woman in her late twenties, Korean native speaker with a standard Seoul accent. Low-medium pitch, mezzo-alto, a relaxed full chest voice, a little breathy and husky, the register of a woman who normally speaks quite low. Bright and playful only through the smile, speed and bouncy rhythm: talkative, teasing, eager, cheeky grin in the voice. Definitely an adult woman, never childish, never high, never squeaky. Clean dry studio recording, no background noise, no music.", "text": "선배, 안녕하세요! 오늘도 같이 달려 봐요! 와, 빌드 진짜 금방 끝났어요. 테스트도 전부 초록불이에요! 앗, 하나 빨간불이 있긴 한데요, 괜찮아요. 제가 금방 잡을게요! 선배는 잠깐 쉬고 계세요. 끝나면 제일 먼저 알려 드릴게요!"},
+      "brain": "gemini",
+      "preset": "cheerful-junior",
+      "appearance_hint": "twin tails with teal ribbons, teal X hairpin, blue eyes with red slit pupils, small fangs, suspenders; sparkly, playful fang-grin impression",
+      "target": { "pitch_rank": 5, "pitch": "high-medium", "pace": "fast, lively", "timbre": "bright, clear, bouncy" },
+      "voice_design": {
+        "description": "Young adult Korean woman in her early twenties, Korean native speaker with a standard Seoul accent. Upper-medium pitch, only a little higher than the other voices, never high-pitched: the brightness comes from the smile, the energy and the bouncy rhythm, not from pitch. A grounded, fuller young woman's voice with some chest resonance, lower than a typical cute voice, with a clear, bouncy, smiling timbre. Sparkly and playful, with a cheeky fang-grin energy in the voice, a teasing little grin in every line, yet fully grown-up. Fast, lively pace with wide upbeat intonation and energetic, rising sentence endings, short exclamations come naturally. Default emotion: cheerful, eager and enthusiastic, like an energetic junior coworker who admires her senior. Clearly an adult voice, not a child, not squeaky, not shrill. Clean dry studio recording, no background noise, no music.",
+        "sample_text_ko": "선배, 안녕하세요! 오늘도 같이 달려 봐요! 와, 빌드 진짜 금방 끝났어요. 테스트도 전부 초록불이에요! 앗, 하나 빨간불이 있긴 한데요, 괜찮아요. 제가 금방 잡을게요! 선배는 잠깐 쉬고 계세요. 끝나면 제일 먼저 알려 드릴게요!",
+        "sample_text_ja": "先輩、こんにちはっす！今日も一緒に頑張りましょう！わっ、ビルドめっちゃ速く終わりましたよ。テストも全部通ってます！あっ、一つだけ落ちてるんですけど、大丈夫です。すぐ直せますって！先輩は少し休んでてください。終わったら一番に知らせますね！"
+      },
+      "voice_design_v2": {
+        "note": "2026-11-25 redesign: clear, bright, sweet young adult female voice (user said the v1 voices all sound muddy). The candidate the user picked (dotchan B, gpichan B, claudechan A, grokchan A, gemmini B) was saved as agentg-v2-<char> and is the voice_id above; the v1 voice id is kept in voice_id_alternatives.v1. Muddy words (husky, breathy, velvety, deep, smooth, textured, warm, rounded, dry) are removed on purpose.",
+        "description": "A young Korean woman around twenty years old, a grown young adult woman and not a child or little girl. Korean native speaker with a natural standard Seoul accent. A clear, bright, pure, sweet, crystal-clear voice with a light, clean, transparent timbre and clean, precise articulation. No rasp, no huskiness, no vocal fry, no breathiness, not deep, not nasal, not muffled. The highest and brightest of the group but clearly a grown young woman, never childish and never squeaky. Fast, lively, bouncy pace with wide, sparkling intonation and a big smile in the voice: cheerful, eager and playful. Close-mic, clean studio recording, no background noise, no music.",
+        "sample_text_ko": "선배, 안녕하세요! 오늘도 같이 힘내 봐요! 제가 금방 끝낼게요! 기다려 주세요!",
+        "contrast": "높이 가장 높음(성인) · 속도 빠름 · 억양: 폭이 크고 통통 튀는, 웃는 목소리"
+      },
+      "tts": {
+        "model_id": "eleven_v4",
+        "voice_settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0.35, "use_speaker_boost": true }
+      },
+      "v4_tags": {
+        "allowed": ["[sighs]"],
+        "avoid_extra": ["[laughs]", "[giggles]"],
+        "note": "She is already the highest voice, so any pitch-raising tag ([excited], [cheerfully], [shouting]) pushes her into a child-like range. Exclamation marks in the text are enough. [laughs]/[giggles] are untested and may add takes with long laughter; keep off for preset lines."
+      }
+    },
+    {
+      "id": "grokchan",
+      "name": "그록쨩",
+      "voice_id": "j18UFsxOLAVig7csIsff",
+      "voice_id_alternatives": { "v1": "PEdPZ6dZeHx2uM96y5qM" },
+      "brain": "grok",
+      "preset": "tsundere-colleague",
+      "appearance_hint": "wavy blonde hair, black X hairpins on both sides, grey eyes, a fang, black jacket over an X top; rebellious cool, smirky impression",
+      "target": { "pitch_rank": 4, "pitch": "medium-high", "pace": "quick, clipped", "timbre": "slightly husky, textured" },
+      "voice_design": {
+        "description": "Adult Korean woman in her mid twenties, Korean native speaker with a standard Seoul accent. Medium-high pitch with a slightly husky, textured edge and a cool, confident attitude. A rebellious cool edge with a smirk in the voice, like a leather-jacket rebel who would never admit she cares. Quick, clipped delivery with short casual phrases and a small downward drop at sentence endings, as if shrugging something off. Default emotion: nonchalant and a little sulky on the surface, secretly caring underneath, a hint of embarrassment when thanked. Never harsh, never aggressive, never shouting. Clean dry studio recording, no background noise, no music.",
+        "sample_text_ko": "왔어? 늦었잖아. 빌드는 벌써 끝났어. 딱히 너 기다린 건 아니고. 테스트 두 개 깨진 건 내가 로그 봐 뒀어. 고맙다고? 됐어, 그냥 할 일 한 거야. 너무 오래 앉아 있지 말고 좀 쉬어. 쓰러지면 귀찮은 건 나거든.",
+        "sample_text_ja": "来たの？遅かったじゃん。ビルドはもう終わってるよ。別にあんたを待ってたわけじゃないけど。落ちたテストのログは、あたしがもう見ておいたから。ありがとうって？いいよ、やることやっただけだし。ずっと座ってないで、少しは休みなよ。"
+      },
+      "voice_design_v2": {
+        "note": "2026-11-25 redesign: clear, bright, sweet young adult female voice (user said the v1 voices all sound muddy). The candidate the user picked (dotchan B, gpichan B, claudechan A, grokchan A, gemmini B) was saved as agentg-v2-<char> and is the voice_id above; the v1 voice id is kept in voice_id_alternatives.v1. Muddy words (husky, breathy, velvety, deep, smooth, textured, warm, rounded, dry) are removed on purpose.",
+        "description": "A young Korean woman around twenty years old, a grown young adult woman and not a child or little girl. Korean native speaker with a natural standard Seoul accent. A clear, bright, pure, sweet, crystal-clear voice with a light, clean, transparent timbre and clean, precise articulation. No rasp, no huskiness, no vocal fry, no breathiness, not deep, not nasal, not muffled. Medium-high pitch, pure and clear but a little bored and playful: a nonchalant, slightly sulky, teasing tone. Quick, clipped delivery with casual sentence endings that trail off or tip up, like someone pretending not to care. Clean timbre even when sarcastic, never gravelly. Close-mic, clean studio recording, no background noise, no music.",
+        "sample_text_ko": "뭐, 별거 아니었어. 아직도 안 쉬었어? 그러다 쓰러진다니까. 걱정돼서 하는 말 아니거든.",
+        "contrast": "높이 중간보다 높음 · 속도 빠르고 짧게 끊음 · 억양: 어미를 흘리거나 올리는 시큰둥·장난기, 맑은 음색"
+      },
+      "tts": {
+        "model_id": "eleven_v4",
+        "voice_settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0.25, "use_speaker_boost": true }
+      },
+      "v4_tags": {
+        "allowed": ["[sighs]", "[calmly]"],
+        "avoid_extra": ["[annoyed]", "[angrily]", "[sarcastic]", "[furious]", "[hoarse voice]"],
+        "note": "Tsundere 'anger' must stay playful: [annoyed]/[angrily]/[sarcastic] are untested and tend to push pitch and harshness. [hoarse voice]/[furious] were tuned for shouts, not for her. The husky edge belongs in the voice design, not in tags."
+      }
+    },
+    {
+      "id": "dotchan",
+      "name": "닷쨩",
+      "voice_id": "NmCyGQRXrb2MhDtGx7gq",
+      "voice_id_alternatives": { "v1": "t5bKX0Bsya9RyrEdzqRf" },
+      "brain": "dots",
+      "preset": "calm-butler",
+      "appearance_hint": "long straight black hair with blunt bangs, narrow long sharp grey eyes (cool, keen beauty), a beauty mark under one eye, silver hairpins, white shirt, black pencil skirt, lanyard ID badge",
+      "target": { "pitch_rank": 1, "pitch": "low-medium", "pace": "slow, measured", "timbre": "smooth, velvety, deep" },
+      "voice_design": {
+        "description": "Adult Korean woman in her late twenties to early thirties, Korean native speaker with a formal standard Seoul accent. Low pitch, a low-medium alto clearly the lowest and deepest of the group, with a smooth, velvety, composed timbre that carries a cool, crisp, slightly cold elegance, the voice of a sharp-eyed, icy beauty. Sharp, refined diction with clean consonants, yet still slow, measured and steady, with deliberate, unhurried phrasing and very stable intonation. Default emotion: calm, polite and dignified, like a refined head butler quietly addressing her employer, composed and a little aloof but never rude. She never raises her voice, never sounds excited, no sweetness, no breathiness. Clean dry studio recording, no background noise, no music.",
+        "sample_text_ko": "다녀오셨습니까, 주인님. 맡겨 주신 작업은 모두 마쳤습니다. 테스트 두 건이 실패했지만, 기록은 정리해 두었습니다. 승인해 주시면 바로 진행하겠습니다. 오래 일하셨습니다. 차라도 한잔 하시겠습니까? 필요하신 것은 미리 준비해 두겠습니다.",
+        "sample_text_ja": "お帰りなさいませ、ご主人様。お任せいただいた作業はすべて完了いたしました。テストが二件失敗しておりますが、記録はまとめてございます。ご承認いただければ、すぐに進めます。長くお仕事なさいましたね。お茶でもいかがですか。"
+      },
+      "voice_design_v2": {
+        "note": "2026-11-25 redesign: clear, bright, sweet young adult female voice (user said the v1 voices all sound muddy). The candidate the user picked (dotchan B, gpichan B, claudechan A, grokchan A, gemmini B) was saved as agentg-v2-<char> and is the voice_id above; the v1 voice id is kept in voice_id_alternatives.v1. Muddy words (husky, breathy, velvety, deep, smooth, textured, warm, rounded, dry) are removed on purpose.",
+        "description": "A young Korean woman around twenty years old, a grown young adult woman and not a child or little girl. Korean native speaker with a natural standard Seoul accent. A clear, bright, pure, sweet, crystal-clear voice with a light, clean, transparent timbre and clean, precise articulation. No rasp, no huskiness, no vocal fry, no breathiness, not deep, not nasal, not muffled. The lowest-pitched voice of the five characters, the low register of a young woman, yet still a pure, light, clean and clear mezzo, never dark, thick or heavy. Slow, measured, steady pace. Calm, dignified and elegant with cool-beauty composure, formal polite diction and refined, crisp consonants, a little aloof but never rude. Close-mic, clean studio recording, no background noise, no music.",
+        "sample_text_ko": "필요하신 것은 미리 준비해 두겠습니다. 편히 말씀해 주십시오, 주인님.",
+        "contrast": "높이 가장 낮은 편이지만 맑음 · 속도 느리고 일정 · 억양: 차분하고 기품 있는 하십시오체, 쿨뷰티"
+      },
+      "tts": {
+        "model_id": "eleven_v4",
+        "voice_settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0.1, "use_speaker_boost": true }
+      },
+      "v4_tags": {
+        "allowed": ["[calmly]", "[gently]", "[softly]", "[slowly]"],
+        "avoid_extra": ["[solemn]", "[grave]", "[deep voice]"],
+        "note": "Low, calm tags ([calmly], [slowly]) brought F0 back down in an earlier male-voice case. Do not try to make her lower with [deep voice]/[grave]; that was a male shout fix and may change her character. If she is not low enough, redesign the voice rather than tag it."
+      }
+    }
+  ]
+}

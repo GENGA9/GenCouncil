@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { gencouncilHome, slugify } from "@gencouncil/core";
@@ -455,11 +456,40 @@ export class AgendaStore {
     return hit ? new AgendaStore(project, hit.slug) : undefined;
   }
 
+  /**
+   * slugs a new agenda of this project must not take (lower-cased). Worktrees and branches are named
+   * after the slug inside the repo, so besides this project's own agendas this covers every other
+   * project on the same folder, leftover .worktrees/<slug> folders and existing agenda/<slug> branches:
+   * two projects on one repo once shared "새-안건", and finishing one deleted the other's worktree.
+   */
+  static takenSlugs(project: ProjectConfig): Set<string> {
+    const taken = new Set<string>();
+    const add = (s: string | undefined) => s && taken.add(s.toLowerCase());
+    for (const a of AgendaStore.list(project)) add(a?.slug);
+    const same = (a: string, b: string) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+    for (const other of new ProjectRegistry().list()) {
+      if (!other || other.id === project.id || !other.repo || !project.repo || !same(other.repo, project.repo)) continue;
+      for (const a of AgendaStore.list(other)) add(a?.slug);
+    }
+    try {
+      for (const d of fs.readdirSync(path.join(project.repo, ".worktrees"))) add(d);
+    } catch {
+      /* no worktrees yet */
+    }
+    try {
+      const r = spawnSync("git", ["for-each-ref", "--format=%(refname:short)", "refs/heads/agenda/"], { cwd: project.repo, encoding: "utf8", windowsHide: true });
+      for (const b of (r.stdout ?? "").split("\n").map((l) => l.trim())) if (b.startsWith("agenda/")) add(b.slice("agenda/".length));
+    } catch {
+      /* not a git folder yet */
+    }
+    return taken;
+  }
+
   static create(project: ProjectConfig, title: string, goals: string[]): AgendaStore {
     let slug = slugify(title, 40);
-    const existing = new Set(AgendaStore.list(project).map((a) => a.slug));
+    const existing = AgendaStore.takenSlugs(project);
     let n = 2;
-    while (existing.has(slug)) slug = `${slugify(title, 40)}-${n++}`;
+    while (existing.has(slug.toLowerCase())) slug = `${slugify(title, 40)}-${n++}`;
     const store = new AgendaStore(project, slug);
     const cfg: AgendaConfig = {
       slug,
@@ -518,10 +548,11 @@ export class AgendaStore {
     fs.mkdirSync(this.chairDir(), { recursive: true });
     fs.writeFileSync(path.join(this.chairDir(), "state.md"), md.trim() + "\n", "utf8");
   }
-  chairSession(): { sessionId?: string; model?: string; provider?: string } {
+  /** modelId: what the chair's model setting ran as last time (an alias resolved by the CLI) */
+  chairSession(): { sessionId?: string; model?: string; provider?: string; modelId?: string } {
     return readJson(path.join(this.chairDir(), "session.json"), {});
   }
-  saveChairSession(s: { sessionId?: string; model?: string; provider?: string }): void {
+  saveChairSession(s: { sessionId?: string; model?: string; provider?: string; modelId?: string }): void {
     writeJson(path.join(this.chairDir(), "session.json"), s);
   }
 

@@ -1,0 +1,823 @@
+{
+ "claudechan": {
+  "regions": {
+   "skin": [
+    452,
+    380,
+    208,
+    84
+   ],
+   "eyes": [
+    432,
+    296,
+    248,
+    140
+   ],
+   "mouth": [
+    532,
+    440,
+    108,
+    56
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 496,
+    "y": 850,
+    "rx": 75,
+    "ry": 68,
+    "focus": [
+     484,
+     864
+    ],
+    "max": 36
+   },
+   {
+    "x": 702,
+    "y": 850,
+    "rx": 78,
+    "ry": 68,
+    "focus": [
+     716,
+     864
+    ],
+    "max": 36
+   }
+  ]
+ },
+ "gpichan": {
+  "regions": {
+   "skin": [
+    320,
+    408,
+    220,
+    40
+   ],
+   "eyes": [
+    292,
+    336,
+    288,
+    88
+   ],
+   "mouth": [
+    384,
+    464,
+    96,
+    60
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 458,
+    "y": 926,
+    "rx": 94,
+    "ry": 115,
+    "focus": [
+     440,
+     947
+    ],
+    "max": 36
+   },
+   {
+    "x": 670,
+    "y": 930,
+    "rx": 102,
+    "ry": 112,
+    "focus": [
+     691,
+     951
+    ],
+    "max": 36
+   }
+  ]
+ },
+ "gemmini": {
+  "regions": {
+   "skin": [
+    276,
+    428,
+    280,
+    40
+   ],
+   "eyes": [
+    248,
+    352,
+    344,
+    80
+   ],
+   "mouth": [
+    352,
+    460,
+    136,
+    84
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 300,
+    "y": 994,
+    "rx": 94,
+    "ry": 126,
+    "focus": [
+     283,
+     1018
+    ],
+    "max": 36
+   },
+   {
+    "x": 527,
+    "y": 992,
+    "rx": 105,
+    "ry": 128,
+    "focus": [
+     548,
+     1018
+    ],
+    "max": 36
+   }
+  ]
+ },
+ "grok-x": {
+  "regions": {
+   "skin": [
+    304,
+    368,
+    236,
+    32
+   ],
+   "eyes": [
+    288,
+    280,
+    268,
+    96
+   ],
+   "mouth": [
+    360,
+    408,
+    124,
+    72
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide",
+    "angry",
+    "sleepy"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 327,
+    "y": 920,
+    "rx": 92,
+    "ry": 113,
+    "focus": [
+     310,
+     944
+    ],
+    "max": 36
+   },
+   {
+    "x": 548,
+    "y": 924,
+    "rx": 98,
+    "ry": 113,
+    "focus": [
+     568,
+     947
+    ],
+    "max": 36
+   }
+  ]
+ },
+ "dotchan": {
+  "regions": {
+   "skin": [
+    316,
+    308,
+    204,
+    52
+   ],
+   "eyes": [
+    296,
+    240,
+    244,
+    88
+   ],
+   "mouth": [
+    384,
+    352,
+    88,
+    60
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 320,
+    "y": 780,
+    "rx": 74,
+    "ry": 73,
+    "focus": [
+     306,
+     795
+    ],
+    "max": 30
+   },
+   {
+    "x": 574,
+    "y": 789,
+    "rx": 75,
+    "ry": 61,
+    "focus": [
+     588,
+     799
+    ],
+    "max": 30
+   }
+  ]
+ },
+ "claudechan-full": {
+  "regions": {
+   "skin": [
+    356,
+    260,
+    120,
+    16
+   ],
+   "eyes": [
+    348,
+    208,
+    136,
+    56
+   ],
+   "mouth": [
+    388,
+    272,
+    56,
+    36
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 483,
+    "y": 508,
+    "rx": 65,
+    "ry": 62,
+    "focus": [
+     506,
+     526
+    ],
+    "max": 34
+   },
+   {
+    "x": 349,
+    "y": 508,
+    "rx": 65,
+    "ry": 62,
+    "focus": [
+     326,
+     526
+    ],
+    "max": 34
+   }
+  ],
+  "anchor": [
+   416,
+   1645
+  ],
+  "top": 27
+ },
+ "gpichan-full": {
+  "regions": {
+   "skin": [
+    344,
+    296,
+    116,
+    24
+   ],
+   "eyes": [
+    332,
+    248,
+    140,
+    56
+   ],
+   "mouth": [
+    384,
+    312,
+    56,
+    32
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 392,
+    "y": 503,
+    "rx": 49,
+    "ry": 50,
+    "focus": [
+     378,
+     518
+    ],
+    "max": 28
+   },
+   {
+    "x": 491,
+    "y": 503,
+    "rx": 48,
+    "ry": 50,
+    "focus": [
+     505,
+     518
+    ],
+    "max": 28
+   }
+  ],
+  "anchor": [
+   405,
+   1622
+  ],
+  "top": 127
+ },
+ "gemmini-full": {
+  "regions": {
+   "skin": [
+    360,
+    216,
+    136,
+    40
+   ],
+   "eyes": [
+    340,
+    176,
+    176,
+    64
+   ],
+   "mouth": [
+    384,
+    236,
+    68,
+    48
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 383,
+    "y": 506,
+    "rx": 72,
+    "ry": 72,
+    "focus": [
+     363,
+     528
+    ],
+    "max": 36
+   },
+   {
+    "x": 527,
+    "y": 508,
+    "rx": 72,
+    "ry": 72,
+    "focus": [
+     547,
+     530
+    ],
+    "max": 36
+   }
+  ],
+  "anchor": [
+   427,
+   1645
+  ],
+  "top": 13
+ },
+ "grok-x-full": {
+  "regions": {
+   "skin": [
+    372,
+    208,
+    120,
+    32
+   ],
+   "eyes": [
+    364,
+    172,
+    144,
+    52
+   ],
+   "mouth": [
+    404,
+    228,
+    68,
+    36
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide",
+    "angry",
+    "sleepy"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 372,
+    "y": 500,
+    "rx": 60,
+    "ry": 58,
+    "focus": [
+     354,
+     517
+    ],
+    "max": 32
+   },
+   {
+    "x": 520,
+    "y": 500,
+    "rx": 46,
+    "ry": 58,
+    "focus": [
+     534,
+     517
+    ],
+    "max": 32
+   }
+  ],
+  "anchor": [
+   428,
+   1655
+  ],
+  "top": 38
+ },
+ "dotchan-full": {
+  "regions": {
+   "skin": [
+    368,
+    216,
+    112,
+    16
+   ],
+   "eyes": [
+    356,
+    180,
+    140,
+    36
+   ],
+   "mouth": [
+    400,
+    244,
+    52,
+    28
+   ]
+  },
+  "states": {
+   "skin": [
+    "normal",
+    "blush"
+   ],
+   "eyes": [
+    "open",
+    "half",
+    "closed",
+    "smile",
+    "sad",
+    "wide",
+    "angry",
+    "sleepy"
+   ],
+   "mouth": [
+    "closed",
+    "open_m",
+    "open_l",
+    "smile_closed",
+    "smile_open_l",
+    "o"
+   ]
+  },
+  "sets": {
+   "normal": [
+    "closed",
+    "open_m",
+    "open_l"
+   ],
+   "smile": [
+    "smile_closed",
+    "smile_open_l"
+   ]
+  },
+  "chest": [
+   {
+    "x": 336,
+    "y": 458,
+    "rx": 46,
+    "ry": 46,
+    "focus": [
+     322,
+     474
+    ],
+    "max": 28
+   },
+   {
+    "x": 445,
+    "y": 506,
+    "rx": 9,
+    "ry": 24,
+    "focus": [
+     448,
+     512
+    ],
+    "max": 8
+   }
+  ],
+  "anchor": [
+   425,
+   1643
+  ],
+  "top": 55
+ }
+}

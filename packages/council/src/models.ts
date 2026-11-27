@@ -3,7 +3,7 @@
  * The chair picks provider / model / effort / advisor for each task; the council
  * rejects anything above the user's limits so the chair can re-pick.
  */
-export const CLI_PROVIDERS = ["claude", "gemini", "gpt"] as const;
+export const CLI_PROVIDERS = ["claude", "gemini", "gpt", "grok"] as const;
 export type CliProvider = (typeof CLI_PROVIDERS)[number];
 
 /** web AIs reached through a relay member (human carries the packet) */
@@ -50,6 +50,13 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
     { id: "gpt-6.2-sol", label: "GPT-6.2 Sol", note: "주력. 코딩·일상 작업 (6.1 Sol의 새 세대)", match: /sol/i },
     { id: "gpt-6.2-astra", label: "GPT-6.2 Astra", note: "최상위. 가장 어려운 작업 (6 Astra의 새 세대)", match: /astra|pro/i },
   ],
+  // xAI Grok Build CLI (grok), signed in with a SuperGrok account
+  grok: [
+    { id: "grok-4.5", label: "Grok 4.5", note: "이전 세대. 가벼운 작업", match: /grok-4\.5/i, maxEffort: "high" },
+    { id: "grok-4.6", label: "Grok 4.6", note: "이전 주력", match: /grok-4\.6/i },
+    { id: "grok-4.7-build-fast", label: "Grok 4.7 Fast", note: "빠른 4.7. 범위가 분명한 일반 작업", match: /grok-4\.7.*fast/i },
+    { id: "grok-4.7", label: "Grok 4.7", note: "기본 배정. Grok Build의 최신 모델", match: /grok-4\.7|grok-5/i },
+  ],
 };
 
 /**
@@ -57,16 +64,16 @@ export const LADDERS: Record<CliProvider, ModelInfo[]> = {
  * (gpt-6.2-sol on a Codex signed in with a ChatGPT account) runs this one instead: same kind of
  * work, never a lower rung and never another company.
  */
-export const PREDECESSOR: Record<string, string> = { "gpt-6.2-sol": "gpt-6.1-sol", "gpt-6.2-astra": "gpt-6-astra" };
+export const PREDECESSOR: Record<string, string> = { "gpt-6.2-sol": "gpt-6.1-sol", "gpt-6.2-astra": "gpt-6-astra", "grok-4.7": "grok-4.6" };
 
 /** how long a login is taken to lack a model before it is tried again */
 export const UNSUPPORTED_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** CLI accepts an effort setting */
-export const SUPPORTS_EFFORT: Record<CliProvider, boolean> = { claude: true, gemini: true, gpt: true };
+export const SUPPORTS_EFFORT: Record<CliProvider, boolean> = { claude: true, gemini: true, gpt: true, grok: true };
 
 /** default ceiling, unless a model explicitly supports more */
-export const EFFORT_CAP: Record<CliProvider, Effort> = { claude: "max", gemini: "high", gpt: "max" };
+export const EFFORT_CAP: Record<CliProvider, Effort> = { claude: "max", gemini: "high", gpt: "max", grok: "xhigh" };
 
 export function modelEffortCap(provider: CliProvider, model: string): Effort {
   return LADDERS[provider][tierOf(provider, model)]?.maxEffort ?? EFFORT_CAP[provider];
@@ -95,6 +102,7 @@ export const DEFAULT_LIMITS: Limits = {
   claude: { maxMembers: 3, maxModel: "fable", maxEffort: "high", topModelMinWeeklyLeft: 30 },
   gemini: { maxMembers: 2, maxModel: "gemini-4-argon", maxEffort: "high" },
   gpt: { maxMembers: 2, maxModel: "gpt-6.2-sol", maxEffort: "high", topModelMinWeeklyLeft: 50 },
+  grok: { maxMembers: 1, maxModel: "grok-4.7", maxEffort: "high" },
   "gemini-web": { maxMembers: 1 },
   aistudio: { maxMembers: 1 },
   chatgpt: { maxMembers: 0 },
@@ -180,7 +188,7 @@ export function checkTopModelUsage(provider: CliProvider, model: string | undefi
 }
 
 /** the default rung when the chair names no model (Gemini defaults to Neon, its Opus-rank model) */
-export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-neon", gpt: "gpt-6.2-sol" };
+export const WORKHORSE: Record<CliProvider, string> = { claude: "sonnet", gemini: "gemini-4-neon", gpt: "gpt-6.2-sol", grok: "grok-4.7" };
 
 /** default = the "workhorse" clamped to the limit */
 export function resolveModel(provider: CliProvider, requested: string | undefined, limit: ProviderLimit): string {

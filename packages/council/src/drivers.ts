@@ -50,8 +50,13 @@ export interface Driver {
 
 const exts = process.platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""];
 
+/** where an installer puts a CLI that a process started before the install has no PATH entry for */
+const INSTALL_DIRS: Record<string, string[]> = {
+  grok: [path.join(process.env.USERPROFILE ?? process.env.HOME ?? "", ".grok", "bin")],
+};
+
 export function findExecutable(name: string): string | null {
-  const dirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  const dirs = [...(process.env.PATH ?? "").split(path.delimiter).filter(Boolean), ...(INSTALL_DIRS[name] ?? [])];
   for (const d of dirs) {
     for (const ext of exts) {
       const full = path.join(d, name + ext);
@@ -264,6 +269,95 @@ export const codexDriver: Driver = {
   },
 };
 
+// ---------- Grok Build CLI (xAI) ----------
+
+/**
+ * Grok Build run headless: one prompt (-p), newline-delimited JSON on stdout. The work packet goes on
+ * stdin. A headless run cannot ask for approval and refuses even file edits under acceptEdits, so it
+ * always approves, inside the member's own worktree (as headless Antigravity does).
+ */
+export const grokDriver: Driver = {
+  provider: "grok",
+  spawn(spec, onLine) {
+    const args = ["-p", spec.prompt, "--output-format", "streaming-json", "--cwd", spec.cwd, "--no-alt-screen"];
+    if (spec.model) args.push("--model", spec.model);
+    if (spec.effort) args.push("--reasoning-effort", spec.effort);
+    args.push("--always-approve");
+    if (spec.extraArgs) args.push(...spec.extraArgs);
+    const env: NodeJS.ProcessEnv = { ...process.env, ...spec.env };
+    const child = spawnCli("grok", args, { cwd: spec.cwd, env });
+    return wireProcess(child, spec, onLine);
+  },
+};
+
+/** the arguments for a one-off Grok answer (no tools) */
+export function grokOneShotArgs(spec: { prompt: string; model?: string; effort?: string; cwd: string }): string[] {
+  // no way to allow no tool at all (--tools needs a name): the ones that change or run anything are taken away
+  const args = ["-p", spec.prompt, "--output-format", "streaming-json", "--cwd", spec.cwd, "--no-alt-screen", "--disallowed-tools", "run_terminal_command,search_replace,write,image_gen,image_edit,image_to_video,reference_to_video,scheduler_create,workflow", "--no-subagents", "--no-memory", "--disable-web-search", "--max-turns", "1"];
+  if (spec.model) args.push("--model", spec.model);
+  if (spec.effort) args.push("--reasoning-effort", spec.effort);
+  return args;
+}
+
+/**
+ * Grok's streaming-json: {"type":"text","data":"..."} fragments, {"type":"thought",...},
+ * tool events, and {"type":"end","stopReason":...,"sessionId":...}. Text fragments are gathered into
+ * one message, given out when something else happens (a tool, the end).
+ */
+export function makeGrokParser(): (line: string) => ClaudeEvent[] {
+  let text = "";
+  let all = "";
+  const flush = (): ClaudeEvent[] => {
+    const t = text.trim();
+    text = "";
+    if (!t) return [];
+    all += (all ? "\n\n" : "") + t;
+    return [{ kind: "text", text: t }];
+  };
+  return (line: string) => {
+    let msg: Record<string, unknown>;
+    try {
+      msg = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+    const type = String(msg.type ?? "");
+    if (type === "text") {
+      if (typeof msg.data === "string") text += msg.data;
+      return [];
+    }
+    if (type === "thought" || type === "thinking" || type === "usage" || type === "available_commands") return [];
+    if (type === "end" || type === "result") {
+      const out = flush();
+      const stop = String(msg.stopReason ?? msg.stop_reason ?? "");
+      const isError = /error|fail|refus/i.test(stop);
+      const sid = msg.sessionId ? String(msg.sessionId) : undefined;
+      // the model that ran (its usage is keyed by it)
+      const model = Object.keys((msg.modelUsage ?? {}) as Record<string, unknown>)[0];
+      if (sid || model) out.unshift({ kind: "init", sessionId: sid ?? "", model });
+      out.push({ kind: "result", text: all || (isError ? stop : ""), sessionId: sid, isError });
+      return out;
+    }
+    if (type === "error") {
+      const out = flush();
+      const e = msg.error ?? msg.message ?? msg.data;
+      out.push({ kind: "result", text: typeof e === "string" ? e : JSON.stringify(e ?? "error"), isError: true });
+      return out;
+    }
+    // a tool's progress and results: only its start is told
+    if (/tool/i.test(type) && /update|result|output|end/i.test(type)) return [];
+    if (/tool/i.test(type)) {
+      const out = flush();
+      const input = (msg.rawInput ?? msg.input ?? msg.args ?? msg.data) as { tool_name?: string } | undefined;
+      // an MCP call goes through use_tool: its own name ("council__council_assign") says more
+      const name = String(input?.tool_name ?? msg.name ?? msg.tool ?? msg.toolName ?? (msg.data as { name?: string } | undefined)?.name ?? type);
+      out.push({ kind: "tool", name, input });
+      return out;
+    }
+    return [{ kind: "other", type }];
+  };
+}
+
 /** TOML string for a codex -c value: literal (single-quoted) so Windows paths need no escaping */
 function tomlStr(v: string): string {
   return v.includes("'") ? JSON.stringify(v) : "'" + v + "'";
@@ -293,7 +387,7 @@ export function codexMcpArgs(cfg: { mcpServers: Record<string, { command?: strin
   return out;
 }
 
-export const drivers: Record<CliProvider, Driver> = { claude: claudeDriver, gemini: geminiDriver, gpt: codexDriver };
+export const drivers: Record<CliProvider, Driver> = { claude: claudeDriver, gemini: geminiDriver, gpt: codexDriver, grok: grokDriver };
 
 // ---------- stream-json parsing (Claude Code) ----------
 

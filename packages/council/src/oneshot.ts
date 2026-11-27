@@ -10,7 +10,7 @@
  * Nothing here can write: the sandbox/tool flags are read-only, and a failure returns an error
  * string rather than throwing, because a failed consult must not kill the caller's turn.
  */
-import { agyModelId, claudeModelId, makeAgyParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent } from "./drivers.js";
+import { agyModelId, claudeModelId, grokOneShotArgs, makeAgyParser, makeGrokParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent } from "./drivers.js";
 import { GEMINI_OFF, geminiEnabled } from "./optin.js";
 import { LADDERS, type CliProvider } from "./models.js";
 
@@ -76,9 +76,9 @@ export function oneShot(spec: OneShotSpec): Promise<OneShotResult> {
       resolve({ text: "", seconds: 0, error: GEMINI_OFF });
       return;
     }
-    const cmd = spec.provider === "claude" ? "claude" : spec.provider === "gpt" ? "codex" : "agy";
-    const args = spec.provider === "claude" ? claudeArgs(spec) : spec.provider === "gpt" ? codexArgs(spec) : agyArgs(spec);
-    const parse = spec.provider === "claude" ? parseClaudeLine : spec.provider === "gpt" ? parseCodexLine : makeAgyParser();
+    const cmd = spec.provider === "claude" ? "claude" : spec.provider === "gpt" ? "codex" : spec.provider === "grok" ? "grok" : "agy";
+    const args = spec.provider === "claude" ? claudeArgs(spec) : spec.provider === "gpt" ? codexArgs(spec) : spec.provider === "grok" ? grokOneShotArgs(spec) : agyArgs(spec);
+    const parse = spec.provider === "claude" ? parseClaudeLine : spec.provider === "gpt" ? parseCodexLine : spec.provider === "grok" ? makeGrokParser() : makeAgyParser();
     const env: NodeJS.ProcessEnv = { ...process.env, ...spec.env };
     delete env.CLAUDECODE; // a nested Claude Code refuses to start when it thinks it is already inside one
     let child;
@@ -190,7 +190,7 @@ export function strongestWithin(provider: CliProvider, cap: string | undefined):
  * the gpt-6-luna pattern matches.
  */
 export function providerOfModel(model: string): CliProvider | undefined {
-  const order = ["claude", "gemini", "gpt"] as CliProvider[];
+  const order = ["grok", "claude", "gemini", "gpt"] as CliProvider[];
   for (const p of order) if (LADDERS[p].some((m) => m.id === model)) return p;
   for (const p of order) if (LADDERS[p].some((m) => m.match.test(model))) return p;
   return undefined;

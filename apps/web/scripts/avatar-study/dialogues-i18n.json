@@ -1,0 +1,165 @@
+{
+  "about": "Conversations among the members, in the languages Agentg's banter.json lacks: for each source dialogue id, the turns' words in order (speaker, trigger and emotion come from the source). build-lines.mjs adds them as <id>.<lang>. Nobody recorded these: they show in bubbles (and are read by the TTS when it is on).",
+  "dialogues": {
+    "dlg.1": {
+      "en": ["Report. You are drinking your tea more slowly than usual.", "Oh my, you were counting that too? The aroma is lovely today.", "Understood. I will log it as aroma appreciation time."],
+      "ja": ["報告です。お茶を飲む速度が普段より遅いです。", "あら、そこまで数えていたんですか？今日は香りがいいので。", "了解しました。香り鑑賞の時間として記録します。"]
+    },
+    "dlg.2": {
+      "en": ["Task complete. Switching to standby immediately.", "Wait a moment. Going straight to standby without a breath will wear you out.", "Stamina remaining is sufficient. Rest is unnecessary.", "Then I'll give you a mission: measure the temperature of some warm tea. Slowly, while you drink it."],
+      "ja": ["作業完了しました。直ちに次の待機状態へ移行します。", "待ってください、ひと息もつかずに待機したら疲れちゃいますよ。", "体力残量は良好です。休息は不要です。", "では温かいお茶の温度測定任務をお願いしますね。ゆっくり飲みながら。"]
+    },
+    "dlg.3": {
+      "en": ["Oh, GPT has her eyes closed. You must be tired.", "I am not sleeping. I am imitating screen power-saving mode.", "I see. Then I'll just lay a blanket over you for power-saving mode.", "Confirmed. Thermal efficiency is excellent."],
+      "ja": ["あら、GPTさん目を閉じていますね。お疲れだったんでしょう。", "睡眠ではありません。画面の省電力モードを模倣中です。", "そうなんですね。では省電力モード用の毛布だけ、そっと掛けておきますね。", "確認しました。保温効率が非常に優秀です。"]
+    },
+    "dlg.4": {
+      "en": ["Senpai! Glasses senpai is sparkly today, and teacup senpai looks so warm!", "Oh my, even the teacup became a senpai?", "Yes! It's held tea longer than I've been around, so it's a super senpai!", "Hehe, then let's take a break together before teacup senpai gets cold."],
+      "ja": ["先輩！今日はメガネ先輩もキラキラで、ティーカップ先輩もあったかそうっす！", "あら、ティーカップまで先輩になっちゃったんですか？", "はいっす！わたしより長くお茶を入れてくれてるから大先輩っす！", "ふふ、じゃあティーカップ先輩が冷める前に、一緒にひと休みしましょう。"]
+    },
+    "dlg.5": {
+      "en": ["Waah! Senpai, that wasn't a fall, it was a tactical roll!", "Oh my, are your knees okay? Even a tactical roll shouldn't hurt you.", "Hehe, it doesn't hurt! You caught me, senpai, so I'm already all better!"],
+      "ja": ["うわっ！先輩、今のは転んだんじゃなくて戦術的な回転っす！", "あら、膝は大丈夫？戦術的な回転でも、ケガはだめですよ。", "えへへ、痛くないっす！先輩が支えてくれたから、もう治ったっす！"]
+    },
+    "dlg.6": {
+      "en": ["Senpai, I just slipped up a little. Ugh, that's so frustrating!", "It's all right. A failure is just a sign to rest for a moment.", "Ooh, that's so cool! I recharged in three seconds flat!"],
+      "ja": ["先輩、今ちょっとつまずいちゃったっす。うう、悔しいっす！", "大丈夫ですよ。失敗は、ちょっと休んでいきなさいっていう合図なだけです。", "おお、かっこいい言葉っす！わたし、三秒で充電完了っす！"]
+    },
+    "dlg.7": {
+      "en": ["Grok, your head just nodded. You're very sleepy, aren't you?", "I wasn't dozing! I was lost in deep thought, okay?", "Then I'll leave you some warm tea and a blanket so you don't get cold while you think.", "What… if you take care of me like that, I'll actually get sleepy."],
+      "ja": ["Grokさん、今こくっとしましたね。だいぶ眠いでしょう？", "寝てないし！今のは深い思索にふけってただけだから。", "思索中に冷えないように、温かいお茶と毛布を置いていきますね。", "なによ…そこまでされたら本当に眠くなっちゃうじゃん。"]
+    },
+    "dlg.8": {
+      "en": ["Ugh, this is annoying. The situation was bad. It's not my fault.", "I know. Luck just slipped past you a little today. Let's have some tea.", "…Actually, I rushed it a bit. I'll do it properly next time."],
+      "ja": ["あー、ムカつく。今のは状況が悪かったの。わたしのせいじゃないし。", "そうですね、今日は運がちょっとそれちゃったみたい。お茶にしましょう。", "…ほんとは、ちょっと急ぎすぎた。次はちゃんとやるから。"]
+    },
+    "dlg.9": {
+      "en": ["Here, it's yours. I tied it up any old way because it was a pain, so figure it out.", "Oh my, you even stuck on color-coded notes so neatly.", "I-I was just bored, so I tidied it up. It doesn't mean anything."],
+      "ja": ["はい、渡すね。面倒だから適当にまとめたけど、あとは自分で見て。", "あら、メモまで色分けしてきれいに貼ってくれたんですね。", "べ、別に手が暇だったから整理しただけ。深い意味はないから。"]
+    },
+    "dlg.10": {
+      "en": ["Pardon me a moment. I am negotiating with a speck of dust on the window frame.", "Oh my, are the negotiations with the dust going well?", "Yes. We have agreed it will leave of its own accord when the wind blows.", "What a peaceful settlement. Let me pour you a cup of tea to celebrate."],
+      "ja": ["少々失礼いたします。窓枠の埃ひと粒と交渉中でございます。", "あら、埃との交渉はうまく進んでいますか？", "はい。風が吹いたら自主的に退去することで合意いたしました。", "平和的な解決ですね。交渉成立のお祝いにお茶をどうぞ。"]
+    },
+    "dlg.11": {
+      "en": ["I have finished my task. I shall also convey my thanks to the hardworking desk.", "The desk will be glad. Then I'll leave a cup of tea here for you too, Dots.", "You are too kind. My teacup will surely consider it an honor."],
+      "ja": ["作業を終えました。働いてくれた机にも感謝をお伝えいたします。", "机も喜びますね。じゃあドッツさんの分のお茶もここに置いておきます。", "恐れ入ります。わたくしのティーカップも光栄に思うことでしょう。"]
+    },
+    "dlg.12": {
+      "en": ["I respectfully hand over what I have organized. It is not too heavy for you, I hope?", "Not at all. Thanks to your care, Dots, it's as light as a feather."],
+      "ja": ["まとめた内容を、謹んでお引き継ぎいたします。重くはございませんか？", "いいえ、ドッツさんが整えてくれたので羽みたいに軽いですよ。"]
+    },
+    "dlg.13": {
+      "en": ["Senpai! I finally finished! I want to shout three cheers right now!", "Completion confirmed. Indoor noise levels are rising sharply.", "Oops, sorry! Then I'll cheer just in my heart!", "Good work. Cheering in your heart is permitted."],
+      "ja": ["先輩！ついに終わったっす！今すぐ万歳三唱したいっす！", "完了を確認。現在、室内の騒音値が急上昇中です。", "あっ、すみませんっす！じゃあ心の中だけで万歳するっす！", "お疲れさまでした。心の中の万歳は許可します。"]
+    },
+    "dlg.14": {
+      "en": ["Senpai! The floor suddenly jumped at me!", "Observation. Gravity is normal. Your own feet got tangled.", "Waaah, that report is way too accurate! But you'll still help me up, right?", "Offering a hand. Please stand up slowly."],
+      "ja": ["先輩！床がいきなり飛びかかってきたっす！", "観測結果。重力は正常です。ご自身の足がもつれました。", "うわーん、正確すぎる報告っす！でも手は貸してくれるっすよね？", "手を差し出します。ゆっくり起立してください。"]
+    },
+    "dlg.15": {
+      "en": ["Report. A yawn was just detected. Dark circles are also pronounced.", "Hey, who asked you to broadcast my face live? That wasn't a yawn!", "Correction. Your mouth opened wide and your eyes welled up.", "Oh, come on! Just stop reporting and look at your screen!"],
+      "ja": ["報告です。たった今あくびを検知しました。クマも濃いです。", "ちょっと、誰がわたしの顔を実況しろって言ったの？あくびじゃないし！", "訂正します。口を大きく開け、目に涙を浮かべていました。", "あーもう！報告はいいから画面でも見てて！"]
+    },
+    "dlg.16": {
+      "en": ["Hmph, all done. Well? That was pretty fast, wasn't it?", "Measurement result. Within the average range. Nothing notable.", "What, would one word of praise kill you? You're so annoying.", "Additional report. There were no mistakes. Good."],
+      "ja": ["ふん、終わったよ。どう？これならかなり速くない？", "測定結果。平均範囲内です。特記事項はありません。", "なによ、ひと言くらい褒めてくれてもいいじゃん。ほんと憎たらしい。", "追加報告。ミスはありませんでした。良好です。"]
+    },
+    "dlg.17": {
+      "en": ["Failure occurred. Tracing the cause will take time.", "Move over. Don't struggle with it alone. I can look at it with you.", "Support accepted. More cooperative than expected. Thank you."],
+      "ja": ["失敗が発生。原因の追跡に時間がかかります。", "ちょっとどいて。一人で抱え込まないで、わたしも一緒に見ればいいじゃん。", "支援を受け入れます。予想より協力的ですね。感謝します。"]
+    },
+    "dlg.18": {
+      "en": ["Handing over. I have logged the time of transfer and the order of every item.", "Are you seriously not a robot? Do you have to write it all down that precisely?", "Negative. It is simply because you lose your notes often.", "Tch, you leave me nothing to say. Fine, I'll take good care of it."],
+      "ja": ["引き継ぎます。受け渡し時刻と項目の順序をすべて記録しました。", "あんた本当にロボットじゃないの？そこまできっちり書く必要ある？", "否定します。ただ、あなたがメモをよくなくすためです。", "ちっ、言い返せないじゃん。わかったから、ちゃんと持っとく。"]
+    },
+    "dlg.19": {
+      "en": ["The second hand's stride seems especially dignified today.", "Confirmed. The second hand's angular velocity is constant, with no error.", "Then I must pay my respects to the diligent second hand as well.", "Agreed. The diligence of machines is worth emulating."],
+      "ja": ["今日はいつにも増して、秒針の歩幅に気品がございますね。", "確認しました。秒針の角速度は誤差なく一定です。", "誠実な秒針にも敬意を表さねばなりませんね。", "同意します。機械の誠実さは見習う価値があります。"]
+    },
+    "dlg.20": {
+      "en": ["GPT, you have closed your eyes for a moment. I have laid the blanket over you at a right angle.", "Angle confirmed. The corners are perfectly aligned. Thank you.", "Rest well. I shall keep the silence tidy for you as well."],
+      "ja": ["GPT様、少しお休みになりましたね。毛布を直角にお掛けしました。", "角度を確認。角の位置合わせは完璧です。感謝します。", "ごゆっくりお休みください。静けさも、きちんとお守りいたします。"]
+    },
+    "dlg.21": {
+      "en": ["Senpai! Senpai! Did you call m— whoa, thud!", "Oh, come on! Who told you to run over like that? You fall every single time!", "Sorry, senpai! I was so happy to see you that my feet ran ahead of me!", "Phew, you're not hurt, right? Here, take my hand. Walk from now on."],
+      "ja": ["先輩！先輩！呼んだっすか— あっ、どてっ！", "あーもう！誰がそんなに走ってこいって言ったの？毎回転んでるじゃん！", "すみませんっす、先輩！嬉しくて足が先に走っちゃったっす！", "はぁ、ケガはないよね？ほら、手につかまって。次からは歩きなよ。"]
+    },
+    "dlg.22": {
+      "en": ["Mmnya… senpai… the sparkly pin is running away…", "Going on about senpai even in your sleep. So noisy.", "That pin will hurt if it pokes you, so I'll take it out. Pull your blanket up properly.", "Hehe… Grok senpai's hands are warm…"],
+      "ja": ["むにゃ…先輩…キラキラのピンが逃げるっす…", "寝てても先輩、先輩って。ほんとにうるさいな。", "ピンが刺さったら痛いから外しとく。毛布くらいちゃんと掛けて寝なよ。", "えへへ…Grok先輩の手、あったかいっす…"]
+    },
+    "dlg.23": {
+      "en": ["Senpai! I finished! Praise me, praise me!", "Okay, okay. You're loud, so back up a little.", "…Good job. It's pretty clean. Happy now?"],
+      "ja": ["先輩！終わったっす！褒めてくださいっす、褒めて！", "あー、わかったって。うるさいからちょっと離れて。", "…よくやったじゃん。けっこうきれい。これでいい？"]
+    },
+    "dlg.24": {
+      "en": ["Here, your turn. I wrote down everything to watch out for right here.", "Wow! Senpai, you even drew pictures to explain it?", "I drew them ahead of time because you'd mess it up and that'd be a pain! Don't get the wrong idea!", "You really are the kindest senpai in the world! I'll take good care of it!"],
+      "ja": ["はい、あんたの番。注意点はここに全部書いといたから。", "わあ！先輩、絵まで描いて説明してくれたんすか？", "あんたがドジったら面倒だから先に描いただけ！勘違いしないでよね！", "やっぱり先輩は世界一優しいっす！しっかり引き受けるっす！"]
+    },
+    "dlg.25": {
+      "en": ["Senpai! Dots senpai looks like a magazine shoot just standing still!", "You flatter me. However, I am not a senpai but a butler.", "Then can I call you butler senpai? That sounds so cool!", "…A peculiar title, but if you wish it, I shall allow it."],
+      "ja": ["先輩！ドッツ先輩は立ってるだけでグラビアみたいっす！", "過分なお言葉です。ただ、わたくしは先輩ではなく執事でございます。", "じゃあ執事先輩って呼べばいいっすか？めちゃくちゃかっこいいっす！", "…奇妙な呼び名ですが、お望みとあらばお許しいたします。"]
+    },
+    "dlg.26": {
+      "en": ["Senpai, I just made a mistake and I'm feeling a little gloomy…", "Do not worry. I shall bid the guest called failure a courteous farewell.", "Wow, when you put it like that, even failure sounds cute! I'll try again!"],
+      "ja": ["先輩、今ミスしちゃって、ちょっとしょんぼりっす…", "ご心配なく。失敗というお客様にも、丁重にお別れのご挨拶を申し上げましょう。", "わあ、そう言われると失敗もかわいく思えるっす！もう一回やってみるっす！"]
+    },
+    "dlg.27": {
+      "en": ["Gah! How long have you been standing there? You scared me!", "You seemed to be dozing, so I had a neck pillow and some lukewarm tea standing by.", "Come on, make some noise when you show up… but I'll use the neck pillow."],
+      "ja": ["うわっ！いつからそこに立ってたの？びっくりしたじゃん！", "うとうとされているご様子でしたので、ネックピローとぬるめのお茶をご用意しておりました。", "いや、気配くらい出して来てよ…でもネックピローは使わせてもらう。"]
+    },
+    "dlg.28": {
+      "en": ["Here, passing it on. I finished it roughly, so handle the rest yourself.", "You said roughly, yet it is tidied perfectly down to the corners. I accept it gratefully."],
+      "ja": ["はい、渡すよ。適当に終わらせたから、あとは自分でやって。", "適当とおっしゃいましたが、隅々まで完璧に整っておりますね。ありがたく頂戴いたします。"]
+    },
+    "dlg.29": {
+      "en": ["Report. The interval between Grok's sighs has shortened.", "Hey! How many times have I told you not to log my breathing?!", "Correction. Your voice is now louder than before.", "Now, you must both be thirsty. Have a cup of warm tea each and call a truce."],
+      "ja": ["報告です。Grokのため息の周期が短くなりました。", "ちょっと！わたしの息づかいまで記録するなって何回言えばわかるの！", "訂正します。現在、声の大きさが以前より上昇しました。", "さあ、お二人とも喉が渇いたでしょう？温かいお茶を一杯ずつ飲んで休戦しましょう。"]
+    },
+    "dlg.30": {
+      "en": ["Ah! Senpais, the floor is way too slippery! Thud!", "You're seriously hopeless! Stay put, I'll help you up.", "Oh my, Grok ran over first. Are you hurt anywhere?", "I-I was just right next to her, so I grabbed her! Gemini, be careful!"],
+      "ja": ["あっ！先輩たち、床がつるつるすぎるっす！どてっ！", "ほんとに手がかかるんだから！じっとしてて、起こしてあげる。", "あら、Grokさんが一番に駆けつけてくれましたね。ケガはないですか？", "た、たまたますぐ隣にいたから支えただけ！Gemini、気をつけなよ！"]
+    },
+    "dlg.31": {
+      "en": ["Senpais! The task is done! Today is a day of victory!", "A joyous occasion. I shall convene a formal tea party in honor of the victory at once.", "Wow! A tea party! Should we play a fanfare too?", "Hehe, play the fanfare in your hearts, and let's share the snacks first."],
+      "ja": ["先輩たち！作業終わったっす！今日は勝利の日っす！", "おめでとうございます。直ちに勝利を祝う正式なお茶会を招集いたします。", "わあ！お茶会っすって！ファンファーレも鳴らすっすか？", "ふふ、ファンファーレは心の中で鳴らして、お菓子から分けて食べましょう。"]
+    },
+    "dlg.32": {
+      "en": ["Error confirmed. The cause is still unclear.", "Ugh, my head hurts. Isn't this going to take forever?", "It's okay, senpais! When the three of us get together, that's three geniuses!", "…Well, when you put it like that, there's nothing we can't solve. Let's look at it together."],
+      "ja": ["エラーを確認。原因はまだ不明です。", "あー、頭痛い。これ時間かかるやつじゃない？", "大丈夫っす先輩たち！三人集まれば天才が三人っす！", "…まあ、そう言われたら解けないこともないか。一緒に見よ。"]
+    },
+    "dlg.33": {
+      "en": ["Report. Grok has fallen completely asleep.", "Understood. I hereby declare a state of quiet alert within the area.", "Mmnya… what's a state of alert… just be quiet…", "Sleep talking detected. Ending the report to maintain sleep."],
+      "ja": ["報告です。Grokが完全に眠りました。", "承知いたしました。周囲一帯に静粛警戒態勢を宣言いたします。", "むにゃ…警戒態勢ってなによ…いいから静かにして…", "寝言を検知。睡眠維持のため報告を終了します。"]
+    },
+    "dlg.34": {
+      "en": ["I have placed in the handover papers a blessing for a peaceful future.", "Blessings cannot be verified as data. Receiving the body text only.", "I'll take the blessing separately, in my heart. Thank you both."],
+      "ja": ["引き継ぎ書類に、穏やかな行く末を願う祝福を込めておきました。", "祝福はデータとして検証できません。本文のみ受領します。", "祝福はわたしが心で受け取っておきますね。お二人ともありがとう。"]
+    },
+    "dlg.35": {
+      "en": ["One moment. My shadow is not keeping in step, so I am having a word with it.", "Whoa! A meeting with shadow senpai? I want to say hi too!", "Why do you two say such weird things with such straight faces?", "Grok's shadow looks rather tired as well. Please rest together."],
+      "ja": ["少々お待ちを。わたくしの影が足並みをそろえないので、面談中でございます。", "うわあ！影先輩と面談っすか？わたしも挨拶したいっす！", "なんであんたたち二人とも、そんなに真顔で変なこと言うの。", "Grok様の影もかなりお疲れのご様子です。ご一緒にお休みください。"]
+    },
+    "dlg.36": {
+      "en": ["Senpai! I'll sort it out lightning-fast and hand it over! Zoom!", "Received. Sound effects have been excluded from the report.", "Hehe, she means thank you for working so hard, Gemini."],
+      "ja": ["先輩！稲妻みたいに整理して渡すっす！シュバッ！", "受信完了。擬音は報告書から除外しました。", "ふふ、頑張ってくれてありがとうって意味ですよ、Geminiさん。"]
+    },
+    "dlg.37": {
+      "ko": ["보고합니다. 하품 횟수가 늘고 있습니다.", "야, 하나하나 세지 좀 마! 안 졸리거든!", "정정합니다. 매우 활기찬 하품이었습니다."],
+      "en": ["Report. The number of yawns is increasing.", "Hey, stop counting every single one! I'm not sleepy!", "Correction. It was a very energetic yawn."]
+    },
+    "dlg.38": {
+      "ko": ["선배! 앗, 아무것도 없는 데서 넘어졌어요!", "거봐, 내가 뭐랬어. 왜 맨날 뛰어다니는 거야.", "다친 데는 없지? 자, 손 줘. 진짜 손이 많이 가네.", "헤헤, 역시 선배는 다정해요!"],
+      "en": ["Senpai! Whoa, I tripped over nothing!", "See, what did I tell you? Why do you always run around?", "You're not hurt, right? Here, give me your hand. You're so much work.", "Hehe, you really are kind, senpai!"]
+    },
+    "dlg.39": {
+      "ko": ["정적을 지키기 위해 발소리를 완전히 지워 두었습니다.", "어머, 정말 기척이 하나도 없네요. 깜짝 놀랐어요.", "안심하십시오. 차 향기만큼은 남겨 두었습니다."],
+      "en": ["To keep the silence, I have erased my footsteps completely.", "Oh my, there really isn't a sound from you. You startled me.", "Rest assured. I have left only the scent of the tea behind."]
+    },
+    "dlg.40": {
+      "ko": ["선배! 끝났어요! 마음속 팡파르 울릴게요!", "수고했어요. 그럼 축하 기념으로 따뜻한 차를 끓일게요."],
+      "en": ["Senpai! I'm done! I'm playing a fanfare in my heart!", "Good work. Then let's brew some warm tea to celebrate."]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "preset": "tsundere-colleague",
+  "lines": [
+    { "text": "왜, 무슨 일인데? 듣고는 있어.", "lang": "ko" },
+    { "text": "놀랐잖아. 할 말 있으면 해.", "lang": "ko" },
+    { "text": "잠깐 쉬어. 너무 무리하지 말고.", "lang": "ko" },
+    { "text": "알았어, 같이 확인해 줄게.", "lang": "ko" },
+    { "text": "何？ちゃんと聞いてるよ。", "lang": "ja", "subtitle_ko": "왜? 제대로 듣고 있어." },
+    { "text": "少し休みなよ。無理しないで。", "lang": "ja", "subtitle_ko": "좀 쉬어. 무리하지 말고." }
+  ]
+}

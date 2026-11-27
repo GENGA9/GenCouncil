@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "name": "그록쨩",
+  "canvas": [
+    832,
+    1216
+  ],
+  "regions": {
+    "skin": [
+      304,
+      368,
+      236,
+      32
+    ],
+    "eyes": [
+      288,
+      280,
+      268,
+      96
+    ],
+    "mouth": [
+      360,
+      408,
+      124,
+      72
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide",
+      "angry",
+      "sleepy"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "grok-x D rig (brain grok) from the user's bust shot IMG_4149 with the face redrawn as mockup D: sleepy drooping lids, faint greyish dark circles, a lazy closed mouth (long wavy pale blonde hair, two black X hair clips, grey eyes, black choker, dog tag chain, black jacket over a black shirt with a big white X). The base is the neutral face (eyes/open, mouth/closed); eyes add angry and sleepy to the usual six (app presets angry / sleepy); the dark circles stay in every eye state. Built by tools/rig/build_rig.py; record tools/rig/grok_x_d_records.json (v2: grok_x_v2_records.json).",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "c8436f9133102497688d2dddb40863f9b99611489dbff4c58583c2ac62464330",
+      "eyes/angry.png": "e058cebab7ba576ce1ae215b78ffe76ec95f02998dbbd097f5feb2ba9db656a7",
+      "eyes/closed.png": "b2537cbcb0b62bdc95c10543e1570db97686830c75be189cd6a087dad8789136",
+      "eyes/half.png": "2ef5a718035cf10204fb44b16b67d23210135dcb743aba2172b2836d63cf5020",
+      "eyes/open.png": "21f695e85862f6add90e62ea57b0999cb2b9ce7e434b8046aa64a3c8ddba5794",
+      "eyes/sad.png": "c25f934621223413acbb779fcdc236c8c6f17b2e421732e37f1d0e609f6303c1",
+      "eyes/sleepy.png": "b4418f25d136160cf8ea2d67004cd5b23048a9d3490de6056ff15902fc00728f",
+      "eyes/smile.png": "f0c3797aab8699c258606eac86d0c5debe482c7cdd838f838bb2986168d68fee",
+      "eyes/wide.png": "ba431275e7db27c31df9b966066a137708d74b4e8cd5d66f207aecf67024c6a7",
+      "masks/eyes.png": "303d9729bc6a510d248ae8ea3b9de09426fc945d323dd6b254a47a2d76a1b9a0",
+      "masks/mouth.png": "320f3af15f23a2907423528274123d26e79ca0098fd149194a16f8acb549cb58",
+      "masks/skin.png": "7a3ac06c6e4e0359c4e5cb8b3220b390af234554335ef685c33039631d361d73",
+      "mouth/closed.png": "1e1fd482f0321c42b10c05c7e15c15767062393e2875553d02f697eba2217cd3",
+      "mouth/o.png": "6fb740e323aee5154863fe76908ad1811b2a14d06042f6094ad140778be3626e",
+      "mouth/open_l.png": "ca58502c4d7ec6c8c6de922bdcf2b623d12f266cb23aa202fd4f75386b62f4dd",
+      "mouth/open_m.png": "75045a84ff70cb213fcb59254c631108ead2fb263657ff71001daef895b169a2",
+      "mouth/smile_closed.png": "e458a4b76d694bedd10dbf58aa9a3595b013d2f5a7c93e24c9da425839e107b4",
+      "mouth/smile_open_l.png": "9bf1138c27d08e8feae64ccd4b93e8d25d484538ab68e1905833cff773370f40",
+      "skin/blush.png": "cd0241ed385d15613c52a8d9919b6ef000fa4210a8792ee081db17a51527c7c0",
+      "skin/normal.png": "77a95289e077594d6901ee1d210e8702a0efcf6d3455d8f63a1fe3a42b0d46b5"
+    }
+  }
+}

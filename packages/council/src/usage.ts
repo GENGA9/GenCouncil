@@ -6,6 +6,7 @@
  * Every reader is best effort; a failure becomes an `error` string for the UI.
  */
 import { spawn } from "node:child_process";
+import { grokEnv } from "./accounts.js";
 import { geminiEnabled } from "./optin.js";
 import fs from "node:fs";
 import os from "node:os";
@@ -191,12 +192,90 @@ export async function geminiUsage(home?: string): Promise<UsageData> {
   return parseAgyUsage(text);
 }
 
+// ---------- Grok Build ----------
+
+/** the signed-in Grok login in a GROK_HOME (auth.json holds one entry per issuer) */
+function grokLogin(grokHome: string): { key: string; expiresAt?: number } | undefined {
+  try {
+    const all = JSON.parse(fs.readFileSync(path.join(grokHome, "auth.json"), "utf8")) as Record<string, { key?: string; expires_at?: string }>;
+    const entry = Object.values(all).find((e) => typeof e?.key === "string" && e.key);
+    if (!entry?.key) return undefined;
+    const t = entry.expires_at ? Date.parse(entry.expires_at) : NaN;
+    return { key: entry.key, expiresAt: Number.isFinite(t) ? t : undefined };
+  } catch {
+    return undefined;
+  }
+}
+
+/** run grok once without a model call (it lists models), which refreshes an expired login token */
+function refreshGrokLogin(grokHome: string): Promise<void> {
+  const exe = findExecutable("grok");
+  if (!exe) return Promise.resolve();
+  const env = { ...process.env, ...grokEnv(grokHome) };
+  return new Promise((resolve) => {
+    const child = spawn(exe, ["models"], { env, windowsHide: true, stdio: ["ignore", "ignore", "ignore"] });
+    const timer = setTimeout(() => {
+      killTree(child.pid, child);
+      resolve();
+    }, 30000);
+    child.on("error", () => resolve());
+    child.on("close", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/**
+ * Grok Build's plan usage. `grok usage` refuses headless, but the /usage window reads the billing
+ * service the CLI talks to (cli-chat-proxy /v1/billing?format=credits) with the login's bearer token:
+ * one weekly window (creditUsagePercent, billingPeriodEnd). An expired token is refreshed once by
+ * running grok, then read again.
+ */
+export async function grokUsage(grokHome?: string): Promise<UsageData> {
+  const home = grokHome ?? path.join(os.homedir(), ".grok");
+  let login = grokLogin(home);
+  if (!login) return { error: "로그인 필요" };
+  if (login.expiresAt !== undefined && login.expiresAt < Date.now() + 60_000) {
+    await refreshGrokLogin(home);
+    login = grokLogin(home);
+    if (!login) return { error: "로그인 필요" };
+  }
+  const ask = async (key: string) => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    try {
+      return await fetch("https://cli-chat-proxy.grok.com/v1/billing?format=credits", { headers: { Authorization: `Bearer ${key}` }, signal: ctl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  try {
+    let res = await ask(login.key);
+    if (res.status === 401) {
+      await refreshGrokLogin(home);
+      const again = grokLogin(home);
+      if (!again) return { error: "로그인 필요" };
+      res = await ask(again.key);
+      if (res.status === 401) return { error: "로그인 필요" };
+    }
+    if (!res.ok) return { error: `사용량 서버 오류 (HTTP ${res.status})` };
+    const body = (await res.json()) as { config?: { creditUsagePercent?: number; currentPeriod?: { end?: string }; billingPeriodEnd?: string } };
+    const c = body.config;
+    if (typeof c?.creditUsagePercent !== "number") return { error: "사용량을 읽지 못함" };
+    return { weekly: { usedPct: clampPct(c.creditUsagePercent), resetsAt: c.currentPeriod?.end ?? c.billingPeriodEnd }, noFiveHour: true };
+  } catch (e) {
+    return { error: `사용량을 읽지 못함: ${(e as Error).message}`.slice(0, 120) };
+  }
+}
+
 // ---------- all accounts ----------
 
 const READERS: Record<CliProvider, (dir?: string) => Promise<UsageData>> = {
   claude: claudeUsage,
   gpt: gptUsage,
   gemini: geminiUsage,
+  grok: grokUsage,
 };
 
 export async function accountUsage(a: Account & { provider: CliProvider }): Promise<AccountUsage> {
@@ -216,7 +295,7 @@ export async function accountUsage(a: Account & { provider: CliProvider }): Prom
 export async function collectUsage(registry: AccountRegistry): Promise<AccountUsage[]> {
   const accounts = registry
     .list()
-    .filter((a): a is Account & { provider: CliProvider } => ["claude", "gpt", "gemini"].includes(a.provider) && a.status !== "disabled");
+    .filter((a): a is Account & { provider: CliProvider } => isCliProvider(a.provider) && a.status !== "disabled");
   const results = await Promise.all(accounts.map((a) => accountUsage(a)));
   applyUsageToAccounts(registry, results);
   return results;

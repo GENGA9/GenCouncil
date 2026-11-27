@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <radialGradient id="bg" cx="50%" cy="44%" r="70%"><stop offset="0" stop-color="#161a3a"/><stop offset="1" stop-color="#05060e"/></radialGradient>
+  <radialGradient id="chair" cx="42%" cy="38%" r="65%"><stop offset="0" stop-color="#fff6dd"/><stop offset=".55" stop-color="#ffe09e"/><stop offset="1" stop-color="#f2b866"/></radialGradient>
+  <radialGradient id="halo" r="50%"><stop offset="0" stop-color="#ffe09e" stop-opacity=".45"/><stop offset="1" stop-color="#ffe09e" stop-opacity="0"/></radialGradient>
+  <linearGradient id="l-claude" gradientUnits="userSpaceOnUse" x1="512" y1="570" x2="512" y2="230"><stop offset=".25" stop-color="#ffe09e"/><stop offset=".9" stop-color="#ff9668"/></linearGradient>
+  <linearGradient id="l-gpt" gradientUnits="userSpaceOnUse" x1="512" y1="570" x2="217.6" y2="740"><stop offset=".25" stop-color="#ffe09e"/><stop offset=".9" stop-color="#3ee2b2"/></linearGradient>
+  <linearGradient id="l-gemini" gradientUnits="userSpaceOnUse" x1="512" y1="570" x2="806.4" y2="740"><stop offset=".25" stop-color="#ffe09e"/><stop offset=".9" stop-color="#7a98ff"/></linearGradient>
+</defs>
+<rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+<line x1="512" y1="570" x2="512" y2="230" stroke="url(#l-claude)" stroke-width="84" stroke-linecap="round"/>
+<line x1="512" y1="570" x2="217.6" y2="740" stroke="url(#l-gpt)" stroke-width="84" stroke-linecap="round"/>
+<line x1="512" y1="570" x2="806.4" y2="740" stroke="url(#l-gemini)" stroke-width="84" stroke-linecap="round"/>
+<circle cx="512" cy="230" r="128" fill="#05060e"/>
+<circle cx="512" cy="230" r="108" fill="#ff9668"/>
+<circle cx="217.6" cy="740" r="128" fill="#05060e"/>
+<circle cx="217.6" cy="740" r="108" fill="#3ee2b2"/>
+<circle cx="806.4" cy="740" r="128" fill="#05060e"/>
+<circle cx="806.4" cy="740" r="108" fill="#7a98ff"/>
+<circle cx="512" cy="570" r="166" fill="#05060e"/>
+<circle cx="512" cy="570" r="144" fill="url(#chair)"/>
+</svg>

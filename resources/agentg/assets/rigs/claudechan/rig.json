@@ -1,0 +1,99 @@
+{
+  "v": 1,
+  "name": "클로드쨩",
+  "canvas": [
+    832,
+    1216
+  ],
+  "regions": {
+    "skin": [
+      260,
+      380,
+      208,
+      84
+    ],
+    "eyes": [
+      240,
+      296,
+      248,
+      140
+    ],
+    "mouth": [
+      340,
+      440,
+      108,
+      56
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "claudechan rig (brain claude-code) from the user's own bust shot IMG_4150 (orange hair with a side bun, round thin gold-rimmed glasses, amber eyes, two yellow star hair pins, white ribbed turtleneck, grey cardigan, tea cup and saucer in both hands). Base face = open eyes + gentle closed smile: eyes/open and mouth/smile_closed are the base, mouth/closed is an edit. Built by tools/rig/build_rig.py; record tools/rig/claudechan_records.json.",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "6feaa295b10e9ad04b952904dc809ed94cb891d9f95c9f345d908a8353c1bcec",
+      "eyes/closed.png": "120a0d728b4a84c399c266849ea4d5c507d343d34f5637190c3c36ccd4946509",
+      "eyes/half.png": "6e89b43cf18cfa71c5b90a2a3225a26737bf7529b5953be407537d8a47beb063",
+      "eyes/open.png": "aee3a1fed4dbc173ebe6ff60bae3d397d0a3a6bf3ed7522e1bf15e224975da3b",
+      "eyes/sad.png": "4096d043c903b9c7b65c93e65352b308defeb14fc8da60a1a70c41af31acf352",
+      "eyes/smile.png": "983c213f70937853c7d74c3352c06a99c37be5c7f7d339a14f9a1bed0621ff31",
+      "eyes/wide.png": "018d4cf17f2e93e84d37fcb87c2466a769ded52910aac958e185c764b48e0bb8",
+      "masks/eyes.png": "4dc765c51fb3ca7eeabb177e5ffeaeac285cacf8365f5885a0b4c07c4a78cc14",
+      "masks/mouth.png": "b47ab30667a4ba04528fdf210f3b385fb2c0910cdfc639bf4bc35d735f7f572b",
+      "masks/skin.png": "16ac214ee03da8589aa6251edf0fb05cba13b63308660267439184dadf649371",
+      "mouth/closed.png": "a332f0e1b9b3f0b08748710657071932c62cfa0e5edbbf62ee10a2ec26219186",
+      "mouth/o.png": "30454657f3b20da34c0998f39d3dc4d77d970633089596bf21fe745e787cb59e",
+      "mouth/open_l.png": "de9fcd49e48753e865e042996245de266364eac1df03e31486adc781ed9fc713",
+      "mouth/open_m.png": "6add1a9b794918852661c33efc1358ef47663ea54975ea57c30eeb665f2efc38",
+      "mouth/smile_closed.png": "6d47fda34d11c31cd0c4203e6e0fd15b9d27fe9d2004bbbc2ffd68e689651d6f",
+      "mouth/smile_open_l.png": "348fff6e97288926b6e3ced7a9aae8a7e9aab354a45fabdf14f4532c9738bdd2",
+      "skin/blush.png": "5d39af8f2d648492fd1a8654bf3626edc3dbec45986687ca677395c8049a58d8",
+      "skin/normal.png": "a13f0a03ba366a6735e286f52377ee9b435b89b6759e230d1b515362cfcb1b16"
+    }
+  }
+}

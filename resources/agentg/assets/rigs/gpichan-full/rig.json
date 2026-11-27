@@ -1,0 +1,107 @@
+{
+  "v": 1,
+  "name": "\uc9c0\ud53c\uca29",
+  "canvas": [
+    832,
+    1664
+  ],
+  "anchor": [
+    405,
+    1622
+  ],
+  "bubble_anchor": [
+    405,
+    128
+  ],
+  "regions": {
+    "skin": [
+      344,
+      296,
+      116,
+      24
+    ],
+    "eyes": [
+      332,
+      248,
+      140,
+      56
+    ],
+    "mouth": [
+      384,
+      312,
+      56,
+      32
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "gpichan full-body rig (brain codex, body_mode full), pose A 'hands in pockets, contrapposto' (silver bob with blunt bangs and blue streaks, blue eyes, blue triangle hair clip, black choker, black halter top with a light-blue triangle, white hooded jacket with blue lining, black shorts with belt and strap, thigh pouch, black stockings, white platform boots). The base is the source itself (2x AnimeSharp, keyed, 832x1664); eyes/open and mouth/closed are the base. anchor = the head's vertical line (x of the eye midpoint, over the standing boot; the centre between both boots would be 117 px to the right because of the stepped-out leg) on the sole line, so a bust <-> full switch keeps the head above the same screen x; bubble_anchor = top of the head. Built by tools/rig/build_rig.py; record tools/rig/gpichan_full_records.json.",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "3535d17f7a585a3cb174550bd0b68f6de3f1122714654738fb84c609e8148458",
+      "eyes/closed.png": "48d98b87c6099785e452b43b7774f10162158569cddd254beb0468a56ec17901",
+      "eyes/half.png": "864ac71dce241ec78e71e904bdefaf3faf38d405a30f79b77bb41ad078bfdd75",
+      "eyes/open.png": "8757fbae41c4538372a0cf6ccf51ec5642a189752b12b76457ff4f6c84d6692d",
+      "eyes/sad.png": "4c7041fc60a597e235283738174477d51570931b2961be031a9323e5f733cb01",
+      "eyes/smile.png": "0369defc3a7b3297f3d92c28653d635b06f4fbc8ae4e014588f4a7be1c336de0",
+      "eyes/wide.png": "af96b3464bcee3f2bf6bc5af073b07253d1a3f4ffd7e8d7f474bc8db7e6be4f9",
+      "masks/eyes.png": "d59e85dd65a83e7f484332c90bf502ab339d6880de38d6d1e28e37f34b8583d8",
+      "masks/mouth.png": "a27a8cb12a6667e58f38628325757e8c83e44ef08784f63db6efb32804cea050",
+      "masks/skin.png": "3cc2d4697f234eb6ca1b12b8a70609040051128befe4eea86856496f0b576633",
+      "mouth/closed.png": "1d037c3f5e7694bb2aad22553fa30b61e10057025181b4bb479d2075a07d17ea",
+      "mouth/o.png": "540344f905e3f34a644ed3c6eab5c1d4b2a0d2afa3d15106053be4702fc0132a",
+      "mouth/open_l.png": "dfe8b208c6fe01184c5a1b4fb18b7e69c2c04dea497125584608cc8ca13299ca",
+      "mouth/open_m.png": "49adc7de16fe329ef8091c5e52edecb52196c5e0395844c755fea549ee974b79",
+      "mouth/smile_closed.png": "e68d5416044cd5c12f9777342519c6970c7dd0bdb6c15ae57e904b632435816c",
+      "mouth/smile_open_l.png": "8f211f2236ecb3335f1e988dd88f98f593c43b0f6d4dbc64235e80db03cd3f2f",
+      "skin/blush.png": "dae3003738427c1cca946335dfc3497932fc2059aec7ddf91dd5c20a68d610f9",
+      "skin/normal.png": "1de2cd50d2d23bd4107e40c70b57ddd24201000c0accecdfcdbd4d4726af59b0"
+    }
+  }
+}

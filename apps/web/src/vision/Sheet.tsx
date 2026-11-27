@@ -4,6 +4,7 @@
 // do exactly what they do there. The settings page is laid out for this mode.
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { locale, useT } from "../i18n";
 import { AccountsView } from "../components/AccountsView";
 import { GeminiOptIn, useGemini } from "../components/GeminiOptIn";
 import { MemoryView } from "../components/MemoryView";
@@ -14,7 +15,8 @@ import { THEME_LABEL, useTheme } from "../theme";
 import type { AccountUsage, AgendaOv, Overview, ProjectOv, UsageSnapshot } from "../types";
 import type { ProjectActions } from "./actions";
 import { Bar } from "./Menus";
-import { HOUSE_IDS, HOUSE_NAME, TINT, type Rgb } from "./scene";
+import { HOUSE_IDS, HOUSE_NAME, TINT, USAGE_NAME, usageIds, type Rgb } from "./scene";
+import { LangSelect } from "../components/LangSelect";
 
 const css = (c: Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;
 
@@ -51,9 +53,10 @@ interface SheetProps {
 
 export function VisionSheet(props: SheetProps) {
   const { at, onAt, onClose, overview, notify } = props;
+  const t = useT();
 
   /** a wiki page being written would be lost: ask before leaving it */
-  const leave = useCallback(() => !document.querySelector(".vz-sheet .wiki-edit") || confirm("위키에서 편집 중인 내용이 저장되지 않았습니다. 그래도 나갈까요?"), []);
+  const leave = useCallback(() => !document.querySelector(".vz-sheet .wiki-edit") || confirm(t("위키에서 편집 중인 내용이 저장되지 않았습니다. 그래도 나갈까요?")), [t]);
   const close = useCallback(() => {
     if (leave()) onClose();
   }, [leave, onClose]);
@@ -79,24 +82,24 @@ export function VisionSheet(props: SheetProps) {
 
   const bad = overview?.accounts.filter((a) => a.status !== "ok").length ?? 0;
   const badge: Record<SheetTab, { n: number; warn: boolean; title: string } | undefined> = {
-    wiki: overview && overview.memory.proposed > 0 ? { n: overview.memory.proposed, warn: true, title: "위키 등록을 기다리는 제안" } : undefined,
-    memory: overview && overview.memory.verified > 0 ? { n: overview.memory.verified, warn: false, title: "아직 위키로 옮기지 않은 기억" } : undefined,
-    accounts: bad > 0 ? { n: bad, warn: true, title: "문제가 있는 계정" } : overview?.accounts.length ? { n: overview.accounts.length, warn: false, title: "등록된 계정" } : undefined,
+    wiki: overview && overview.memory.proposed > 0 ? { n: overview.memory.proposed, warn: true, title: t("위키 등록을 기다리는 제안") } : undefined,
+    memory: overview && overview.memory.verified > 0 ? { n: overview.memory.verified, warn: false, title: t("아직 위키로 옮기지 않은 기억") } : undefined,
+    accounts: bad > 0 ? { n: bad, warn: true, title: t("문제가 있는 계정") } : overview?.accounts.length ? { n: overview.accounts.length, warn: false, title: t("등록된 계정") } : undefined,
     settings: undefined,
   };
 
   return (
     <>
       <div className="vz-sheet-back" onClick={close} />
-      <section className="vz-sheet" role="dialog" aria-label={TABS.find((t) => t.id === at.tab)?.title}>
+      <section className="vz-sheet" role="dialog" aria-label={t(TABS.find((x) => x.id === at.tab)?.title ?? "")}>
         <header className="vz-sheet-head">
           <nav className="vz-tabs" role="tablist">
-            {TABS.map((t) => {
-              const b = badge[t.id];
+            {TABS.map((tb) => {
+              const b = badge[tb.id];
               return (
-                <button key={t.id} role="tab" aria-selected={t.id === at.tab} className={t.id === at.tab ? "on" : ""} title={t.title} onClick={() => go(t.id)}>
-                  <i>{t.icon}</i>
-                  <span>{t.label}</span>
+                <button key={tb.id} role="tab" aria-selected={tb.id === at.tab} className={tb.id === at.tab ? "on" : ""} title={t(tb.title)} onClick={() => go(tb.id)}>
+                  <i>{tb.icon}</i>
+                  <span>{t(tb.label)}</span>
                   {b && (
                     <em className={b.warn ? "warn" : ""} title={b.title}>
                       {b.n}
@@ -106,7 +109,7 @@ export function VisionSheet(props: SheetProps) {
               );
             })}
           </nav>
-          <button className="vz-sheet-close" onClick={close} aria-label="닫기" title="닫고 그림으로 돌아가기 (Esc)">
+          <button className="vz-sheet-close" onClick={close} aria-label={t("닫기")} title={t("닫고 그림으로 돌아가기 (Esc)")}>
             ✕
           </button>
         </header>
@@ -123,17 +126,18 @@ export function VisionSheet(props: SheetProps) {
 
 /** The settings: the space everything shares, then one page per project. */
 function Settings({ at, onAt, onClose, overview, selected, usage, wsUp, notify, projects, onSelect, onSettingsSaved, onWorkshop }: SheetProps) {
+  const t = useT();
   const list = overview?.projects ?? [];
   const current = list.find((p) => p.id === at.project);
   const view = at.view ?? "settings";
   return (
     <div className="vz-set">
-      <nav className="vz-set-rail" aria-label="설정 범위">
+      <nav className="vz-set-rail" aria-label={t("설정 범위")}>
         <button className={current ? "" : "on"} onClick={() => onAt({ tab: "settings" })}>
           <i>✦</i>
-          <span>공간</span>
+          <span>{t("공간")}</span>
         </button>
-        <div className="vz-set-rail-title">제작위원회</div>
+        <div className="vz-set-rail-title">{t("제작위원회")}</div>
         {list.map((p) => {
           const open = p.agendas.filter((a) => a.status !== "closed");
           const live = open.some((a) => a.chairBusy || a.running > 0);
@@ -146,7 +150,7 @@ function Settings({ at, onAt, onClose, overview, selected, usage, wsUp, notify, 
           );
         })}
         <button className="vz-set-add" onClick={projects.onNewProject}>
-          ＋ 제작위원회
+          {t("＋ 제작위원회")}
         </button>
       </nav>
       <div className="vz-set-pane" key={current?.id ?? ""}>
@@ -176,6 +180,7 @@ function Settings({ at, onAt, onClose, overview, selected, usage, wsUp, notify, 
 }
 
 function SpacePage({ overview, usage, wsUp, notify, onTab, onWorkshop }: { overview: Overview | null; usage?: UsageSnapshot | null; wsUp: boolean; notify: (m: string) => void; onTab: (tab: SheetTab) => void; onWorkshop: () => void }) {
+  const t = useT();
   const [theme, cycleTheme] = useTheme();
   const ts = overview?.server.tailscale;
   const bad = overview?.accounts.filter((a) => a.status !== "ok").length ?? 0;
@@ -183,48 +188,48 @@ function SpacePage({ overview, usage, wsUp, notify, onTab, onWorkshop }: { overv
     <>
       <header className="vz-set-head">
         <span className="vz-pop-kicker">SPACE</span>
-        <h2>공간</h2>
-        <p>모든 제작위원회가 함께 쓰는 것: 계정마다 남은 사용량, 지식, 연결, 화면.</p>
+        <h2>{t("공간")}</h2>
+        <p>{t("모든 제작위원회가 함께 쓰는 것: 계정마다 남은 사용량, 지식, 연결, 화면.")}</p>
       </header>
 
       <UsageCards pushed={usage} />
 
       <section className="vz-set-sec">
-        <h3>제미나이</h3>
+        <h3>{t("제미나이")}</h3>
         <div className="vz-skin vz-set-gem">
           <GeminiOptIn notify={notify} />
         </div>
       </section>
 
       <section className="vz-set-sec">
-        <h3>지식 · 계정</h3>
+        <h3>{t("지식 · 계정")}</h3>
         <div className="vz-tiles">
           <button className="vz-tile" onClick={() => onTab("wiki")}>
             <i>❖</i>
             <b>Gen Wiki</b>
-            <span className={overview && overview.memory.proposed > 0 ? "warn" : ""}>{overview ? (overview.memory.proposed > 0 ? `등록 대기 제안 ${overview.memory.proposed}` : "등록 대기 없음") : "…"}</span>
+            <span className={overview && overview.memory.proposed > 0 ? "warn" : ""}>{overview ? (overview.memory.proposed > 0 ? t("등록 대기 제안 {n}", { n: overview.memory.proposed }) : t("등록 대기 없음")) : "…"}</span>
           </button>
           <button className="vz-tile" onClick={() => onTab("memory")}>
             <i>◈</i>
-            <b>기억 원본</b>
-            <span>{overview ? `위키로 옮기지 않은 기억 ${overview.memory.verified}` : "…"}</span>
+            <b>{t("기억 원본")}</b>
+            <span>{overview ? t("위키로 옮기지 않은 기억 {n}", { n: overview.memory.verified }) : "…"}</span>
           </button>
           <button className="vz-tile" onClick={() => onTab("accounts")}>
             <i>◎</i>
-            <b>계정</b>
-            <span className={bad > 0 ? "warn" : ""}>{overview ? `${overview.accounts.length}개${bad > 0 ? ` · 문제 ${bad}` : ""}` : "…"}</span>
+            <b>{t("계정")}</b>
+            <span className={bad > 0 ? "warn" : ""}>{overview ? (bad > 0 ? t("{n}개 · 문제 {bad}", { n: overview.accounts.length, bad }) : t("{n}개", { n: overview.accounts.length })) : "…"}</span>
           </button>
         </div>
       </section>
 
       <section className="vz-set-sec">
-        <h3>연결</h3>
+        <h3>{t("연결")}</h3>
         <div className="vz-set-row">
           <span className={`vz-conn ${wsUp ? "up" : ""}`} />
           <div>
-            <b>{wsUp ? "실시간 연결됨" : "연결 끊김"}</b>
+            <b>{wsUp ? t("실시간 연결됨") : t("연결 끊김")}</b>
             <span>
-              {overview && overview.server.port ? `포트 ${overview.server.port}` : "서버"}
+              {overview && overview.server.port ? t("포트 {port}", { port: overview.server.port }) : t("서버")}
               {ts?.dnsName ? ` · Tailscale https://${ts.dnsName}` : ts?.ip ? ` · Tailscale IP ${ts.ip}` : ""}
             </span>
           </div>
@@ -232,24 +237,31 @@ function SpacePage({ overview, usage, wsUp, notify, onTab, onWorkshop }: { overv
       </section>
 
       <section className="vz-set-sec">
-        <h3>화면</h3>
+        <h3>{t("화면")}</h3>
         <div className="vz-set-row">
           <div>
-            <b>작업실</b>
-            <span>안건 목록·의장 대화·위원 카드가 한 화면에 있는 작업 화면</span>
+            <b>{t("작업실")}</b>
+            <span>{t("안건 목록·의장 대화·위원 카드가 한 화면에 있는 작업 화면")}</span>
           </div>
           <button className="vz-pill" onClick={onWorkshop}>
-            ▤ 작업실로
+            {t("▤ 작업실로")}
           </button>
         </div>
         <div className="vz-set-row">
           <div>
-            <b>작업실 테마</b>
-            <span>작업실 화면의 밝기입니다. 시각화 화면은 늘 밤하늘입니다.</span>
+            <b>{t("작업실 테마")}</b>
+            <span>{t("작업실 화면의 밝기입니다. 시각화 화면은 늘 밤하늘입니다.")}</span>
           </div>
-          <button className="vz-pill" onClick={cycleTheme} title="자동 → 라이트 → 다크">
-            {THEME_LABEL[theme]}
+          <button className="vz-pill" onClick={cycleTheme} title={t("자동 → 라이트 → 다크")}>
+            {t(THEME_LABEL[theme])}
           </button>
+        </div>
+        <div className="vz-set-row">
+          <div>
+            <b>{t("언어")}</b>
+            <span>{t("화면 글자와 캐릭터 대사·음성의 언어입니다. 서버 메시지와 의장·위원의 대화는 그대로입니다.")}</span>
+          </div>
+          <LangSelect className="vz-pill vz-lang" />
         </div>
       </section>
     </>
@@ -258,6 +270,7 @@ function SpacePage({ overview, usage, wsUp, notify, onTab, onWorkshop }: { overv
 
 /** What each account has left, one card per company. */
 function UsageCards({ pushed }: { pushed?: UsageSnapshot | null }) {
+  const t = useT();
   const geminiOff = useGemini()?.enabled === false;
   const [snap, setSnap] = useState<UsageSnapshot | null>(pushed ?? null);
   const [loading, setLoading] = useState(false);
@@ -281,19 +294,19 @@ function UsageCards({ pushed }: { pushed?: UsageSnapshot | null }) {
   return (
     <section className="vz-set-sec">
       <h3>
-        남은 사용량
-        <button className="vz-set-refresh" onClick={() => void load(true)} disabled={loading} title="지금 새로 확인">
+        {t("남은 사용량")}
+        <button className="vz-set-refresh" onClick={() => void load(true)} disabled={loading} title={t("지금 새로 확인")}>
           {loading ? "…" : "↻"}
         </button>
-        {snap?.at ? <span className="vz-usage-when">마지막 확인 {new Date(snap.at).toLocaleTimeString()}</span> : null}
+        {snap?.at ? <span className="vz-usage-when">{t("마지막 확인 {time}", { time: new Date(snap.at).toLocaleTimeString(locale()) })}</span> : null}
       </h3>
       <div className="vz-usage">
-        {HOUSE_IDS.map((id) => {
+        {usageIds(items).map((id) => {
           const rows = items.filter((u) => u.provider === id);
           return (
             <div key={id} className="vz-usage-card" style={{ "--c": css(TINT[id]) } as React.CSSProperties}>
-              <b>{HOUSE_NAME[id]}</b>
-              {rows.length === 0 && <span className="vz-usage-none">{id === "gemini" && geminiOff ? "꺼짐 · 아래에서 켤 수 있음" : snap ? "계정 없음" : "확인 중…"}</span>}
+              <b>{USAGE_NAME[id]}</b>
+              {rows.length === 0 && <span className="vz-usage-none">{id === "gemini" && geminiOff ? t("꺼짐 · 아래에서 켤 수 있음") : snap ? t("계정 없음") : t("확인 중…")}</span>}
               {rows.map((u) => (
                 <Meter key={u.account} u={u} named={rows.length > 1} />
               ))}
@@ -306,6 +319,7 @@ function UsageCards({ pushed }: { pushed?: UsageSnapshot | null }) {
 }
 
 function Meter({ u, named }: { u: AccountUsage; named: boolean }) {
+  const t = useT();
   const groups = new Map<string, NonNullable<AccountUsage["details"]>>();
   for (const d of u.details ?? []) groups.set(d.group, [...(groups.get(d.group) ?? []), d]);
   const reset = until(u.weekly?.resetsAt);
@@ -319,15 +333,15 @@ function Meter({ u, named }: { u: AccountUsage; named: boolean }) {
       ) : (
         <>
           {/* Claude's 5-hour number is not reported reliably; its weekly bar is enough */}
-          {!u.noFiveHour && u.provider !== "claude" && u.fiveHour && <Bar label="5시간" used={u.fiveHour.usedPct} />}
-          {u.weekly && <Bar label="주간" used={u.weekly.usedPct} />}
-          {!u.weekly && !u.fiveHour && <span className="vz-usage-none">정보 없음</span>}
-          {reset && <span className="vz-usage-reset">주간 한도 {reset}</span>}
+          {!u.noFiveHour && u.provider !== "claude" && u.fiveHour && <Bar label={t("5시간")} used={u.fiveHour.usedPct} />}
+          {u.weekly && <Bar label={t("주간")} used={u.weekly.usedPct} />}
+          {!u.weekly && !u.fiveHour && <span className="vz-usage-none">{t("정보 없음")}</span>}
+          {reset && <span className="vz-usage-reset">{t("주간 한도 {reset}", { reset })}</span>}
         </>
       )}
       {groups.size > 0 && (
         <details className="vz-usage-details">
-          <summary>세부 한도 {u.details!.length}</summary>
+          <summary>{t("세부 한도 {n}", { n: u.details!.length })}</summary>
           {[...groups].map(([group, list]) => (
             <div key={group} className="vz-usage-group">
               <span className="vz-meter-name">{group}</span>
@@ -354,15 +368,16 @@ interface ProjectPageProps {
 }
 
 function ProjectPage({ project, view, selected, onView, onOpen, onNewAgenda, notify, onSettingsSaved }: ProjectPageProps) {
+  const t = useT();
   const open = project.agendas.filter((a) => a.status !== "closed");
   const closed = project.agendas.filter((a) => a.status === "closed");
   const row = (a: AgendaOv) => (
-    <button key={a.key} className={`vz-picker-row ${a.key === selected ? "on" : ""} ${a.status === "closed" ? "closed" : ""}`} onClick={() => onOpen(a.key)} title="이 안건을 그림으로 열기">
+    <button key={a.key} className={`vz-picker-row ${a.key === selected ? "on" : ""} ${a.status === "closed" ? "closed" : ""}`} onClick={() => onOpen(a.key)} title={t("이 안건을 그림으로 열기")}>
       <span className={`vz-live ${a.status !== "closed" && (a.chairBusy || a.running > 0) ? "on" : ""}`} />
       <span className="vz-picker-title">{a.title}</span>
       <span className="vz-picker-meta">
-        {a.status === "closed" ? "종료 · " : a.waitingForUser && !a.chairBusy ? "결정 대기 · " : ""}
-        {a.status !== "closed" && a.running > 0 ? `${a.running} 실행 · ` : ""}
+        {a.status === "closed" ? t("종료") + " · " : a.waitingForUser && !a.chairBusy ? t("결정 대기") + " · " : ""}
+        {a.status !== "closed" && a.running > 0 ? t("{n} 실행", { n: a.running }) + " · " : ""}
         {a.taskCounts.done}/{a.taskCounts.total}
       </span>
     </button>
@@ -370,23 +385,23 @@ function ProjectPage({ project, view, selected, onView, onOpen, onNewAgenda, not
   return (
     <>
       <header className="vz-set-head">
-        <span className="vz-pop-kicker">제작위원회</span>
+        <span className="vz-pop-kicker">{t("제작위원회")}</span>
         <h2>{project.name}</h2>
         <p className="mono">
-          {project.repo || "(작업 폴더 없음)"}
+          {project.repo || t("(작업 폴더 없음)")}
           {project.baseBranch ? ` · ${project.baseBranch}` : ""}
-          {project.localGit ? " · 로컬 git" : ""}
+          {project.localGit ? ` · ${t("로컬 git")}` : ""}
         </p>
       </header>
       <div className="vz-seg" role="tablist">
         <button role="tab" aria-selected={view === "settings"} className={view === "settings" ? "on" : ""} onClick={() => onView("settings")}>
-          의장 · 위원 한도
+          {t("의장 · 위원 한도")}
         </button>
         <button role="tab" aria-selected={view === "guidelines"} className={view === "guidelines" ? "on" : ""} onClick={() => onView("guidelines")}>
-          가이드라인
+          {t("가이드라인")}
         </button>
         <button role="tab" aria-selected={view === "agendas"} className={view === "agendas" ? "on" : ""} onClick={() => onView("agendas")}>
-          안건 {open.length}
+          {t("안건")} {open.length}
         </button>
       </div>
       {view === "settings" && (
@@ -396,19 +411,19 @@ function ProjectPage({ project, view, selected, onView, onOpen, onNewAgenda, not
       )}
       {view === "guidelines" && (
         <div className="vz-set-form vz-skin">
-          <p className="vz-set-note">의장이 일을 나누고 모델을 고를 때 따르는 규칙입니다. 저장하면 의장의 다음 턴부터 반영됩니다.</p>
+          <p className="vz-set-note">{t("의장이 일을 나누고 모델을 고를 때 따르는 규칙입니다. 저장하면 의장의 다음 턴부터 반영됩니다.")}</p>
           <GuidelinesForm projectId={project.id} notify={notify} />
         </div>
       )}
       {view === "agendas" && (
         <div className="vz-set-agendas">
-          {open.length > 0 ? <div className="vz-set-list">{open.map(row)}</div> : <p className="vz-set-note">진행 중인 안건이 없습니다.</p>}
+          {open.length > 0 ? <div className="vz-set-list">{open.map(row)}</div> : <p className="vz-set-note">{t("진행 중인 안건이 없습니다.")}</p>}
           <button className="vz-pill gold" onClick={onNewAgenda}>
-            ＋ 새 안건
+            {t("＋ 새 안건")}
           </button>
           {closed.length > 0 && (
             <section className="vz-set-sec">
-              <h3>보관된 안건 {closed.length}</h3>
+              <h3>{t("보관된 안건 {n}", { n: closed.length })}</h3>
               <div className="vz-set-list">{closed.map(row)}</div>
             </section>
           )}

@@ -79,8 +79,14 @@
 .vz-mark { color: var(--gold); margin-right: 0.6em; letter-spacing: 0; }
 .vz .mode-switch { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--ink); border: 1px solid var(--line); backdrop-filter: blur(10px); }
 .vz .mode-switch button { padding: 5px 13px; border-radius: 999px; font-size: 12px; color: var(--dim); white-space: nowrap; }
+.mode-switch .ms-icon { font-style: normal; margin-right: 0.35em; }
 .vz .mode-switch button:hover { color: #fff; }
 .vz .mode-switch button.on { background: linear-gradient(135deg, rgba(255, 224, 158, 0.26), rgba(150, 130, 255, 0.24)); color: #fff7e2; box-shadow: inset 0 0 0 1px rgba(255, 224, 158, 0.42); }
+/* the room (작업실 · 회의실) and the look (시각화 · 아바타 · 텍스트): two groups in one pill */
+.vz .mode-switch { flex-direction: row; border-radius: 999px; }
+.mode-switch .ms-group { display: inline-flex; gap: 2px; }
+.vz .mode-switch .ms-sep { width: 1px; height: auto; margin: 5px 4px; background: rgba(255, 255, 255, 0.16); }
+.vz .mode-switch button.look.on { background: rgba(255, 255, 255, 0.1); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); }
 
 /* which project, which agenda */
 .vz-card { position: relative; min-width: 0; flex: 1; }
@@ -399,3 +405,36 @@
   .vz .vz-use { width: 116px; padding: 6px 8px 7px; gap: 4px; }
   .vz-use-row { grid-template-columns: 40px 1fr 24px; gap: 5px; }
 }
+
+/* The input bar: one height and one centre line for the buttons and the text (34px each, the bar 46px),
+   the glyphs centred in their circles. On a touch screen the text is 16px: iPhone Safari zooms the
+   whole page into any field set smaller when it is tapped. */
+.vz-composer { padding: 6px; gap: 6px; }
+.vz.narrow .vz-composer { padding: 5px; }
+.vz .vz-attach, .vz .vz-send { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; line-height: 1; }
+.vz-composer textarea { box-sizing: border-box; min-height: 34px; padding: 7px 4px; line-height: 20px; font-size: 14px; }
+@media (pointer: coarse) { .vz-composer textarea { font-size: 16px; } }
+
+/* attachments in the record: the workshop's pictures, videos and pages, fitted to the narrow column */
+.vz .vz-att { margin-top: 4px; }
+.vz .vz-att img { max-width: 100%; max-height: 320px; border-radius: 8px; border: 1px solid var(--line); display: block; }
+.vz .vz-att.shown img, .vz .vz-att.shown video { max-width: 100%; }
+.vz .vz-att video { max-width: 100%; max-height: 360px; border-radius: 8px; border: 1px solid var(--line); background: #000; }
+.vz .vz-att .shown-html { width: 100%; }
+.vz .vz-att .shown-html iframe { height: 300px; border-color: var(--line); }
+.vz .vz-att .shown-html a, .vz .vz-att .file-chip { color: #b9c6ff; font-size: 12px; }
+
+/* files waiting to go with a message: a thumbnail for pictures, size or upload progress */
+.vz .vz-file { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; }
+.vz .vz-file img { width: 30px; height: 30px; object-fit: cover; border-radius: 6px; display: block; }
+.vz .vz-file .vz-file-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.vz .vz-file em { font-style: normal; opacity: 0.7; }
+.vz .vz-file.failed { color: #ffb3a7; background: rgba(255, 120, 100, 0.14); }
+.vz-file-error { flex-basis: 100%; font-size: 11px; color: #ffb3a7; }
+.vz-composer.drag { border-color: rgba(255, 224, 158, 0.7); box-shadow: 0 0 0 3px rgba(255, 224, 158, 0.18); }
+/* the chair's bubble can be closed by hand (until it says something new) */
+.vz .say-x { position: absolute; top: -9px; right: -9px; z-index: 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; line-height: 1; cursor: pointer; color: #fff; background: rgba(20, 14, 10, 0.82); border: 1px solid rgba(255, 255, 255, 0.35); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); opacity: 0; transition: opacity 0.15s; }
+.vz .av-say:hover .say-x, .vz .vz-bubble.chair:hover .say-x { opacity: 1; }
+.vz .say-x:hover { background: rgba(160, 40, 30, 0.9); }
+@media (hover: none) { .vz .say-x { opacity: 0.85; } }
+.vz .av-say .say-x { top: 5px; right: 5px; width: 20px; height: 20px; }

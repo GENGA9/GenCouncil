@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "chest_left": {
+    "x": 372, "y": 500, "rx": 60, "ry": 58, "focus": [354, 517],
+    "horizontal": 0.14, "frequency": 3.0, "damping": 0.3,
+    "max_displacement": 32, "lag_ms": 65, "scale_amount": 0.36, "asym": 0.12
+  },
+  "chest_right": {
+    "x": 520, "y": 500, "rx": 46, "ry": 58, "focus": [534, 517],
+    "horizontal": 0.14, "frequency": 3.0, "damping": 0.3,
+    "max_displacement": 32, "lag_ms": 65, "scale_amount": 0.36, "asym": 0.12
+  }
+}

@@ -1,4 +1,5 @@
 import type { Member } from "./types";
+import { t } from "./i18n";
 
 /** "claude-sonnet-5-5" -> "Sonnet 5.5", "gemini-2.5-pro" -> "Gemini 2.5 Pro", "opus" -> "Opus" */
 export function prettyModel(model?: string): string | undefined {
@@ -11,6 +12,9 @@ export function prettyModel(model?: string): string | undefined {
   if (gem) return "Gemini " + gem[1].split("-").map(cap).join(" ");
   const gpt = /^gpt-([\d.]+)(?:-(.+))?$/i.exec(m);
   if (gpt) return `GPT-${gpt[1]}${gpt[2] ? " " + gpt[2].split("-").map(cap).join(" ") : ""}`;
+  // grok-4.7, grok-4.7-build-fast ("build" is the Grok Build serving name, not part of the model)
+  const grok = /^grok-([\d.]+)(?:-(.+))?$/i.exec(m);
+  if (grok) return `Grok ${grok[1]}${grok[2] ? " " + grok[2].split("-").filter((w) => w.toLowerCase() !== "build").map(cap).join(" ") : ""}`.trim();
   return m;
 }
 
@@ -20,23 +24,25 @@ function cap(s: string): string {
 
 /** What the UI calls a member: the model it runs, not "claude-1". */
 export function memberName(m: Pick<Member, "id" | "provider" | "model" | "label">): string {
-  if (m.provider === "relay") return m.label || "릴레이";
-  return prettyModel(m.model) ?? (m.provider === "claude" ? "Claude" : m.provider === "gpt" ? "GPT" : "Gemini");
+  if (m.provider === "relay") return m.label || t("릴레이");
+  return prettyModel(m.model) ?? (m.provider === "claude" ? "Claude" : m.provider === "gpt" ? "GPT" : m.provider === "grok" ? "Grok" : "Gemini");
 }
 
-export type Family = "claude" | "gemini" | "gpt" | "relay";
+export type Family = "claude" | "gemini" | "gpt" | "grok" | "relay";
 
 /** Which brand a member belongs to, for colors. Relay members are judged by their label. */
 export function familyOf(m: Pick<Member, "provider" | "label" | "model"> & { site?: string }): Family {
   if (m.provider === "claude") return "claude";
   if (m.provider === "gemini") return "gemini";
   if (m.provider === "gpt") return "gpt";
+  if (m.provider === "grok") return "grok";
   if (m.site === "gemini-web" || m.site === "aistudio") return "gemini";
   if (m.site === "chatgpt") return "gpt";
   const l = `${m.label ?? ""} ${m.model ?? ""}`.toLowerCase();
   if (/gemini|제미나이|agy|antigravity|aistudio|ai studio|google/.test(l)) return "gemini";
   if (/gpt|chatgpt|openai|codex|지피티/.test(l)) return "gpt";
   if (/claude|클로드|anthropic/.test(l)) return "claude";
+  if (/grok|그록|xai/.test(l)) return "grok";
   return "relay";
 }
 
@@ -44,6 +50,7 @@ export const FAMILY_COLOR: Record<Family, string> = {
   claude: "var(--c-claude)",
   gemini: "var(--c-gemini)",
   gpt: "var(--c-gpt)",
+  grok: "var(--c-grok)",
   relay: "var(--c-relay)",
 };
 

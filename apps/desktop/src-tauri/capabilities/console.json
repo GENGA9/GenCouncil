@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "console",
+  "description": "the localhost console in the main window may only report which view it shows (avatar or not)",
+  "windows": ["main"],
+  "remote": { "urls": ["http://localhost:*", "http://127.0.0.1:*"] },
+  "permissions": ["allow-desktop-mode"]
+}

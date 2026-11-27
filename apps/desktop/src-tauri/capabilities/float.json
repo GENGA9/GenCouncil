@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "float",
+  "description": "the floating chair window (localhost /?float=1) may drag itself, hide itself, open its right-click menu and bring the main window back",
+  "windows": ["float"],
+  "remote": { "urls": ["http://localhost:*", "http://127.0.0.1:*"] },
+  "permissions": ["allow-float-restore", "allow-float-drag", "allow-float-hide", "allow-float-menu"]
+}

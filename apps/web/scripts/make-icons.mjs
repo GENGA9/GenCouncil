@@ -1,3 +1,5 @@
+// 막음: 아이콘은 apps/desktop/icon-drafts/A.svg 에서 만든다 (resvg 렌더). 이 스크립트는 옛 막대 디자인이라 실행하면 새 아이콘을 덮어쓰므로 막아 둔다.
+throw new Error("make-icons.mjs is retired: icons come from apps/desktop/icon-drafts/A.svg (copied to public/icons/icon.svg)");
 // Generate PWA icons without an image library: a rounded dark square with three "member" bars.
 import fs from "node:fs";
 import path from "node:path";

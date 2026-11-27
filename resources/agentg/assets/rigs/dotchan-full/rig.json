@@ -1,0 +1,111 @@
+{
+  "v": 1,
+  "name": "닷쨩",
+  "canvas": [
+    832,
+    1664
+  ],
+  "anchor": [
+    425,
+    1643
+  ],
+  "bubble_anchor": [
+    425,
+    55
+  ],
+  "regions": {
+    "skin": [
+      368,
+      216,
+      112,
+      16
+    ],
+    "eyes": [
+      356,
+      180,
+      140,
+      36
+    ],
+    "mouth": [
+      400,
+      244,
+      52,
+      28
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide",
+      "angry",
+      "sleepy"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "dotchan full-body rig (brain dots, body_mode full), user-confirmed picture A_fix3: standing, left hand on the hip, a beige folder held against the side with the right arm. Long straight black hair, blunt bangs, grey eyes, beauty mark under the eye (right side of the picture), silver hair clip, white shirt with rolled sleeves, lanyard ID card, black pencil skirt, black pumps. The inner face (eyes, nose, mouth) is the bust rig face transplanted (tools/rig/dotchan_full_v3/face_transplant.py --eye-dx 2.5 0 3.4 0). eyes/open and mouth/closed are the base; eyes add angry and sleepy (8 states). anchor = x between the eyes x the lowest sole row, bubble_anchor = x between the eyes x the top of the head. Built by tools/rig/build_rig.py; record tools/rig/dotchan_full_v4_records.json.",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "efc48e5781c0b4bc45427a0b7b819ab86c54c16773f021119b0d9fb374387796",
+      "eyes/angry.png": "43ebbb1a90e830fa63a257c1cba977722f129eafe40f25742d26560323eafea6",
+      "eyes/closed.png": "9edd08cf2de161b0309bc3d8b073d88c05ce8aef64fd86134b2713d6bf636675",
+      "eyes/half.png": "a9a238a83576a728d7fccc57cc8b61f7d20398c84216a18387a756585a6665c2",
+      "eyes/open.png": "f1fad0b66140014334961e62cdb6c9fead8f01af6dd02f3939ec58e08d550ef4",
+      "eyes/sad.png": "00398955c597e164843161f3258c9ac0c0151be913fae0f2808dd907f33de964",
+      "eyes/sleepy.png": "60421e1c97ee63c9f5c7e3cbe31a4503cbce8777600d8c44a1988e2fa9b7deff",
+      "eyes/smile.png": "209b7a9c20bea4f7a80120a6e708784a54894b3015154a4df50f01dbd0078fb8",
+      "eyes/wide.png": "05cf7ee80232820b06ca375e463155de1a2a7a1ddf5e28418a88b3ed72055f8d",
+      "masks/eyes.png": "7d8c305f5e270ba6310e70059add9cc7e294ace89de03183c16fccd743e50517",
+      "masks/mouth.png": "c0b27b943e86fa03e4b35dabd19f5091164febf08e1c7b254ab1cb0c28340a6c",
+      "masks/skin.png": "6b74be0f9c334b11e06cb81c71303414aa60ee3f30b795c1ec9f04711f2533be",
+      "mouth/closed.png": "abacd85332733e93cf51a959e978161b0c54cb36e99d4d41bae0cc4bcc1d107c",
+      "mouth/o.png": "703815ed840b6045de2262bf71258656e4c44e413fcf0fa35cfec7e5c8469fc0",
+      "mouth/open_l.png": "e4f4bcc546b01b9a723850a8c1a1ad95c242bac6bc0e94bdbcf3dc1b32f00682",
+      "mouth/open_m.png": "6121b1fd205ff814907129715c3f5b5b1aedc4d055d861d653a923ab006d69b6",
+      "mouth/smile_closed.png": "53635f1edb9bb52a89e9c3acd6c44875d01b41f4fc0ebe943b9b4ff72cd3614f",
+      "mouth/smile_open_l.png": "afb240408ad8f16f3a9394d976765853390e9ae12056d3a9c996b37981beddc3",
+      "skin/blush.png": "a36b7b58c8b423aeed10031291927b70152528b57fe9099164ec07d13f49f656",
+      "skin/normal.png": "04215986213582bf7aa0b88e27ef0fd2f044d71651f1f990c24e8fa800751800"
+    }
+  }
+}

@@ -96,7 +96,7 @@ export function createCouncilMcp(council: Council): McpServer {
     {
       title: "Assign task to a new member",
       description:
-        "Spawn an autonomous member (claude, gemini or gpt CLI) in its own git worktree/branch to do one task, " +
+        "Spawn an autonomous member (claude, gemini, gpt or grok CLI) in its own git worktree/branch to do one task, " +
         "or create a relay member (provider 'relay': a human copies the packet into a web AI such as web Gemini / AI Studio / Antigravity and pastes the answer back; " +
         "the web AI cannot see the repo, so list the files it needs in `files`). " +
         "Returns immediately; you will be notified with a [council event] message when it finishes " +
@@ -106,8 +106,8 @@ export function createCouncilMcp(council: Council): McpServer {
         "the call is rejected with the allowed values if you exceed them.",
       inputSchema: {
         task_id: z.string(),
-        provider: z.enum(["claude", "gemini", "gpt", "relay"]).optional().describe("default: project.members.defaultProvider"),
-        model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-3.8-flash | gemini-4-hydrogen | gemini-4-argon | gemini-4-neon, gpt-6-luna | gpt-6.1-terra | gpt-6.2-sol | gpt-6.2-astra. default: the workhorse model within the limit"),
+        provider: z.enum(["claude", "gemini", "gpt", "grok", "relay"]).optional().describe("default: project.members.defaultProvider. grok = xAI Grok Build CLI (only when the user's limits allow grok members)"),
+        model: z.string().optional().describe("e.g. haiku | sonnet | opus | fable, gemini-3.8-flash | gemini-4-hydrogen | gemini-4-argon | gemini-4-neon, gpt-6-luna | gpt-6.1-terra | gpt-6.2-sol | gpt-6.2-astra, grok-4.5 | grok-4.6 | grok-4.7. default: the workhorse model within the limit"),
         effort: z
           .enum(["low", "medium", "high", "xhigh", "max"])
           .optional()
@@ -139,7 +139,7 @@ export function createCouncilMcp(council: Council): McpServer {
         "Quota/auth failures are handed over automatically; use this for manual cases (e.g. a relay member you want a CLI member to finish, or a stuck member you stopped).",
       inputSchema: {
         member_id: z.string(),
-        provider: z.enum(["claude", "gemini", "gpt"]).optional(),
+        provider: z.enum(["claude", "gemini", "gpt", "grok"]).optional(),
         model: z.string().optional(),
         effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("default: the previous member's. Raise it one step only when the work itself fell short, not for a quota or login cut"),
         account: z.string().optional(),

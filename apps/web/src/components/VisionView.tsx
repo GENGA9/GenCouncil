@@ -1,5 +1,7 @@
+import { ReloadButton } from "./ReloadButton";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
+import { t, useT } from "../i18n";
 import { familyOf, memberName, prettyModel } from "../model";
 import type { ChatItem, Member, ModelsInfo, Overview, RuntimeState, UsageSnapshot } from "../types";
 import type { ChairActions, MemberActions, ProjectActions, SendFn } from "../vision/actions";
@@ -10,7 +12,7 @@ import { VisionSheet, type SheetAt, type SheetTab } from "../vision/Sheet";
 import { UsageMini } from "../vision/UsageMini";
 import { TALL_CARD_BOTTOM, TALL_LABEL, tallFloor } from "../vision/scene";
 import { buildScene, HOUSE_NAME, isActive, laddersFrom, STAGES, stagesOf, TINT, type HouseId, type Rgb, type Scene, type TintId, type WorkerNode } from "../vision/scene";
-import { ModeSwitch } from "./ModeSwitch";
+import { ModeSwitch, type Mode } from "./ModeSwitch";
 import "../vision/vision.css";
 // after vision.css: it adjusts a few of its rules (the top row on a phone)
 import "../vision/sheet.css";
@@ -28,6 +30,8 @@ interface Props {
   models?: ModelsInfo | null;
   onSelect: (key: string) => void;
   onWorkshop: () => void;
+  /** the other picture modes (the avatar study) */
+  onMode?: (mode: Mode) => void;
   /** a short message for the user (the app's toast) */
   notify: (msg: string) => void;
   /** a project's settings were saved from the sheet: say so and reload what they change */
@@ -58,7 +62,8 @@ interface Bubble {
 }
 
 const css = (c: Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;
-const LOG_KEY = "gc.vision.log";
+// open by default on a wide screen (closing it is remembered); a phone starts with it shut
+const LOG_KEY = "gc.vision.log2";
 /** how wide a member's bubble may get: narrower on a tall stage, where the houses stand close */
 const bubbleWidth = (scene: Scene) => Math.min(scene.portrait ? 184 : 232, scene.w - 16);
 const bareModel = (m: Pick<Member, "id" | "provider" | "model" | "label">) => memberName({ ...m, model: m.model?.replace(/-(low|medium|high|xhigh|max)$/i, "") });
@@ -138,12 +143,13 @@ interface ChairSays {
  * there and always the same height, so the picture above never has to make room for it.
  */
 function ChairWords({ says, onOpen }: { says: ChairSays | null; onOpen: () => void }) {
+  const t = useT();
   const quiet = !says?.text;
   return (
-    <button className={`vz-words ${quiet ? "quiet" : ""}`} onClick={onOpen} title="대화 기록 열기">
+    <button className={`vz-words ${quiet ? "quiet" : ""}`} onClick={onOpen} title={t("대화 기록 열기")}>
       <span className="vz-words-body" key={says?.key ?? "none"}>
-        <span className="vz-words-tag">의장</span>
-        {says?.text || (says?.dots ? "생각하는 중입니다" : "아직 의장의 말이 없습니다. 아래에 첫 지시를 적어 보세요.")}
+        <span className="vz-words-tag">{t("의장")}</span>
+        {says?.text || (says?.dots ? t("생각하는 중입니다") : t("아직 의장의 말이 없습니다. 아래에 첫 지시를 적어 보세요."))}
       </span>
       {says?.dots && (
         <span className="vz-dots">
@@ -234,16 +240,17 @@ function placeLabels(scene: Scene, workers: WorkerNode[], keep?: Rect): Map<stri
 
 /** how a member's work is going, in a few words: tool calls so far and how long it has been at it */
 function progress(w: WorkerNode, now: number): string {
-  if (w.status === "starting") return "시작하는 중";
-  if (w.status === "waiting") return "답변 전달을 기다리는 중";
+  if (w.status === "starting") return t("시작하는 중");
+  if (w.status === "waiting") return t("답변 전달을 기다리는 중");
   const min = Math.round((now - Date.parse(w.startedAt)) / 60000);
-  const time = !Number.isFinite(min) || min < 0 ? "" : min < 1 ? "방금 시작" : min >= 60 ? `${Math.floor(min / 60)}시간 ${min % 60}분째` : `${min}분째`;
-  return [`도구 ${w.toolCalls}회`, time].filter(Boolean).join(" · ");
+  const time = !Number.isFinite(min) || min < 0 ? "" : min < 1 ? t("방금 시작") : min >= 60 ? t("{h}시간 {m}분째", { h: Math.floor(min / 60), m: min % 60 }) : t("{m}분째", { m: min });
+  return [t("도구 {n}회", { n: w.toolCalls }), time].filter(Boolean).join(" · ");
 }
 
 let seq = 1;
 
-export function VisionView({ state, overview, selected, chat, wsUp, loading, firstTurn, usage, models: given, onSelect, onWorkshop, notify, onSettingsSaved, subscribe, onSend, chair, members, projects: baseProjects }: Props) {
+export function VisionView({ state, overview, selected, chat, wsUp, loading, firstTurn, usage, models: given, onSelect, onWorkshop, onMode, notify, onSettingsSaved, subscribe, onSend, chair, members, projects: baseProjects }: Props) {
+  const t = useT();
   const stage = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<VisionRenderer | null>(null);
@@ -255,10 +262,11 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
   const [reports, setReports] = useState<Report[]>([]);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const narrow = useMedia("(max-width: 760px)");
-  // the record of everything said is tucked away until asked for: what is said shows beside who said it
+  // the record of everything said sits open at the right on a wide screen until closed (a phone starts with it shut)
   const [logOpen, setLogOpen] = useState(() => {
     try {
-      return localStorage.getItem(LOG_KEY) === "1";
+      const v = localStorage.getItem(LOG_KEY);
+      return v === null ? !window.matchMedia("(max-width: 760px)").matches : v === "1";
     } catch {
       return false;
     }
@@ -328,7 +336,7 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
   // old chair's light and bursts into the new one. The disc keeps the old name while the light is
   // drawn in, shrinks with it, and shows the new name as it bursts. The chair's card closes so it is seen.
   const chairEl = useRef<HTMLButtonElement>(null);
-  const lastChair = useRef<{ key: string; provider: HouseId; model: string } | null>(null);
+  const lastChair = useRef<{ key: string; provider: TintId; model: string } | null>(null);
   const [outgoing, setOutgoing] = useState<string | null>(null);
   const [crowned, setCrowned] = useState(0);
   const chairKey = state?.key;
@@ -408,9 +416,9 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
           });
         if (e.type === "assign") {
           const task = st?.tasks.find((t) => t.id === e.taskId)?.title;
-          setReports((cur) => [...cur, { ...base, kind: "spawn" as const, text: task ?? "작업을 시작합니다" }].slice(-120));
+          setReports((cur) => [...cur, { ...base, kind: "spawn" as const, text: task ?? t("작업을 시작합니다") }].slice(-120));
         } else if (e.type === "done") {
-          const text = e.summary?.trim() || (e.ok === false ? "작업이 중단되었습니다" : "작업을 마쳤습니다");
+          const text = e.summary?.trim() || (e.ok === false ? t("작업이 중단되었습니다") : t("작업을 마쳤습니다"));
           setReports((cur) => [...cur, { ...base, kind: "done" as const, ok: e.ok, text }].slice(-120));
           say(plain(text, 170), e.ok === false ? "fail" : "done", 11);
         } else {
@@ -422,8 +430,8 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
           setReports((cur) => {
             const last = cur[cur.length - 1];
             // a run of tool calls by one member is one line with a count
-            if (tool && last && last.kind === "line" && last.member === e.member && last.count) return [...cur.slice(0, -1), { ...last, text: `도구 ${text}`, count: last.count + 1 }];
-            return [...cur, { ...base, kind: "line" as const, text: tool ? `도구 ${text}` : text, count: tool ? 1 : undefined }].slice(-120);
+            if (tool && last && last.kind === "line" && last.member === e.member && last.count) return [...cur.slice(0, -1), { ...last, text: t("도구 {name}", { name: text }), count: last.count + 1 }];
+            return [...cur, { ...base, kind: "line" as const, text: tool ? t("도구 {name}", { name: text }) : text, count: tool ? 1 : undefined }].slice(-120);
           });
         }
       }),
@@ -451,19 +459,21 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
   const ask = state?.agenda.waitingForUser && !busy && state.agenda.status !== "closed" ? state.agenda.waitingForUser : undefined;
   const status = !state
     ? loading
-      ? "불러오는 중"
-      : "안건을 고르면 깨어납니다"
+      ? t("불러오는 중")
+      : t("안건을 고르면 깨어납니다")
     : state.agenda.status === "closed"
-      ? "안건 종료 · 결정 완료"
+      ? t("안건 종료 · 결정 완료")
       : busy
-        ? "숙의 중"
+        ? t("숙의 중")
         : ask
-          ? "당신의 결정을 기다립니다"
+          ? t("당신의 결정을 기다립니다")
           : working > 0
-            ? `위원 ${working}명이 작업 중`
-            : "대기";
+            ? t("위원 {n}명이 작업 중", { n: working })
+            : t("대기");
 
   // what the chair is saying now: its question, or its latest words; while it thinks about something newer, just the dots
+  // the chair's bubble closed by hand: hidden until it says something new
+  const [closedSay, setClosedSay] = useState<string | null>(null);
   const chairSays = useMemo<ChairSays | null>(() => {
     if (!state) return null;
     if (ask) return { key: `ask${ask.at}`, text: plain(ask.question, 220), ask: true, dots: false };
@@ -556,9 +566,9 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
                 touch(e, scene.chair.x, scene.chair.y, scene.chair.haloR, "chair");
                 if (state) setMenu({ kind: "chair" });
               }}
-              title="의장: 모델·추론 수준·멈춤·안건 종료"
+              title={t("의장: 모델·추론 수준·멈춤·안건 종료")}
             >
-              <span className="vz-chair-role">의장</span>
+              <span className="vz-chair-role">{t("의장")}</span>
               <span key={outgoing !== null ? "out" : `in${crowned}`} className={`vz-chair-model ${outgoing !== null ? "leaving" : crowned ? "arriving" : ""} ${(prettyModel(outgoing ?? state?.chair.model) ?? "").length > 10 ? "long" : ""}`}>
                 {state ? prettyModel(outgoing ?? state.chair.model) ?? "Claude" : "—"}
               </span>
@@ -568,7 +578,7 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
               <span>{status}</span>
               {tasksAll > 0 && (
                 <span className="vz-status-sub">
-                  결정 {tasksDone} / {tasksAll}
+                  {t("결정")} {tasksDone} / {tasksAll}
                 </span>
               )}
             </div>
@@ -582,7 +592,7 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
                   touch(e, h.x, h.y, h.ringR, h.id);
                   setMenu({ kind: "house", id: h.id });
                 }}
-                title={`${HOUSE_NAME[h.id]}: 모델 사다리 · 끝난 위원 · 사용량`}
+                title={`${HOUSE_NAME[h.id]}: ${t("모델 사다리 · 끝난 위원 · 사용량")}`}
                 aria-label={HOUSE_NAME[h.id]}
               />
             ))}
@@ -596,8 +606,8 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
                   touch(e, p.x, p.y, scene.pastR + 3, p.house);
                   setMenu({ kind: "member", id: p.id });
                 }}
-                title={`${p.name} · ${p.kind === "merged" ? "머지됨" : p.kind === "done" ? "완료" : p.kind === "failed" ? "실패" : "중지"}\n${p.task}`}
-                aria-label={`끝난 위원 ${p.name}: ${p.task}`}
+                title={`${p.name} · ${p.kind === "merged" ? t("머지됨") : p.kind === "done" ? t("완료") : p.kind === "failed" ? t("실패") : t("중지")}\n${p.task}`}
+                aria-label={t("끝난 위원 {name}: {task}", { name: p.name, task: p.task })}
               />
             ))}
 
@@ -612,7 +622,7 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
                       touch(e, w.x, w.y, scene.workerR + 4, w.house);
                       setMenu({ kind: "member", id: w.id });
                     }}
-                    title={`${w.name} · ${MEMBER_STATUS_KO[w.status]}${w.effort ? ` · 추론 ${w.effort}` : ""} · 도구 호출 ${w.toolCalls}회\n${w.task}`}
+                    title={`${w.name} · ${t(MEMBER_STATUS_KO[w.status])}${w.effort ? ` · ${t("추론 {effort}", { effort: w.effort })}` : ""} · ${t("도구 호출 {n}회", { n: w.toolCalls })}\n${w.task}`}
                     aria-label={`${w.name}: ${w.task}`}
                   />
                   <div className={`vz-label ${place.side} ${place.compact ? "compact" : ""}`} style={{ left: place.left, top: place.top, transform: place.transform, maxWidth: place.width }}>
@@ -628,14 +638,26 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
             })}
 
             {/* what each one is saying, right where it is */}
-            {chairAt && chairSays && (
+            {chairAt && chairSays && chairSays.key !== closedSay && (
               <button
                 key={chairSays.key}
                 className={`vz-bubble chair ${chairSays.ask ? "ask" : ""} ${chairSays.dots && !chairSays.text ? "thinking" : ""}`}
                 style={{ left: chairAt.x, top: chairAt.y, maxWidth: chairAt.width, "--c": "var(--gold)" } as React.CSSProperties}
                 onClick={toggleLog}
-                title="대화 기록 열기"
+                title={t("대화 기록 열기")}
               >
+                <span
+                  className="say-x"
+                  role="button"
+                  aria-label={t("말풍선 닫기")}
+                  title={t("말풍선 닫기 (다음 말이 오면 다시 뜹니다)")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setClosedSay(chairSays.key);
+                  }}
+                >
+                  ✕
+                </span>
                 {chairSays.text && <span className="vz-bubble-text">{chairSays.text}</span>}
                 {chairSays.dots && <span className="vz-dots"><i /><i /><i /></span>}
               </button>
@@ -665,16 +687,17 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
               <span className="vz-brand-name">GENCOUNCIL</span>
             </div>
             <div className="vz-nav">
-              <ModeSwitch mode="vision" onChange={(m) => m === "work" && onWorkshop()} />
-              <nav className="vz-dock" aria-label="위키와 설정">
-                <button className={sheet && sheet.tab !== "settings" && sheet.tab !== "accounts" ? "on" : ""} onClick={(e) => dock(e, "wiki")} title="Gen Wiki · 공유 기억">
-                  <i>❖</i>위키
-                  {proposed > 0 && <em title="위키 등록을 기다리는 제안">{proposed}</em>}
+              <ModeSwitch mode={{ room: "work", look: "vision" }} onChange={(m) => onMode?.(m)} />
+              <nav className="vz-dock" aria-label={t("위키와 설정")}>
+                <button className={sheet && sheet.tab !== "settings" && sheet.tab !== "accounts" ? "on" : ""} onClick={(e) => dock(e, "wiki")} title={t("Gen Wiki · 공유 기억")}>
+                  <i>❖</i><span className="vz-dock-label">{t("위키")}</span>
+                  {proposed > 0 && <em title={t("위키 등록을 기다리는 제안")}>{proposed}</em>}
                 </button>
-                <button className={sheet && (sheet.tab === "settings" || sheet.tab === "accounts") ? "on" : ""} onClick={(e) => dock(e, "settings")} title="설정 · 계정 · 남은 사용량">
-                  <i>⚙</i>설정
-                  {badAccounts > 0 && <em title="문제가 있는 계정">{badAccounts}</em>}
+                <button className={sheet && (sheet.tab === "settings" || sheet.tab === "accounts") ? "on" : ""} onClick={(e) => dock(e, "settings")} title={t("설정 · 계정 · 남은 사용량")}>
+                  <i>⚙</i><span className="vz-dock-label">{t("설정")}</span>
+                  {badAccounts > 0 && <em title={t("문제가 있는 계정")}>{badAccounts}</em>}
                 </button>
+                <ReloadButton />
               </nav>
             </div>
           </div>
@@ -685,7 +708,7 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
         </header>
 
         {scene && (
-          <aside className="vz-roster" aria-label="회사별 위원">
+          <aside className="vz-roster" aria-label={t("회사별 위원")}>
             {scene.houses.map((h) => {
               const slots = Math.min(8, Math.max(h.max, h.active));
               return (
@@ -705,9 +728,9 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
             })}
             <div className="vz-roster-foot">
               <span>
-                과제 <b>{tasksDone}</b> / {tasksAll}
+                {t("과제")} <b>{tasksDone}</b> / {tasksAll}
               </span>
-              <span className={`vz-conn ${wsUp ? "up" : ""}`} title={wsUp ? "실시간 연결됨" : "연결 끊김"} />
+              <span className={`vz-conn ${wsUp ? "up" : ""}`} title={wsUp ? t("실시간 연결됨") : t("연결 끊김")} />
             </div>
           </aside>
         )}
@@ -724,8 +747,8 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
             {STAGES.map((st, i) => (
               <li key={st.id} className={stages.has(st.id) ? "on" : ""}>
                 <span className="vz-stage-n">{i + 1}</span>
-                <b>{st.title}</b>
-                <span className="vz-stage-text">{st.text}</span>
+                <b>{t(st.title)}</b>
+                <span className="vz-stage-text">{t(st.text)}</span>
               </li>
             ))}
           </ol>
@@ -739,7 +762,7 @@ export function VisionView({ state, overview, selected, chat, wsUp, loading, fir
               firstTurn={firstTurn}
               chair={chair}
               onStop={() => {
-                if (confirm("의장의 이번 작업을 멈출까요? (위원은 계속 작업합니다)")) void api.stopChair(state.key).catch(() => undefined);
+                if (confirm(t("의장의 이번 작업을 멈출까요? (위원은 계속 작업합니다)"))) void api.stopChair(state.key).catch(() => undefined);
               }}
               onClose={() => setMenu(null)}
               onWorkshop={onWorkshop}

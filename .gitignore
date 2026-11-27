@@ -12,5 +12,10 @@ private/
 # local tooling and large media kept out of the public repo
 .claude/
 promo/*.mp4
-# character art stays local (not in the public repo)
-docs/characters/
+promo/frames-*/
+promo/chrome-*/
+promo/*.log
+
+# Agentg's large sources (chibi frames, raw recordings, voice design): kept here, out of git
+resources/agentg/local/
+resources/agentg/voice-lines/audio/

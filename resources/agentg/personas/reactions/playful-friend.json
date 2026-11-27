@@ -1,0 +1,11 @@
+{
+  "preset": "playful-friend",
+  "lines": [
+    { "text": "응? 나 찾았어?", "lang": "ko" },
+    { "text": "깜짝이야. 무슨 재밌는 일 있어?", "lang": "ko" },
+    { "text": "좋아, 잠깐 쉬었다 하자.", "lang": "ko" },
+    { "text": "나 여기 있어. 얘기해 봐.", "lang": "ko" },
+    { "text": "ん？何か面白いこと？", "lang": "ja", "subtitle_ko": "응? 뭐 재밌는 일 있어?" },
+    { "text": "ちょっと休憩しようよ。", "lang": "ja", "subtitle_ko": "잠깐 쉬자." }
+  ]
+}

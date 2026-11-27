@@ -1,0 +1,99 @@
+{
+  "v": 1,
+  "name": "젬미니",
+  "canvas": [
+    832,
+    1216
+  ],
+  "regions": {
+    "skin": [
+      276,
+      428,
+      280,
+      40
+    ],
+    "eyes": [
+      248,
+      352,
+      344,
+      80
+    ],
+    "mouth": [
+      352,
+      460,
+      136,
+      84
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "gemmini rig (brain gemini) from the user's own bust shot IMG_4148 (blonde twin tails with red wavy ends and teal streaks, two teal ribbons, teal X hair clip, blue eyes with red slit pupils, fang, white blouse with teal ribbon tie, black suspenders). Base face = her grin (sheet panel 2): eyes/smile and mouth/smile_open_l are the base, the neutral eyes/open + mouth/closed are an edit. Built by tools/rig/build_rig.py; record tools/rig/gemmini_records.json.",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "f2161d9483c75ebadcef092039deffd4661f3a053bb60e783f94513128ca067d",
+      "eyes/closed.png": "523e8f038b0a94f736fcdf7941fb2cbc6cae669b3ef6e4c764d24b701cab4fbf",
+      "eyes/half.png": "02758a64f8c2efb9ba10fd6c7ded8ec303c00fa3765366bb33444c68cd3d0d56",
+      "eyes/open.png": "438e1d8608876f69a5fa4cd547a38aaff02f3d35bb22d70632f62a28f3aa30f8",
+      "eyes/sad.png": "c6a0e49f4e8175a3199ca70338d5ea679330d67f4875216f336c4e2c16d78ae5",
+      "eyes/smile.png": "b57a6916ee729404901dbce8c5ef9d45a96a000f9a972d02defd9b5e410910a2",
+      "eyes/wide.png": "a27b48087a4a8fe98789dd46222e0387c0a7e406ae65ad7efacceb3f1a91ead0",
+      "masks/eyes.png": "cc9928c11a0fc2967b4a85e67c7222c68f8feaae09b61f53039523424e8fef8a",
+      "masks/mouth.png": "6d4d808fc9a164cf77ecc5b4a0c99875e7f5b6e45d27ffaf6c113842f6611135",
+      "masks/skin.png": "570c90ab3be306f9b8ea37c6ce8cffb32fcc80f5f5ac5a112ea7177d63052441",
+      "mouth/closed.png": "6e8ebba03bf39b4e16633d4d3098fd7ae8b90f690140f4690d22639e1b63cfa1",
+      "mouth/o.png": "b7eec6fb06303d3e5a1fc28aaa43b3e3bed16ea8e62a6c7e52d84c700938479a",
+      "mouth/open_l.png": "3494187ba22169b80533521b8657757ac60b7ee992be4cce22bae775b2782f4e",
+      "mouth/open_m.png": "27cac0a60f158f1fbc7f7b074f28add72cdceaa1ee6f348aae819305756b6fe2",
+      "mouth/smile_closed.png": "df36c733cc73913ff7ad31093347fb8384942543a0fb8a1a12b1c13114ba2d19",
+      "mouth/smile_open_l.png": "1c4516d7ac168bf12d5f6ed63e782f929a00076146c17fda3308568738653f6c",
+      "skin/blush.png": "9b621f1a2576f03efd460989d832b62e4607255b3ed231cf24b1dec91936a1db",
+      "skin/normal.png": "0424466fa68875cb3cf93e0a9d6de76455bc5967ed8a99087053f0277591dfd2"
+    }
+  }
+}

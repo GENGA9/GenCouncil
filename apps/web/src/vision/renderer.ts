@@ -1,6 +1,7 @@
 // Draws the scene on a canvas: the night sky, the chair's eclipse, the three houses and the light
 // that runs between them. Names and buttons are HTML on top of this; nothing here is clickable.
 import { HOUSE_NAME, rgba, TINT, type HouseId, type HouseNode, type Rgb, type Scene, type TintId, type WorkerNode } from "./scene";
+import { t } from "../i18n";
 
 /** something that just happened, shown as a burst of light */
 export type VisionEvent =
@@ -15,7 +16,7 @@ export type VisionEvent =
   /** a member's log line: a tool call or a sentence */
   | { type: "line"; member: string; text?: string }
   /** another model takes the chair (from one company's colour to another's) */
-  | { type: "crown"; from: HouseId; to: HouseId }
+  | { type: "crown"; from: TintId; to: TintId }
   /** a member is finished and reports */
   | { type: "done"; member: string; house?: HouseId; name?: string; ok?: boolean; summary?: string }
   /** the user touched something in the picture */
@@ -263,7 +264,7 @@ export class VisionRenderer {
         continue;
       }
       // sent out a moment ago: wait for the order to arrive before stepping out
-      const sent = w.house !== "relay" ? this.lastAssign.get(w.house) : undefined;
+      const sent = w.house !== "relay" && w.house !== "grok" ? this.lastAssign.get(w.house) : undefined;
       const wait = sent !== undefined && this.time - sent < LOCK + 1 ? Math.max(0, sent + LOCK - this.time) : 0;
       this.born.set(w.id, this.time + wait);
       this.waves.push({ x: w.fromX, y: w.fromY, r0: 2, r1: 0.9 * s.u, t: -wait, dur: 1.1, c: TINT[w.house] });
@@ -300,14 +301,14 @@ export class VisionRenderer {
         this.wave(ch.x, ch.y, ch.r, ch.haloR * 1.7, 1.5, gold);
         break;
       case "user":
-        this.send([{ kind: "port", rev: true }], USER, "요청", true);
+        this.send([{ kind: "port", rev: true }], USER, t("요청"), true);
         break;
       case "say":
         // a long answer arrives in pieces; one packet is enough for a burst of them
         if (this.time - this.lastSay < 0.7) return;
         this.lastSay = this.time;
         this.wave(ch.x, ch.y, ch.r, ch.haloR * 1.3, 1.1, gold);
-        this.send([{ kind: "port", rev: false }], gold, "응답", true);
+        this.send([{ kind: "port", rev: false }], gold, t("응답"), true);
         break;
       case "crown": {
         const from = TINT[ev.from];
@@ -365,7 +366,7 @@ export class VisionRenderer {
             { kind: "thread", member: ev.member, rev: false },
           ],
           TINT[ev.house],
-          "지시",
+          t("지시"),
           true,
         );
         break;
@@ -374,7 +375,7 @@ export class VisionRenderer {
         const now = this.time;
         if (now - (this.lastLine.get(ev.member) ?? -1) < 0.8) return;
         const w = this.workers(s).find((x) => x.id === ev.member);
-        if (!w || w.house === "relay") return;
+        if (!w || w.house === "relay" || w.house === "grok") return;
         this.lastLine.set(ev.member, now);
         this.send(
           [
@@ -390,7 +391,7 @@ export class VisionRenderer {
       }
       case "done": {
         const w = this.workers(s).find((x) => x.id === ev.member);
-        const house = (w && w.house !== "relay" ? w.house : undefined) ?? ev.house;
+        const house = (w && w.house !== "relay" && w.house !== "grok" ? w.house : undefined) ?? ev.house;
         if (w) this.wave(w.x, w.y, s.workerR, s.workerR * 4.5, 1.3, TINT[w.house]);
         const beam = house ? this.beams.get(house) : undefined;
         if (!house || !beam) {
@@ -406,7 +407,7 @@ export class VisionRenderer {
             { kind: "beam", house, rev: true },
           ],
           failed ? RED : TINT[house],
-          failed ? "중단" : "보고",
+          failed ? t("중단") : t("보고"),
           true,
         );
         break;

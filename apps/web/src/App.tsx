@@ -7,13 +7,18 @@ import { LeftPane } from "./components/LeftPane";
 import { MemoryView } from "./components/MemoryView";
 import { WikiView } from "./components/WikiView";
 import { RightPane } from "./components/RightPane";
-import { readMode, saveMode, type Mode } from "./components/ModeSwitch";
+import { ModeSwitch, readMode, saveMode, type Mode } from "./components/ModeSwitch";
+import { AvatarView } from "./components/AvatarView";
+import { MeetingView } from "./components/MeetingView";
 import { VisionView } from "./components/VisionView";
+import { FloatingChair } from "./components/FloatingChair";
+import { IS_FLOAT, reportMode } from "./desktop";
+import { useT } from "./i18n";
 import { reloadGemini } from "./components/GeminiOptIn";
 import type { ChairActions, MemberActions, ProjectActions } from "./vision/actions";
 import type { VisionEvent } from "./vision/renderer";
 import { FolderTidyModal, GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
-import type { Attachment, ChatItem, Member, Overview, RuntimeState, TranscriptEntry, UploadHooks, UsageSnapshot } from "./types";
+import type { Attachment, ChatItem, Meeting, MeetingSettings, Member, Overview, RuntimeState, TranscriptEntry, UploadHooks, UsageSnapshot } from "./types";
 
 const MEMORY_KEY = "__memory__";
 const ACCOUNTS_KEY = "__accounts__";
@@ -36,12 +41,26 @@ let seq = 1;
 const item = (role: ChatItem["role"], text: string, ts = new Date().toISOString()): ChatItem => ({ id: seq++, role, text, ts });
 
 export function App() {
+  const t = useT();
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [token, setToken] = useState("");
   const [loginError, setLoginError] = useState("");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [usage, setUsage] = useState<UsageSnapshot | null>(null);
+  // the meeting room: the meeting under way or the last one, kept current over the websocket
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
+  // who chairs and who sits in (saved on the server, the same on every device)
+  const [meetingSettings, setMeetingSettings] = useState<MeetingSettings>({ chair: "claude", members: ["claude", "gpt", "gemini", "grok"] });
   const [selected, setSelected] = useState<string>(() => localStorage.getItem("gc.selected") ?? "");
+  // the floating chair follows the agenda the main window opens
+  useEffect(() => {
+    if (!IS_FLOAT) return;
+    const fn = (e: StorageEvent) => {
+      if (e.key === "gc.selected" && e.newValue !== null) setSelected(e.newValue);
+    };
+    window.addEventListener("storage", fn);
+    return () => window.removeEventListener("storage", fn);
+  }, []);
   const [state, setState] = useState<RuntimeState | null>(null);
   const [chat, setChat] = useState<ChatItem[]>([]);
   const [firstTurn, setFirstTurn] = useState(false);
@@ -53,6 +72,10 @@ export function App() {
     saveMode(m);
     setModeState(m);
   }, []);
+  // the desktop app shows the floating chair when its window is minimized in the avatar view (nothing in a browser)
+  useEffect(() => {
+    if (!IS_FLOAT) reportMode(authed && mode.room === "work" && mode.look === "avatar" ? "avatar" : "other");
+  }, [authed, mode]);
   // what just happened on the open agenda, for the visualization to flash
   const visionListeners = useRef(new Set<(e: VisionEvent) => void>());
   const subscribeVision = useCallback((fn: (e: VisionEvent) => void) => {
@@ -185,6 +208,12 @@ export function App() {
     void loadAgenda(selected);
   }, [authed, selected, loadAgenda]);
 
+  useEffect(() => {
+    if (!authed || mode.room !== "meeting") return;
+    api.meetingLatest().then((r) => setMeeting(r.meeting), () => undefined);
+    api.meetingSettings().then((r) => setMeetingSettings(r.settings), () => undefined);
+  }, [authed, mode, wsUp]);
+
   // websocket
   const stateTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
@@ -204,6 +233,18 @@ export function App() {
         void reloadGemini();
         return;
       }
+      if (type === "meeting") {
+        setMeeting(msg.meeting as Meeting);
+        return;
+      }
+      if (type === "meeting-settings") {
+        setMeetingSettings(msg.settings as MeetingSettings);
+        return;
+      }
+      if (type === "meeting-removed") {
+        setMeeting((cur) => (cur && cur.id === msg.id ? null : cur));
+        return;
+      }
       if (type === "usage") {
         setUsage({ at: Number(msg.at), items: (msg.items as UsageSnapshot["items"]) ?? [] });
         return;
@@ -220,7 +261,7 @@ export function App() {
       else if (type === "member:start" || type === "member:done") {
         const m = msg.member as Member;
         const fam = familyOf(m);
-        const house = fam === "relay" ? undefined : fam;
+        const house = fam === "relay" || fam === "grok" ? undefined : fam;
         const name = memberName({ ...m, model: m.model?.replace(/-(low|medium|high|xhigh|max)$/i, "") });
         if (type === "member:done") flash({ type: "done", member: m.id, house, name, ok: m.status === "done", summary: m.result?.summary ?? m.failure?.message ?? m.error });
         else if (house) flash({ type: "assign", house, member: m.id, name, taskId: m.taskId });
@@ -257,7 +298,7 @@ export function App() {
           setChat((c) => [...c, item("system", String(msg.line))]);
           break;
         case "chair:handover":
-          setChat((c) => [...c, item("event", `의장 계정 전환: ${String(msg.from)} → ${String(msg.to)} (${String(msg.reason)})`)]);
+          setChat((c) => [...c, item("event", t("의장 계정 전환: {from} → {to} ({reason})", { from: String(msg.from), to: String(msg.to), reason: String(msg.reason) }))]);
           void refreshOverview();
           break;
         case "chair:show":
@@ -268,7 +309,7 @@ export function App() {
           void refreshState(key);
           break;
         case "agenda:finished":
-          setChat((c) => [...c, item("event", `의장이 안건을 종료했습니다: ${String(msg.reason)} (베이스 브랜치에 머지함)`)]);
+          setChat((c) => [...c, item("event", t("의장이 안건을 종료했습니다: {reason} (베이스 브랜치에 머지함)", { reason: String(msg.reason) }))]);
           void refreshOverview();
           void refreshState(key);
           break;
@@ -301,7 +342,7 @@ export function App() {
         await api.chat(selected, message, attachments);
       } catch (e) {
         if (current >= 0) {
-          const msg = `업로드 실패: ${(e as Error).message}`;
+          const msg = t("업로드 실패: {msg}", { msg: (e as Error).message });
           hooks?.onFail(current, msg);
           notify(msg);
         } else notify((e as Error).message);
@@ -323,15 +364,15 @@ export function App() {
 
   const currentProject = useMemo(() => overview?.projects.find((p) => selected.startsWith(p.id + "/")), [overview, selected]);
 
-  if (authed === null) return <div className="boot">연결 중…</div>;
+  if (authed === null) return <div className="boot">{t("연결 중…")}</div>;
   if (authed === false) {
     return (
       <div className="login">
         <div className="login-card">
           <h1>GenCouncil</h1>
-          <p>서버 토큰을 입력하세요. 토큰은 PC에서 <code>gencouncil web token</code> 으로 볼 수 있습니다.</p>
+          <p>{t("서버 토큰을 입력하세요.")} {t("토큰은 PC에서 다음 명령으로 볼 수 있습니다:")} <code>gencouncil web token</code></p>
           <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="token" onKeyDown={(e) => e.key === "Enter" && onLogin()} autoFocus />
-          <button onClick={onLogin}>입장</button>
+          <button onClick={onLogin}>{t("입장")}</button>
           {loginError && <div className="err">{loginError}</div>}
         </div>
       </div>
@@ -395,8 +436,8 @@ export function App() {
       await api.setChair(selected, model, effort, account, advisor);
       notify(
         account !== undefined
-          ? `이 안건의 의장 계정을 ${account}로 바꿨습니다. 새 세션으로 시작합니다. (다른 안건은 그대로입니다)`
-          : "이 안건의 의장 설정을 저장했습니다. 다음 턴부터 적용됩니다. (다른 안건은 그대로입니다)",
+          ? t("이 안건의 의장 계정을 {account}로 바꿨습니다. 새 세션으로 시작합니다. (다른 안건은 그대로입니다)", { account })
+          : t("이 안건의 의장 설정을 저장했습니다. 다음 턴부터 적용됩니다. (다른 안건은 그대로입니다)"),
       );
       if (selected) void refreshState(selected);
     },
@@ -404,7 +445,7 @@ export function App() {
       if (!currentProject) return;
       try {
         await api.projectSettings(currentProject.id, { members: { autonomy } });
-        notify(autonomy === "chair" ? "위원 권한 요청을 의장이 대신 승인합니다. 다음에 시작하는 위원부터 적용됩니다." : "위원 자율성을 바꿨습니다. 다음에 시작하는 위원부터 적용됩니다.");
+        notify(autonomy === "chair" ? t("위원 권한 요청을 의장이 대신 승인합니다. 다음에 시작하는 위원부터 적용됩니다.") : t("위원 자율성을 바꿨습니다. 다음에 시작하는 위원부터 적용됩니다."));
         void refreshOverview();
       } catch (e) {
         notify((e as Error).message);
@@ -413,15 +454,15 @@ export function App() {
     onReset: async () => {
       if (!selected) return;
       await api.reset(selected);
-      notify("의장 세션을 초기화했습니다 (state.md 유지).");
+      notify(t("의장 세션을 초기화했습니다 (state.md 유지)."));
       void refreshState(selected);
     },
     onRetrospect: async () => {
       if (!selected) return;
       try {
-        notify("회고 시작: 의장이 교훈·성향을 공유 기억에 기록합니다.");
+        notify(t("회고 시작: 의장이 교훈·성향을 공유 기억에 기록합니다."));
         const r = await api.retrospect(selected);
-        notify(r.ran ? (r.isError ? `회고 실패: ${r.text.slice(0, 120)}` : "회고 완료") : "의장 세션이 없어 회고할 내용이 없습니다.");
+        notify(r.ran ? (r.isError ? t("회고 실패: {text}", { text: r.text.slice(0, 120) }) : t("회고 완료")) : t("의장 세션이 없어 회고할 내용이 없습니다."));
       } catch (e) {
         notify((e as Error).message);
       }
@@ -430,7 +471,7 @@ export function App() {
       if (!selected) return;
       try {
         const r = await api.resume(selected);
-        notify(`이어서 시작: 위원 ${r.resumed.length}명${r.failed.length ? `, 실패 ${r.failed.length}명 (${r.failed.map((f) => f.error).join("; ").slice(0, 120)})` : ""}`);
+        notify(r.failed.length ? t("이어서 시작: 위원 {n}명, 실패 {f}명 ({errors})", { n: r.resumed.length, f: r.failed.length, errors: r.failed.map((f) => f.error).join("; ").slice(0, 120) }) : t("이어서 시작: 위원 {n}명", { n: r.resumed.length }));
         void refreshState(selected);
       } catch (e) {
         notify((e as Error).message);
@@ -443,14 +484,14 @@ export function App() {
     },
     onDelete: async () => {
       if (!selected || !state) return;
-      if (!confirm(`안건 "${state.agenda.title}"을 삭제할까요?\n작업 폴더와 브랜치를 지우고, 대화 기록은 프로젝트의 deleted 폴더로 옮깁니다.`)) return;
+      if (!confirm(t("안건 \"{title}\"을 삭제할까요?\n작업 폴더와 브랜치를 지우고, 대화 기록은 프로젝트의 deleted 폴더로 옮깁니다.", { title: state.agenda.title }))) return;
       try {
         let r = await api.deleteAgenda(selected);
         if (!r.deleted) {
-          if (!confirm(`이 안건에는 아직 합치지 않은 작업이 있습니다:\n- ${r.lost.join("\n- ")}\n\n삭제하면 이 작업은 사라집니다. 그래도 삭제할까요?`)) return;
+          if (!confirm(t("이 안건에는 아직 합치지 않은 작업이 있습니다:\n- {lost}\n\n삭제하면 이 작업은 사라집니다. 그래도 삭제할까요?", { lost: r.lost.join("\n- ") }))) return;
           r = await api.deleteAgenda(selected, true);
         }
-        notify("안건을 삭제했습니다.");
+        notify(t("안건을 삭제했습니다."));
         setSelected("");
         void refreshOverview();
       } catch (e) {
@@ -460,9 +501,9 @@ export function App() {
     onApproveFinish: async () => {
       if (!selected) return;
       try {
-        notify("회고 후 종료합니다…");
+        notify(t("회고 후 종료합니다…"));
         await api.finish(selected, true);
-        notify("안건을 종료했습니다.");
+        notify(t("안건을 종료했습니다."));
         void refreshOverview();
         void refreshState(selected);
       } catch (e) {
@@ -471,10 +512,10 @@ export function App() {
     },
     onMergeBase: async () => {
       if (!selected) return;
-      if (!confirm("지금까지 안건 브랜치에 합쳐진 결과를 메인(베이스 브랜치)에 반영합니다. 안건은 계속 열려 있습니다. 진행할까요?")) return;
+      if (!confirm(t("지금까지 안건 브랜치에 합쳐진 결과를 메인(베이스 브랜치)에 반영합니다. 안건은 계속 열려 있습니다. 진행할까요?"))) return;
       try {
         const r = await api.mergeBase(selected);
-        notify(r.notIncluded.length ? `메인에 반영했습니다. 아직 안건에 합치지 않은 위원 결과(${r.notIncluded.join(", ")})는 빠졌습니다.` : "메인에 반영했습니다.");
+        notify(r.notIncluded.length ? t("메인에 반영했습니다. 아직 안건에 합치지 않은 위원 결과({list})는 빠졌습니다.", { list: r.notIncluded.join(", ") }) : t("메인에 반영했습니다."));
         void refreshState(selected);
       } catch (e) {
         notify((e as Error).message);
@@ -490,13 +531,13 @@ export function App() {
       if (selected) setModal({ kind: "folders", key: selected });
     },
     onFinish: async () => {
-      if (!selected || !confirm("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?")) return;
-      if (!confirm("안건을 종료할까요? 의장이 회고(교훈·모델 성향을 공유 기억에 제안)를 먼저 하고, 안건 브랜치를 베이스 브랜치에 합친 뒤 닫습니다.")) return;
+      if (!selected || !confirm(t("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?"))) return;
+      if (!confirm(t("안건을 종료할까요? 의장이 회고(교훈·모델 성향을 공유 기억에 제안)를 먼저 하고, 안건 브랜치를 베이스 브랜치에 합친 뒤 닫습니다."))) return;
       const retro = true;
       try {
-        if (retro) notify("회고 중… 끝나면 종료합니다.");
+        if (retro) notify(t("회고 중… 끝나면 종료합니다."));
         await api.finish(selected, retro);
-        notify("안건을 종료했습니다.");
+        notify(t("안건을 종료했습니다."));
         void refreshOverview();
         void loadAgenda(selected);
       } catch (e) {
@@ -529,13 +570,13 @@ export function App() {
       if (!selected) return;
       try {
         const r = await api.merge(selected, id);
-        notify(r.ok ? `${id} 머지 완료` : `충돌: ${r.conflicts.join(", ")}`);
+        notify(r.ok ? t("{id} 머지 완료", { id }) : t("충돌: {list}", { list: r.conflicts.join(", ") }));
       } catch (e) {
         notify((e as Error).message);
       }
     },
     onStop: async (id) => {
-      if (!selected || !confirm(`${id} 를 중지할까요?`)) return;
+      if (!selected || !confirm(t("{id} 를 중지할까요?", { id }))) return;
       await api.stop(selected, id);
     },
     onRelay: (id) => setModal({ kind: "relay", id }),
@@ -549,9 +590,74 @@ export function App() {
     />
   );
 
+  if (IS_FLOAT) return <FloatingChair overview={overview} onPick={setSelected} state={shownState} chat={chat} subscribe={subscribeVision} onSend={send} chair={chairActions} toast={toast} />;
+
   return (
-    <div className={`app ${mobile ? "mobile" : ""} ${mode === "vision" ? "is-vision" : ""}`}>
-      {mode === "vision" ? (
+    <div className={`app ${mobile ? "mobile" : ""} ${mode.room !== "work" || mode.look !== "text" ? "is-vision" : ""}`}>
+      {mode.room === "meeting" ? (
+        <MeetingView
+          look={mode.look}
+          meeting={meeting}
+          settings={meetingSettings}
+          onSettings={async (patch) => {
+            setMeetingSettings((cur) => ({ ...cur, ...patch }) as MeetingSettings);
+            const r = await api.meetingSaveSettings(patch);
+            setMeetingSettings(r.settings);
+          }}
+          loadModels={api.models}
+          past={{
+            list: async () => (await api.meetingList()).meetings,
+            open: async (id) => (await api.meetingGet(id)).meeting,
+            remove: async (id) => {
+              await api.meetingDelete(id);
+              setMeeting((cur) => (cur && cur.id === id ? null : cur));
+            },
+          }}
+          usage={usage}
+          onStart={async (topic) => {
+            const r = await api.meetingStart(topic);
+            setMeeting(r.meeting);
+          }}
+          onStop={async (id) => {
+            const r = await api.meetingStop(id);
+            if (r.meeting) setMeeting(r.meeting);
+          }}
+          onMode={setMode}
+          onWorkshop={() => {
+            setMode({ room: "work", look: "text" });
+            setTab("center");
+          }}
+          notify={notify}
+        />
+      ) : mode.look === "avatar" ? (
+        <AvatarView
+          state={shownState}
+          overview={overview}
+          selected={selected}
+          chat={chat}
+          wsUp={wsUp}
+          loading={loadingAgenda}
+          firstTurn={firstTurn}
+          usage={usage}
+          onSelect={setSelected}
+          onMode={setMode}
+          onWorkshop={() => {
+            setMode({ room: "work", look: "text" });
+            setTab("center");
+          }}
+          notify={notify}
+          onSettingsSaved={(m) => {
+            notify(m);
+            void refreshOverview();
+            if (selected) void refreshState(selected);
+          }}
+          subscribe={subscribeVision}
+          onSend={send}
+          chair={chairActions}
+          members={memberActions}
+          projects={projectActions}
+        />
+      ) : mode.look === "vision" ? (
         <VisionView
           state={shownState}
           overview={overview}
@@ -562,8 +668,9 @@ export function App() {
           firstTurn={firstTurn}
           usage={usage}
           onSelect={setSelected}
+          onMode={setMode}
           onWorkshop={() => {
-            setMode("work");
+            setMode({ room: "work", look: "text" });
             setTab("center");
           }}
           notify={notify}
@@ -580,15 +687,17 @@ export function App() {
         />
       ) : mobile ? (
         <>
+          <div className="mode-row">
+            <ModeSwitch mode={mode} onChange={setMode} />
+          </div>
           <div className="tabs">
-            <button className={tab === "left" ? "on" : ""} onClick={() => setTab("left")}>안건</button>
+            <button className={tab === "left" ? "on" : ""} onClick={() => setTab("left")}>{t("안건")}</button>
             <button className={tab === "center" ? "on" : ""} onClick={() => setTab("center")}>
-              의장{state?.agenda.waitingForUser && !state.chair.busy ? <span className="tab-ask" title="의장이 결정을 기다립니다">?</span> : null}
+              {t("의장")}{state?.agenda.waitingForUser && !state.chair.busy ? <span className="tab-ask" title={t("의장이 결정을 기다립니다")}>?</span> : null}
             </button>
             <button className={tab === "right" ? "on" : ""} onClick={() => setTab("right")}>
-              위원{state?.members.some((m) => m.status === "running") ? " ●" : ""}
+              {t("위원")}{state?.members.some((m) => m.status === "running") ? " ●" : ""}
             </button>
-            <button className="tab-vision" onClick={() => setMode("vision")} title="시각화 모드">✦</button>
           </div>
           <div className="pane-mobile">{tab === "left" ? left : tab === "center" ? center : right}</div>
         </>

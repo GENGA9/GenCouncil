@@ -3,7 +3,7 @@ export interface Tailscale {
   dnsName?: string;
 }
 
-export type CliProvider = "claude" | "gemini" | "gpt";
+export type CliProvider = "claude" | "gemini" | "gpt" | "grok";
 export type Provider = CliProvider | "relay";
 
 export interface LimitEntry {
@@ -74,6 +74,8 @@ export interface AgendaOv {
   branch: string;
   key: string;
   taskCounts: { total: number; done: number };
+  /** the task it is on now (doing, else review, else the next to do) */
+  now?: string;
   running: number;
   /** families of the running members (claude / gemini / relay), for spinner colors */
   runningFamilies: string[];
@@ -100,7 +102,7 @@ export interface UsageWindow {
 }
 
 export interface AccountUsage {
-  provider: "claude" | "gemini" | "gpt";
+  provider: "claude" | "gemini" | "gpt" | "grok";
   account: string;
   fiveHour?: UsageWindow;
   weekly?: UsageWindow;
@@ -194,7 +196,7 @@ export interface RuntimeState {
   members: Member[];
   integrationWorktree: string;
   chairState: string;
-  chair: { provider?: "claude" | "gpt" | "gemini"; model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean; queued?: string[] };
+  chair: { provider?: "claude" | "gpt" | "gemini" | "grok"; model?: string; modelId?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean; queued?: string[] };
   activity: Record<string, number[]>;
   accounts: Account[];
   limits: Limits;
@@ -280,4 +282,58 @@ export interface WikiStatus {
   pages: number;
   changed: number;
   lastReview?: string;
+}
+
+/** the meeting room (server: packages/server/src/meeting.ts) */
+export type MeetingSeatId = "claude" | "gpt" | "gemini" | "grok" | "dots";
+export interface MeetingSeat {
+  seat: MeetingSeatId;
+  name: string;
+  available: boolean;
+  reason?: string;
+  /** the chair's own character sitting in: a chibi on the table */
+  desk?: boolean;
+  model?: string;
+  effort?: string;
+}
+export interface MeetingSettings {
+  chair: "claude" | "gpt" | "gemini" | "grok";
+  chairModel?: string;
+  chairEffort?: string;
+  members: MeetingSeatId[];
+  /** each member seat's model and reasoning effort (unset: the workhorse model, low) */
+  seats?: Partial<Record<MeetingSeatId, { model?: string; effort?: string }>>;
+}
+/** a past meeting in the list */
+export interface MeetingSummary {
+  id: string;
+  topic: string;
+  startedAt: string;
+  status: "running" | "done" | "stopped" | "failed";
+  chair: string;
+  turns: number;
+}
+export interface MeetingTurn {
+  who: MeetingSeatId | "chair";
+  name: string;
+  model?: string;
+  phase: "opinion" | "debate" | "summary";
+  round: number;
+  text: string;
+  at: string;
+  seconds?: number;
+  error?: string;
+}
+export interface Meeting {
+  id: string;
+  topic: string;
+  chair: { seat: MeetingSeatId; name: string; provider: string; model?: string; effort?: string };
+  seats: MeetingSeat[];
+  turns: MeetingTurn[];
+  phase: "opinion" | "debate" | "summary" | "done";
+  speaking?: MeetingSeatId | "chair";
+  status: "running" | "done" | "stopped" | "failed";
+  startedAt: string;
+  endedAt?: string;
+  error?: string;
 }

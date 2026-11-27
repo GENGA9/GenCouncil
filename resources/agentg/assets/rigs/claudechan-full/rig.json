@@ -1,0 +1,107 @@
+{
+  "v": 1,
+  "name": "\ud074\ub85c\ub4dc\uca29",
+  "canvas": [
+    832,
+    1664
+  ],
+  "anchor": [
+    416,
+    1645
+  ],
+  "bubble_anchor": [
+    415,
+    27
+  ],
+  "regions": {
+    "skin": [
+      356,
+      260,
+      120,
+      16
+    ],
+    "eyes": [
+      348,
+      208,
+      136,
+      56
+    ],
+    "mouth": [
+      388,
+      272,
+      56,
+      36
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "claudechan full-body rig (brain claude-code, body_mode full), pose A 'tea cup' = the user-approved full.png (orange hair with ahoge and side buns, round thin glasses, amber eyes, two yellow star pins, white cable-knit turtleneck dress, grey-brown cardigan, tea cup with saucer in both hands, brown tights, beige boots, three decorative sparkles). The base is the source itself (2x AnimeSharp, keyed, 832x1664); eyes/open and mouth/smile_closed are the base (base_states). anchor = the head's vertical line on the sole line (here also the centre between the boots), bubble_anchor = top of the head. Built by tools/rig/build_rig.py; record tools/rig/claudechan_full_records.json.",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "7b15eff09f45b5697b7071fac8c10fbe6fdc39bb7de555947e749ebd9b98c3e7",
+      "eyes/closed.png": "31ef16fca81568c81058ae0d094a4f436c28fd9c96cce62303dad3591c11c9f3",
+      "eyes/half.png": "92fd1e3c9aaf30fb974b53d8f0b711825b857c1ec23f2ba3c040e7f21595c3ff",
+      "eyes/open.png": "90bc8bb9c5736d6887d6c0960323a55c13f6597b9c1c982255411cdd7600b01d",
+      "eyes/sad.png": "e7ea90b698a186502dfca23226a7ff3fdb6a919fad72408dde42d922011e6635",
+      "eyes/smile.png": "276418fb4eaa633b99b87ff8788fc873250f48574139aeee341c7fba50b1aef9",
+      "eyes/wide.png": "068b843bd1714429c885554894bbe93ff88614354ade5f518e20696046cfd226",
+      "masks/eyes.png": "802c8b1aa238eeb33940b2670eb5c644f57791f1dcd9160e8398e9f3b8507d42",
+      "masks/mouth.png": "8734b365e1e6e4a1ad05248b9c8dca640257c2253edbd3ec142d6b53b5743bdb",
+      "masks/skin.png": "deb17c49bd62caec94a8339730071c5d1fab2e08659791d0ed5ba33fd980b1d9",
+      "mouth/closed.png": "5400eb5367db9e766923a55f96a1682455b41ecc6be9477750d3fb73698a0dc2",
+      "mouth/o.png": "88e995b871092e4092ea9d6d5e9157fdd123f1a5388ac8d80e1067771022e05e",
+      "mouth/open_l.png": "926ea1bb86222b4b2aaabdd6e1281141dd4681924599f74317d7ce576c07db2e",
+      "mouth/open_m.png": "389d97f266b5fd2c2abb1f28a1f174bc052041090cf94eb9f2eda2ab72fae2ed",
+      "mouth/smile_closed.png": "6d0fb3c735eca2b55638a12a4b9d947a2746755b2b855455d387061269446a48",
+      "mouth/smile_open_l.png": "d3131a04d4105026c6e0d69ebdb7dbf5944b53e107df4843b5918dc46842b131",
+      "skin/blush.png": "600026d648c33a4ed3242619e99ccb65cbaee5d91c77d42fd0aff845a9caba7b",
+      "skin/normal.png": "8365c3ceace821f7b2d14b138d55df431706bfe08300daae4279c72dfa7bc870"
+    }
+  }
+}

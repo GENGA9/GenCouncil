@@ -12,6 +12,8 @@ Claude Code·Codex·Antigravity CLI·로컬 LLM·OpenCode 쓰는 법과 함정, 
 - [codex-view-image-mime](common/ai-agents/codex-view-image-mime)
 - [codex-weekly-usage](common/ai-agents/codex-weekly-usage) — 코덱스(GPT) 주간 사용량을 세션 로그 used_percent로 확인
 - [antigravity-agy-cli](common/ai-agents/antigravity-agy-cli) — agy models로 새 Gemini 모델 id·추론 단계(xhigh 등) 확인
+- [grok-build-cli](common/ai-agents/grok-build-cli) — Grok Build(grok) 헤드리스 실행·빈 프로필·MCP(search_tool/use_tool)·사용량 비공개
+$L
 - [llama-server-local-llm](common/ai-agents/llama-server-local-llm)
 - [external-api-rate-limits](common/ai-agents/external-api-rate-limits)
 - [agent-json-file-bus](common/ai-agents/agent-json-file-bus)

@@ -4,12 +4,12 @@ import path from "node:path";
 import os from "node:os";
 import { WikiStore } from "@gencouncil/core";
 import { ensureAgyCouncil, serverEntry } from "@gencouncil/mcp/install";
-import type { Account } from "./accounts.js";
+import { grokEnv, writeGrokMcp, type Account } from "./accounts.js";
 import type { Council } from "./council.js";
-import { agyModelId, claudeModelId, codexMcpArgs, makeAgyParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
+import { agyModelId, claudeModelId, codexMcpArgs, makeAgyParser, makeGrokParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
 import { tierOf, type CliProvider } from "./models.js";
 import { advisorFor, projectMemoryKey } from "./model.js";
-import { assignmentRules, chairSystemPrompt } from "./prompts.js";
+import { assignmentRules, chairSystemPrompt, grokChairTools } from "./prompts.js";
 import { classifyFailure } from "./quota.js";
 import { git, isClean } from "./git.js";
 
@@ -25,6 +25,8 @@ export interface ChairOptions {
 export interface ChairTurnResult {
   text: string;
   sessionId?: string;
+  /** the model the CLI ran as (its init event) */
+  modelId?: string;
   isError: boolean;
   costUsd?: number;
 }
@@ -94,8 +96,8 @@ export function chairToolArgs(directEdit: boolean): { allowed: string[]; disallo
 }
 const MAX_ACCOUNT_SWITCHES = 3;
 
-/** "the session to resume is gone" across CLIs (claude / codex / agy) */
-const RESUME_FAILED = /no conversation found|no (session|rollout|thread) found|(conversation|session|thread)\b[^\n]{0,40}not found/i;
+/** "the session to resume is gone" across CLIs (claude / codex / agy / grok) */
+const RESUME_FAILED = /no conversation found|no (session|rollout|thread) found|(conversation|session|thread)\b[^\n]{0,40}not found|no saved copy of session/i;
 
 interface ChairLaunch {
   cmd: string;
@@ -107,7 +109,7 @@ interface ChairLaunch {
 }
 
 /** chair model when the project names none (or one from another provider) */
-export const CHAIR_DEFAULT_MODEL: Record<CliProvider, string> = { claude: "opus", gpt: "gpt-6.2-sol", gemini: "gemini-4-neon" };
+export const CHAIR_DEFAULT_MODEL: Record<CliProvider, string> = { claude: "opus", gpt: "gpt-6.2-sol", gemini: "gemini-4-neon", grok: "grok-4.7" };
 
 /** the chair's model for a provider: the configured one when it belongs to that provider, else the default */
 export function chairModelFor(provider: CliProvider, model: string | undefined): string {
@@ -270,6 +272,13 @@ export class Chair {
         store.appendTranscript({ role: "assistant", text, isError: true });
         return { text, isError: true };
       }
+      try {
+        if (await this.council.ensureIntegration()) onEvent({ kind: "text", text: "(의장 작업 폴더가 지워져 있어 안건 브랜치에서 다시 만들었습니다.)" });
+      } catch (e) {
+        const text = `의장 작업 폴더(${store.integrationWorktree()})가 없고 다시 만들지도 못했습니다: ${(e as Error).message.split("\n")[0]}`;
+        store.appendTranscript({ role: "assistant", text, isError: true });
+        return { text, isError: true };
+      }
       const tried: string[] = [];
       let res: Awaited<ReturnType<Chair["runOnce"]>> | undefined;
       for (let attempt = 0; attempt <= MAX_ACCOUNT_SWITCHES; attempt++) {
@@ -321,7 +330,7 @@ export class Chair {
         const note = await this.commitOwnEdits(shownText ?? message);
         if (note) res.text = `${res.text}\n\n${note}`;
       }
-      if (res.sessionId && !res.isError) store.saveChairSession({ sessionId: res.sessionId, model: this.model(), provider: account.provider });
+      if (res.sessionId && !res.isError) store.saveChairSession({ sessionId: res.sessionId, model: this.model(), provider: account.provider, ...(res.modelId ? { modelId: res.modelId } : {}) });
       store.appendTranscript({ role: "assistant", text: res.text, isError: res.isError, costUsd: res.costUsd });
       return { text: res.text, sessionId: res.sessionId, isError: res.isError, costUsd: res.costUsd };
     } finally {
@@ -349,8 +358,15 @@ export class Chair {
     onEvent: (e: ClaudeEvent) => void,
   ): Promise<ChairTurnResult & { resumeFailed?: boolean; stderr: string; exitCode: number | null }> {
     const store = this.council.store;
-    const provider = (account.provider === "gpt" || account.provider === "gemini" ? account.provider : "claude") as CliProvider;
-    const launch = provider === "gpt" ? this.codexLaunch(message, resume, account) : provider === "gemini" ? this.agyLaunch(message, resume, account) : this.claudeLaunch(resume, account);
+    const provider = (account.provider === "gpt" || account.provider === "gemini" || account.provider === "grok" ? account.provider : "claude") as CliProvider;
+    const launch =
+      provider === "gpt"
+        ? this.codexLaunch(message, resume, account)
+        : provider === "gemini"
+          ? this.agyLaunch(message, resume, account)
+          : provider === "grok"
+            ? this.grokLaunch(message, resume, account)
+            : this.claudeLaunch(resume, account);
     const model = this.model();
     const effort = this.effort();
     const advisor = this.advisor();
@@ -482,6 +498,42 @@ export class Chair {
     return { cmd: "agy", args, env, stdinText, parse: makeAgyParser() };
   }
 
+  /**
+   * Grok Build: one headless turn (-p with the prompt on stdin), resumed by session id. It runs in a
+   * profile of its own (chair/grok-profile) whose Cursor-format mcp.json carries the council and memory
+   * servers; the token stays in the env. Like Codex it has no system-prompt-append file, so the chair
+   * prompt opens each new session. Every tool is approved (a headless run cannot ask), so the ones a
+   * chair may not use are taken away instead: edits and the shell unless direct edit is on, and always
+   * subagents, schedulers, workflows and media generation (members do the work).
+   */
+  private grokLaunch(message: string, resume: string | undefined, account: Account): ChairLaunch {
+    const store = this.council.store;
+    const directEdit = Boolean(this.council.chairCfg().directEdit);
+    const profile = path.join(store.chairDir(), "grok-profile");
+    const token = this.councilToken();
+    writeGrokMcp(profile, this.mcpCfg.mcpServers, Boolean(token));
+    const denied = ["spawn_subagent", "scheduler_create", "scheduler_delete", "scheduler_list", "workflow", "monitor", "image_gen", "image_edit", "image_to_video", "reference_to_video"];
+    if (!directEdit) denied.push("search_replace", "write", "run_terminal_command");
+    const args = ["-p", "--output-format", "streaming-json", "--cwd", store.integrationWorktree(), "--no-alt-screen", "--no-memory", "--no-subagents", "--always-approve", "--disallowed-tools", denied.join(",")];
+    if (resume) args.push("--resume", resume);
+    args.push("--add-dir", this.council.project.repo);
+    const attachDir = path.join(store.dir, "attachments");
+    if (fs.existsSync(attachDir)) args.push("--add-dir", attachDir);
+    const model = this.model();
+    const effort = this.effort();
+    if (model) args.push("--model", model);
+    if (effort) args.push("--reasoning-effort", effort);
+    const env: NodeJS.ProcessEnv = { ...process.env, ...grokEnv(account.configDir, profile), GENCOUNCIL_ROLE: "chair" };
+    if (token) env.GENCOUNCIL_COUNCIL_TOKEN = token;
+    const prompt = this.promptWithInstructions(message, resume);
+    // the tool note goes with every turn: it is short, and a resumed thread forgets how its tools are reached
+    return { cmd: "grok", args, env, stdinText: `<그록_도구>
+${grokChairTools(directEdit)}
+</그록_도구>
+
+${prompt}`, parse: makeGrokParser() };
+  }
+
   private execute(
     launch: ChairLaunch,
     message: string,
@@ -499,6 +551,8 @@ export class Chair {
       throw e;
     }
     let sessionId: string | undefined;
+    // the model the CLI actually runs (an alias like "opus" resolved to its id), from its init event
+    let modelId: string | undefined;
     let finalText = "";
     let isError = false;
     let costUsd: number | undefined;
@@ -516,8 +570,10 @@ export class Chair {
         return;
       }
       for (const ev of parse(line)) {
-        if (ev.kind === "init") sessionId = ev.sessionId;
-        else if (ev.kind === "text") texts.push(ev.text);
+        if (ev.kind === "init") {
+          sessionId = ev.sessionId;
+          if (ev.model) modelId = ev.model;
+        } else if (ev.kind === "text") texts.push(ev.text);
         else if (ev.kind === "result") {
           // codex ends with an empty turn.completed: keep the last message text
           finalText = ev.text || finalText;
@@ -539,7 +595,7 @@ export class Chair {
         finalText = stderr.trim() || `${cmd} exited with code ${exit.code}`;
       }
       if (!finalText && texts.length) finalText = texts[texts.length - 1];
-      return { text: finalText, sessionId, isError, costUsd, resumeFailed, stderr, exitCode: exit.code };
+      return { text: finalText, sessionId, modelId, isError, costUsd, resumeFailed, stderr, exitCode: exit.code };
     });
   }
 }

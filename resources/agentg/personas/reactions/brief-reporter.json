@@ -1,0 +1,11 @@
+{
+  "preset": "brief-reporter",
+  "lines": [
+    { "text": "호출 확인했습니다.", "lang": "ko" },
+    { "text": "대기 중입니다. 말씀하십시오.", "lang": "ko" },
+    { "text": "다음 지시를 확인하겠습니다.", "lang": "ko" },
+    { "text": "준비됐습니다.", "lang": "ko" },
+    { "text": "確認しました。", "lang": "ja", "subtitle_ko": "확인했습니다." },
+    { "text": "次の指示をどうぞ。", "lang": "ja", "subtitle_ko": "다음 지시를 말씀해 주십시오." }
+  ]
+}

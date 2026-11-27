@@ -1,0 +1,11 @@
+{
+  "preset": "calm-butler",
+  "lines": [
+    { "text": "부르셨습니까. 곁에 있겠습니다.", "lang": "ko" },
+    { "text": "필요하신 일을 말씀해 주십시오.", "lang": "ko" },
+    { "text": "잠시 쉬실 시간을 마련하겠습니다.", "lang": "ko" },
+    { "text": "차분히 진행하겠습니다.", "lang": "ko" },
+    { "text": "お呼びでしょうか。", "lang": "ja", "subtitle_ko": "부르셨습니까?" },
+    { "text": "どうぞ、ごゆっくり。", "lang": "ja", "subtitle_ko": "부디 편히 쉬십시오." }
+  ]
+}

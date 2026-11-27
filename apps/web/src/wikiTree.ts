@@ -3,9 +3,9 @@
 import type { WikiPageMeta } from "./types";
 
 /** folder path -> label: "common/comfyui" -> "공용 · comfyui", "projects/video_studio/video" -> "프로젝트 · video_studio · video" */
-export const SECTION_LABEL = (s: string): string => {
+export const SECTION_LABEL = (s: string, tr: (ko: string) => string = (x) => x): string => {
   const [top, ...rest] = s.split("/");
-  const head = top === "common" ? "공용" : top === "models" ? "모델" : top === "projects" ? "프로젝트" : top;
+  const head = top === "common" ? tr("공용") : top === "models" ? tr("모델") : top === "projects" ? tr("프로젝트") : top;
   return [head, ...rest].join(" · ");
 };
 
@@ -48,8 +48,8 @@ export function buildSections(pages: WikiPageMeta[]): Group[] {
  * can be told from other projects; a folder nested inside one already sits under that name, so it
  * shows its own title only — repeating the project there is what made two rows read alike.
  */
-export function folderLabel(f: Folder, nested: boolean): string {
+export function folderLabel(f: Folder, nested: boolean, tr: (ko: string) => string = (x) => x): string {
   if (nested) return f.index?.title ?? f.key.split("/").pop() ?? f.key;
   const parent = f.key.split("/").slice(0, -1).join("/");
-  return f.index ? `${SECTION_LABEL(parent || f.key)} · ${f.index.title}` : SECTION_LABEL(f.key);
+  return f.index ? `${SECTION_LABEL(parent || f.key, tr)} · ${f.index.title}` : SECTION_LABEL(f.key, tr);
 }

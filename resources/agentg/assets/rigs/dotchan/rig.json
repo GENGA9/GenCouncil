@@ -1,0 +1,99 @@
+{
+  "v": 1,
+  "name": "닷쨩",
+  "canvas": [
+    832,
+    1216
+  ],
+  "regions": {
+    "skin": [
+      316,
+      308,
+      204,
+      52
+    ],
+    "eyes": [
+      296,
+      240,
+      244,
+      88
+    ],
+    "mouth": [
+      384,
+      352,
+      88,
+      60
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "dotchan rig v3 (brain dots): base = dotchan-v4 candidate C (v2 face C: F3c img2img d0.36 s103 of the user's IMG_4138, chest name badge removed; side lock removed, ear shown, side hair behind the ear; long straight black hair, blunt bangs, grey eyes, beauty mark, two silver hair clips, lanyard ID card, white shirt, black pencil skirt). Built by tools/rig/build_rig.py; record tools/rig/dotchan_v3_records.json.",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "7c9ffa262aa21fd6599a22332117c36614165b24e5d7345c7f27fd8aa4908eac",
+      "eyes/closed.png": "476eb8cccb322655f05ed71dc57a846aa9be10a15b7b6a4b4fd1ddc817d668ba",
+      "eyes/half.png": "4f26b5001fc10f09dec2868c152229cfdd8376a84e36477e830b83dec02c1b7a",
+      "eyes/open.png": "24a0f4822d753903e8ea83a3cf2f48c55dfc0828fac39839ab110268c1e316c3",
+      "eyes/sad.png": "5edb725a7358876d3e060278d38634352a4880e9e4e6d2cada774a8b60b52c34",
+      "eyes/smile.png": "6d4170daedeb8cbd2f6a9cda494a654e732a7e13bb0711d72cfe9a7a65459710",
+      "eyes/wide.png": "cd0302a74b33f137643a92e2f283c71437322a07e3a3a4070315b107fcbc82fe",
+      "masks/eyes.png": "8c9f74a9b8904bc391dad971bd6498415c11555cfd65ea282af86195473e4fe3",
+      "masks/mouth.png": "2fa9fa7a76c23806442a0cf51c1ee2e2e472f331265d0b9838725a4deb930996",
+      "masks/skin.png": "96972195b0dfcf5e91ee3ab76b87f46b8d9363d51f214ba5b1e1aab0a79c24e1",
+      "mouth/closed.png": "9f35c1a2a480562eae641b21473127fb0eb33b089e4ea0753c041878f5280f31",
+      "mouth/o.png": "04c3048d6df5d197cc525d3cc9ed7d0afa75b37c9a6aae460027aa28a1ff925d",
+      "mouth/open_l.png": "f5cb12ba2dc5759dc304aebd45c6b2657d86439ee9c549b7e1c2a74e5c4156ac",
+      "mouth/open_m.png": "8ee19acaf507884e8ecae7aafdf4b594f8003d778dc16b422ec4dac05a792303",
+      "mouth/smile_closed.png": "dcce25f9c3f5cf98b60fd97c498222dff083f7140dbf87c09012ba053947d196",
+      "mouth/smile_open_l.png": "80b3cd3966352da8220cacd08a12bfc447af5c27e320376a72220784868053e5",
+      "skin/blush.png": "1449da8b3ef3608c08ba3235cef9caa80fc0d0115099e8c30df78c3b29b373ef",
+      "skin/normal.png": "2675aafd31a6432c961147c66df818e9a50c7714f2e8c3d5ae3f8d3387cfa7c4"
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "v": 1,
+  "name": "지피쨩",
+  "canvas": [
+    832,
+    1216
+  ],
+  "regions": {
+    "skin": [
+      320,
+      408,
+      220,
+      40
+    ],
+    "eyes": [
+      292,
+      336,
+      288,
+      88
+    ],
+    "mouth": [
+      384,
+      464,
+      96,
+      60
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "gpichan v2 rig (brain codex) from the user's re-drawn bust shot IMG_4147 (silver bob with blue streaks, blue eyes, blue triangle hair clip with a black pin, black choker and cross strap, black top with a light-blue triangle, white hooded jacket with blue lining and an arm patch, black buckle belts). The base is IMG_4147 itself. Built by tools/rig/build_rig.py; record tools/rig/gpichan_v2_records.json (v1: gpichan_records.json).",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "3f18f560a249b60acfae212a381db08d3b1e7d630e6f9f8d8fff441603fdffde",
+      "eyes/closed.png": "02fce06197baf0d5ccd07b92dd769e9de0ccf4224b9da7f1068e63cf59f23d07",
+      "eyes/half.png": "22806da8a22c9fceb15cdeea4e52151098e51242a0fe707d6894b689bf8d1800",
+      "eyes/open.png": "f8d54f9fcf6f27dd1ede67118885b1630bd7e7f49fcdbc8029ff50c717d311cb",
+      "eyes/sad.png": "1dc1498ca339e7ca69827df53c4967b9afc605bafac2f2dbb255dfa7c3d6174f",
+      "eyes/smile.png": "3550c2c81cce0b94de0aebb887945f6f882a13e9f6af3b9b3c9790c795ef37d3",
+      "eyes/wide.png": "5e8ad7b2ab3de85f11c9d797103fdc35338cbd9029f7dd5d37a96ca219c7c00d",
+      "masks/eyes.png": "bef006eb8e467026e65729e24714b756fa5eba4b6299e8df262c9fafeb0d5fc2",
+      "masks/mouth.png": "30feadf6da579f1d67672c673d0d54a05fd1f3e0b82de0135dd11658446f63bf",
+      "masks/skin.png": "5a16dc467e53285993a9f45f4916b0bfad4859800b33b58803a8421b91100265",
+      "mouth/closed.png": "5e770d120f310a05e91a26967bb5ebffc3c9dc14df1f5e5e9166470c6004fabd",
+      "mouth/o.png": "084cdad9c12ce0959f1f65ca4821a23237ceacd9aceaf99ca9805ac7db3c74fb",
+      "mouth/open_l.png": "0181f0ff76f1db8c0a01f26525a8c33522bd5b744a8b52cf077f0c464813407b",
+      "mouth/open_m.png": "345ce585d0f35bc297dc4b85cda1b499f5204edd9b8eee0fbe69902698924ea1",
+      "mouth/smile_closed.png": "90b624667f423b808ee385c00b52284d8ba5885b95649828d8e37e67940ee467",
+      "mouth/smile_open_l.png": "ddd9a95e9bef801477410c94b72dded50270c75a68d7eb979af4323eab61141f",
+      "skin/blush.png": "0712ecdd9370db7c286b989b97bbd9a57d286828434ac58726c9bb1834cf9333",
+      "skin/normal.png": "798d88b011f42b242ae1a0988dea43e77c5b72719cf488f97615848d79fb8fc8"
+    }
+  }
+}

@@ -52,7 +52,7 @@ gencouncil service start | stop | status | logs
 gencouncil desktop             # 서버가 없으면 띄우고, Chrome 앱 모드 창으로 콘솔을 연다 (Rust 불필요)
 ```
 
-Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가 일반 브라우징과 섞이지 않는다. Chrome이 없으면 Edge 기본 프로필로 연다(Edge 새 프로필은 앱 모드에서 첫 실행 마법사에 막혀 빈 창이 된다). 트레이 상주형 네이티브 앱은 [apps/desktop](../apps/desktop/README.md)에 Tauri 2 스캐폴드(트레이 메뉴, 서버 자식 프로세스, 창 닫아도 상주)가 있다. 이 환경에 Rust가 없어 빌드는 검증하지 못했다.
+Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가 일반 브라우징과 섞이지 않는다. Chrome이 없으면 Edge 기본 프로필로 연다(Edge 새 프로필은 앱 모드에서 첫 실행 마법사에 막혀 빈 창이 된다). 트레이 상주형 네이티브 앱은 [apps/desktop](../apps/desktop/README.md)의 Tauri 2 앱이다(빌드·설치 검증됨, 2026-11-27). `npx tauri build`로 만든 설치 파일(약 2MB)을 실행하면 사용자 폴더에 설치되고 시작 메뉴에 GenCouncil이 생긴다. 서버는 로그온 작업 `GenCouncilWeb`이 돌리고 앱은 붙기만 한다: 포트가 비어 있으면 `service start`로 켜고, 앱을 종료해도 서버는 계속 돈다. 트레이 메뉴는 열기 / 새로고침 / 서버 재시작(확인 창) / 종료, 창을 닫으면 트레이로 숨고, 두 번 실행하면 기존 창이 앞으로 나온다.
 
 ## 패키지
 
@@ -63,7 +63,7 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
 | `packages/council` | 프로젝트·안건·계정 레지스트리, git worktree 통합, 위원 드라이버(claude/gemini CLI, relay), 한도 분류·핸드오버, 의장 세션, 의장용 MCP, `AgendaRuntime`(의장 턴 + 위원 이벤트 전달), 터미널 REPL |
 | `packages/server` | 웹 서버: REST + WebSocket, 토큰 인증, 정적 UI, 안건별 의장 MCP 경로 `/mcp/<project>/<agenda>`, Telegram 브리지 |
 | `apps/web` | React PWA (레퍼런스의 3단 레이아웃, 폰에서는 탭 3개) |
-| `apps/desktop` | Tauri 2 트레이 앱 스캐폴드 (Rust 필요, 미검증) |
+| `apps/desktop` | Tauri 2 트레이 앱 (Rust 필요, 설치 파일 빌드) |
 | `packages/cli` | `gencouncil` 명령 전체 (memory · project · agenda · council · account · web · service · desktop) |
 
 ## 제작위원회 만들기
@@ -76,7 +76,7 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
   - 사용자가 폴더를 직접 고친 내용은 안건을 열 때와 종료할 때 "gencouncil: 사용자 변경 반영"으로 자동 커밋된다. 안건 결과는 종료 때 이 폴더에 바로 합쳐진다.
   - 만들 때 무엇이 git에 들어가고 무엇이 빠졌는지 요약을 보여 준다.
 - **의장**: 기본 Opus. 판단이 많고 토큰은 적게 쓰는 역할이라서다. 모델과 추론 수준은 프로젝트 설정(⚙)이나 의장 헤더에서 바꾼다.
-- **GPT·제미나이 의장**: 의장 헤더의 계정 드롭다운에서 GPT(Codex)나 제미나이(Antigravity) 계정을 고르면 그 AI가 의장을 맡는다. 모델 목록도 그 AI 것으로 바뀌고(기본 gpt-6.2-sol / gemini-4-neon), 세션은 새로 시작한다(state.md 유지). 두 CLI에는 시스템 프롬프트 옵션이 없어 새 세션의 첫 메시지에 의장 지침 전체를, 이후 턴에는 목표·한도·state.md만 붙인다. Codex 의장은 읽기 전용 샌드박스(직접 수정 허용 시 작업 폴더 쓰기)에서 돈다. Antigravity는 MCP를 전역 설정에서만 읽으므로 처음 쓸 때 `~/.gemini/config/mcp_config.json`에 `gencouncil_council`(안건 연결 다리)·`gencouncil`(공유 기억)을 등록하고 `~/.gemini/antigravity-cli/settings.json`에서 두 서버의 도구를 허용한다. 다리는 agy 프로세스 환경변수로 어느 안건인지 알아내므로, 위원이나 직접 띄운 agy에서는 도구가 비어 있다. 위원 권한을 대신 승인하는 검토는 의장이 GPT·제미나이여도 클로드(Opus)가 한다.
+- **GPT·제미나이·그록 의장**: 의장 헤더의 계정 드롭다운에서 GPT(Codex)나 제미나이(Antigravity), 그록(Grok Build) 계정을 고르면 그 AI가 의장을 맡는다. 모델 목록도 그 AI 것으로 바뀌고(기본 gpt-6.2-sol / gemini-4-neon), 세션은 새로 시작한다(state.md 유지). 두 CLI에는 시스템 프롬프트 옵션이 없어 새 세션의 첫 메시지에 의장 지침 전체를, 이후 턴에는 목표·한도·state.md만 붙인다. Codex 의장은 읽기 전용 샌드박스(직접 수정 허용 시 작업 폴더 쓰기)에서 돈다. 그록 의장도 같은 방식(첫 메시지에 지침 전체)이고, 헤드리스 grok은 권한을 물을 수 없어 모든 도구를 승인하는 대신 편집·명령 실행(직접 수정이 꺼져 있을 때)과 하위 에이전트·예약·워크플로·그림 생성 도구를 아예 뺀다. Antigravity는 MCP를 전역 설정에서만 읽으므로 처음 쓸 때 `~/.gemini/config/mcp_config.json`에 `gencouncil_council`(안건 연결 다리)·`gencouncil`(공유 기억)을 등록하고 `~/.gemini/antigravity-cli/settings.json`에서 두 서버의 도구를 허용한다. 다리는 agy 프로세스 환경변수로 어느 안건인지 알아내므로, 위원이나 직접 띄운 agy에서는 도구가 비어 있다. 위원 권한을 대신 승인하는 검토는 의장이 GPT·제미나이여도 클로드(Opus)가 한다.
 
 ## 위원 자율성
 
@@ -103,7 +103,10 @@ Chrome 앱 창은 전용 프로필(첫 실행 생략)을 써서 토큰 쿠키가
 | 클로드 | Claude Code CLI | haiku · sonnet · opus · fable | low ~ max |
 | 제미나이 CLI | Antigravity CLI (`agy`) | gemini-3.8-flash · gemini-4-hydrogen · gemini-4-neon (기본, Opus급) · gemini-4-argon (최상위) | low ~ high (Hydrogen·Neon은 xhigh 지원) |
 | GPT | Codex CLI | gpt-6-luna · gpt-6.1-terra · gpt-6.2-sol (주력) · gpt-6.2-astra (최상위) | low ~ max |
+| 그록 | Grok Build CLI (`grok`) | grok-4.5 · grok-4.6 · grok-4.7-build-fast · grok-4.7 (기본) | low ~ xhigh (4.5는 high까지) |
 | 웹 제미나이 / AI Studio / ChatGPT 웹 | 릴레이 (사람이 전달) | 웹에서 고름 | - |
+
+**그록(Grok Build)**은 SuperGrok 계정으로 `grok login --oauth`(계정 화면의 로그인 버튼) 한 뒤 쓴다. 로그인은 7일마다 만료될 수 있다. grok은 사용자 프로필의 Claude Code 스킬·훅·MCP를 불러오므로 GenCouncil은 빈 프로필(`~/.gencouncil/grok-profile`, 의장은 안건의 `chair/grok-profile`, 위원은 `.council/grok-profile`)로 돌리고, MCP 서버(안건 연결·공유 기억)는 그 프로필의 `.cursor/mcp.json`에 적는다(토큰은 환경 변수로만). grok은 MCP 도구를 `search_tool`로 찾아 `use_tool`로 부르므로 의장·위원 지시에 그 안내가 자동으로 붙는다. 사용량은 `grok usage`가 헤드리스에서 거절하므로, grok의 `/usage` 창이 읽는 결제 서버(`cli-chat-proxy.grok.com/v1/billing?format=credits`, 로그인 토큰으로)에서 주간 사용률과 초기화 시각을 읽는다. 토큰이 만료됐으면 `grok models`를 한 번 돌려 갱신한 뒤 다시 읽는다. 그록 계정이 있을 때만 사용량 막대에 GROK 줄이 생긴다. 자세한 실행법과 함정은 Gen Wiki `common/ai-agents/grok-build-cli`.
 
 **제미나이 CLI는 기본으로 꺼져 있다.** Google [Antigravity 추가 약관](https://antigravity.google/terms) 6조는 제3자 소프트웨어로 서비스에 접근하는 것을 위반(계정 정지·해지 사유)으로 보고, [Antigravity FAQ](https://antigravity.google/docs/faq)는 `agy`를 제3자 코딩 에이전트·앱 안에 감싸 쓰는 것을 개인 요금제에서 지원하지 않는다고 적고 있다. GenCouncil은 제미나이 위원·의장·사용량 확인에 `agy`를 자동으로 실행하므로, 꺼져 있는 동안은 `agy`를 한 번도 실행하지 않는다(제미나이 위원·의장을 만들 수 없고, 프로젝트 한도와 상관없이 0명으로 친다). 쓰려면 계정 화면(작업실, 또는 시각화의 설정 › 계정·공간)에서 "위험 읽고 켜기"를 누르고 위험 고지를 읽은 뒤 "제 판단으로 켭니다"에 체크해야 켜진다. 설정은 `~/.gencouncil/providers.json`에 공간 전체로 저장되고 바로 적용된다. 위험 없이 제미나이를 쓰려면 꺼 둔 채 릴레이(웹 제미나이·AI Studio)를 쓴다.
 
@@ -115,7 +118,7 @@ CLI: `gencouncil project set <project> --limit claude=3,opus,high --limit gpt=2,
 
 위원 카드와 작업 칩에는 `claude-1` 같은 id 대신 **실제로 실행된 모델명**(Sonnet 5.5, GPT-6.1 Sol, Gemini 2.5 Pro …)과 추론 수준·advisor가 표시된다.
 
-색: 클로드 주황 `#d97757`, 제미나이 구글 블루 `#4285f4`, GPT 그린 `#10a37f`, 그 외 릴레이 보라. 릴레이 위원은 라벨(제미나이/agy/aistudio → 블루, gpt/chatgpt → 그린)로 판별한다. 실행 중에는 레퍼런스의 회전 2×2 스피너가 그 색으로 돈다.
+색: 클로드 주황 `#d97757`, 제미나이 구글 블루 `#4285f4`, GPT 그린 `#10a37f`, 그록 노랑 `#c99a06`(어두운 테마 `#f2c94c`), 그 외 릴레이 보라. 시각화 모드에는 아직 그록 집이 없어 그록 위원은 릴레이처럼 의장 곁에 노란색으로 선다. 릴레이 위원은 라벨(제미나이/agy/aistudio → 블루, gpt/chatgpt → 그린)로 판별한다. 실행 중에는 레퍼런스의 회전 2×2 스피너가 그 색으로 돈다.
 
 ## 4단계: 핸드오버 · 계정 레지스트리 · 릴레이 위원
 
@@ -314,7 +317,7 @@ gencouncil council run <project> <agenda> --task "제목" --instructions "무엇
 
 ### 기본 위키
 
-처음 설치한 GenCouncil의 빈 위키는 저장소의 `packages/core/wiki-default/` 페이지 91개로 시작한다(서버나 MCP 서버가 처음 뜰 때 한 번 복사, 페이지가 하나라도 있는 위키는 건드리지 않는다). 내용은 의장·위원 운영(`common/council*`), CLI와 에이전트(`common/ai-agents`), 모델별 성향(`models/`), git·Windows·웹·Python 함정이다. 프로젝트 전용 페이지(`projects/`)와 개인 작업에서 쌓인 페이지는 들어 있지 않다. `packages/core/test/wikidefault.mjs`가 기본 위키에 개인 경로·주소·프로젝트 이름·기억 id·키가 섞이지 않았는지, 링크가 모두 살아 있는지 검사한다.
+처음 설치한 GenCouncil의 빈 위키는 저장소의 `packages/core/wiki-default/` 페이지 94개로 시작한다(서버나 MCP 서버가 처음 뜰 때 한 번 복사, 페이지가 하나라도 있는 위키는 건드리지 않는다). 내용은 의장·위원 운영(`common/council*`), CLI와 에이전트(`common/ai-agents`), 모델별 성향(`models/`), git·Windows·웹·Python 함정이다. 프로젝트 전용 페이지(`projects/`)와 개인 작업에서 쌓인 페이지는 들어 있지 않다. `packages/core/test/wikidefault.mjs`가 기본 위키에 개인 경로·주소·프로젝트 이름·기억 id·키가 섞이지 않았는지, 링크가 모두 살아 있는지 검사한다.
 
 ## 설치
 
@@ -432,6 +435,5 @@ npm test
 
 ## 남은 일
 
-- Tauri 트레이 앱 빌드 검증 (Rust 설치 후 `apps/desktop`)
 - 제미나이 CLI 로그인 후 제미나이 위원 실제 실행 검증
 - Telegram 봇 실제 연결 검증 (봇 토큰 필요)

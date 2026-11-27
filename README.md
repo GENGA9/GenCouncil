@@ -2,162 +2,213 @@
 
 # ✦ GenCouncil
 
-**Claude · GPT · Gemini를 한 팀으로 묶는 로컬 멀티 AI 오케스트레이터**
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md)
 
-의장 AI가 일을 나눠 각 회사의 알맞은 모델에게 동시에 맡기고, 결과를 검토해 하나로 합칩니다.<br>
-A local multi-AI orchestrator: a chair model splits the work across Claude, GPT and Gemini members, runs them in parallel and merges what they deliver.
+**A local multi-AI orchestrator where your AI team lives in a little study on your desk.**
 
-<img src="docs/media/gencouncil-mobile.gif" width="300" alt="GenCouncil 시각화 모드: 의장을 Opus로 바꾸고, 지시를 보내자 다섯 모델에게 일이 나뉘는 장면">
+A chair model splits the work across Claude, GPT, Gemini and Grok members, runs them in parallel and merges what they deliver. In the avatar look you watch it happen: the chair sits at the desk, the members work on it as small characters, and they talk, report, nap and dance.
 
-<sub>휴대폰에서 본 시각화 모드 · 의장을 GPT-6.2 Astra에서 Opus 5.5로 바꾸고, 지시 한 줄을 다섯 모델에게 나눠 맡기는 장면 · <a href="docs/media/gencouncil-mobile.mp4">고화질 영상(mp4, 15초)</a></sub>
+<img src="docs/media/avatar/avatar-en.gif" width="300" alt="Avatar look on a phone: GPT's character in the chair hands it to Claude's, an order goes out, five members land on the desk, one is picked up, one reports, and the chair walks out to dance">
+
+<sub>The avatar look on a phone · the chair changes from GPT to Claude, one order goes out to five models, and the chair dances when the work is under way · videos: <a href="docs/media/avatar/avatar-9x16-en.mp4">phone (mp4, 30 s)</a> · <a href="docs/media/avatar/avatar-16x9-en.mp4">desktop (mp4, 30 s)</a></sub>
 
 </div>
 
 ---
 
-## 무엇인가요
+## What it is
 
-GenCouncil은 내 PC에서 도는 **멀티 AI 오케스트레이터**입니다. AI 코딩 도구는 각자 잘하는 일이 다릅니다. 빠르고 싼 모델, 꼼꼼한 모델, 어려운 설계를 끝까지 풀어내는 모델이 따로 있습니다. GenCouncil은 이들을 **"제작위원회"** 로 묶고, 누가 무엇을 언제 맡을지 조율해 한 프로젝트에서 같이 일하게 합니다.
+GenCouncil runs on your own PC and turns several AI coding tools into one team, a **"production council"**. Each tool is good at something different: some are fast and cheap, some are careful, some can carry a hard design through to the end. GenCouncil decides who does what and when, inside one project.
 
-오케스트레이션은 두 층으로 나뉩니다.
+- **The AI decides**: the chair model breaks the work into tasks, picks a company, model and reasoning effort for each, reviews the results and decides whether to merge them or send them back.
+- **GenCouncil runs it**: starting and stopping member processes, isolating each in its own git worktree, keeping to the limits you set, handing work over when an account runs out, and carrying progress and reports back to the chair.
 
-- **판단은 AI가**: 의장 모델이 일을 쪼개고, 작업마다 회사 · 모델 · 추론 수준을 고르고, 결과를 검토해 합칠지 다시 시킬지 정합니다.
-- **실행 관리는 GenCouncil이**: 위원 프로세스 실행과 중지, worktree 격리, 사용자가 정한 한도 지키기, 계정 · 한도 소진 시 이어받기, 진행 상황과 보고를 의장에게 전달하는 일은 서버가 맡습니다.
+Every AI runs as a headless CLI on **the subscription login you already have** (Claude Code, Codex CLI, Antigravity CLI, Grok). It works inside your plan's limits rather than on API billing, and when one limit is used up the work moves on to another account or a lower model.
 
-- **의장(Chair)** 은 사용자와 대화하며 목표를 정하고, 일을 작업 단위로 쪼개, 작업마다 가장 알맞은 회사·모델·추론 수준을 골라 **위원(Member)** 에게 맡깁니다.
-- **위원** 은 각자 독립된 git worktree와 브랜치에서 일하고, 끝나면 결과를 보고합니다. 여러 위원이 동시에 일해도 서로의 파일을 건드리지 않습니다.
-- 의장은 결과의 diff를 검토해 안건 브랜치에 합치고, 마지막에 사용자가 정한 베이스 브랜치에 반영합니다.
+## 🎭 Avatar look
 
-모든 AI는 **이미 쓰고 있는 구독 로그인 그대로** 헤드리스 CLI로 돌아갑니다(Claude Code, Codex CLI, Antigravity CLI). API 키 과금이 아니라 구독 한도 안에서 움직이고, 한도가 차면 다른 계정이나 낮은 모델로 이어서 일합니다.
+The avatar look is GenCouncil's main screen from now on. It shows the same council as the workshop, as a room you can look into.
 
 <div align="center">
-<img src="docs/diagrams/council-structure.gif" width="760" alt="위원회 구조: 의장이 council_assign으로 회사·모델·추론 수준을 골라 위원에게 맡기고, 위원은 독립 worktree에서 일한 뒤 의장이 diff를 검토해 합친다">
+<img src="docs/media/avatar/desktop-en.jpg" width="860" alt="The avatar study on a wide screen: Claude's character in the chair, members working on the desk as small characters, the agenda record on the right">
 </div>
 
-## 주요 기능
+- **The chair at the desk.** The chair appears as its company's character: Claude, GPT, Gemini or Grok, plus Dots for the web relays. Change the chair's model and a different character sits down. Its answers appear in a speech bubble, and its mouth moves while its voice is heard.
+- **The members on the desk.** Each member the chair sends out lands on the desk as a small character with its model's name and progress. Members say a line when they start, finish or fail, wander about or keep working, and walk over to the chair to report.
+- **They talk among themselves.** While they work, members sometimes say a line to themselves or hold a short conversation with each other (hundreds of scripted lines in Korean, Japanese and English).
+- **Voices.** The chair's and members' event lines are recorded voices. Optionally, words nobody recorded (the chair's answers, the chatter) can be read aloud by TTS (a different voice).
+- **The record beside it.** On a wide screen, the agenda's record (orders, answers, members' reports) stays open on the right. On a phone, the input box and the chair's latest words sit at the bottom.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/avatar/menu-en.jpg" alt="The chair's menu: voice, bubbles, member motion, language, walk out, dance, character, and the chair's model and reasoning"></td>
+<td width="50%"><img src="docs/media/avatar/phone-en.jpg" width="100%" alt="The avatar look on a phone"></td>
+</tr>
+<tr>
+<td><sub><b>The chair's menu</b> (right click, or a long press on a phone): voice on or off, member voices, reading replies aloud, reaction lines, bubbles, how much the members move, the language, a fixed character, walking out and dancing. Below it are the chair's model, reasoning effort, account and the agenda's actions.</sub></td>
+<td><sub><b>On a phone</b>: the same study fitted to a narrow screen. You can give orders from the input box and pick up members with your finger.</sub></td>
+</tr>
+</table>
+
+### Playful bits
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/avatar/dance-en.jpg" alt="The chair standing in front of the desk, dancing"></td>
+<td width="50%"><img src="docs/media/avatar/pickup-en.jpg" alt="A member character held up in the air above the desk"></td>
+</tr>
+<tr>
+<td><sub><b>Walk out and dance</b>: characters with a full-body rig stand up, walk round the desk, step out in front of it and dance (two dances each). The camera pulls back to show them head to toe.</sub></td>
+<td><sub><b>Pick a member up</b>: hold a member (mouse or finger), carry it about and let go. It drops back onto the desk and picks itself up.</sub></td>
+</tr>
+</table>
+
+- **Poke the chair** and it reacts with a line in character, a blush and a little bounce.
+- Members **trip, nap while waiting, cheer when they finish and slump when they fail.**
+- The study follows **the season and the time of day** outside its window.
+
+### Meeting room
+
+<div align="center">
+<img src="docs/media/avatar/meeting-en.jpg" width="860" alt="The meeting room: the members sit round a table and argue a topic out, the minutes on the right">
+</div>
+
+Ask a question in the meeting room and the members sit round a table. Each gives an opinion, they argue it out, and the chair sums up a conclusion. The minutes stay on the right. The meeting room is for questions to talk through, while the workshop is for work that gets done.
+
+### Floating chair (desktop app)
+
+<div align="center">
+<img src="docs/media/avatar/float-en.jpg" width="760" alt="The floating chair: a small transparent window at the bottom right of the desktop with the chair's bust, its latest words and a member's report in a bubble">
+</div>
+
+With the Windows desktop app ([apps/desktop](apps/desktop/README.md)), closing the window into the tray leaves the chair on your desktop. It is a small transparent, always-on-top window at the bottom right that does not take the focus. Its bubble shows the chair's latest answer, a question it is waiting on, or the latest member report, and 💬 opens an input box for an order. Drag it anywhere. Double-click it to bring the main window back.
+
+### Single mode
+
+<div align="center">
+<img src="docs/media/avatar/single-en.jpg" width="760" alt="Council settings with single mode on: Claude members only, the other companies at 0">
+</div>
+
+When you want the whole council on one company, one button in the council's settings keeps only the members of **the chair's own company** and sets every other company to 0. Turning it off gives the earlier limits back.
+
+### Three languages
+
+The whole console, plus the characters' lines and voices, is in **Korean, English or Japanese**. Pick the language next to the theme button in the text workshop, in Settings › Space › Display, or in the chair's menu. Server messages and what the chair and members write stay as they are.
+
+## Other looks
+
+The same council can be seen three ways. The switch at the top left changes the look, and the room (workshop or meeting room) stays the same.
 
 | | |
 |---|---|
-| **세 회사, 모델 사다리** | Claude(haiku · sonnet · opus · fable), GPT(luna · terra · sol · astra), Gemini(flash · hydrogen · neon · argon). 사용자는 회사별 **동시 인원 · 최대 모델 · 최대 추론 수준**만 정하고, 의장이 그 안에서 작업마다 고릅니다. |
-| **병렬 작업과 안전한 합치기** | 위원마다 독립 worktree · 브랜치. 머지는 의장만 하고, 충돌이 나면 되돌리고 보고합니다. git 저장소가 아닌 폴더도 로컬 git을 만들어 그대로 씁니다. |
-| **계정 · 한도 관리** | 계정을 여러 개 미리 로그인해 두면 한도가 찬 계정을 건너뛰고, 멈춘 위원은 같은 worktree에서 다른 계정·모델이 이어받습니다(핸드오버). 회사별 5시간 · 주간 남은 사용량을 보여 줍니다. |
-| **공유 기억 · Gen Wiki** | 위원과 의장이 알게 된 해결책 · 도구 위치 · 규약을 공유 기억에 제안하고, 정리된 내용은 위키 페이지로 모입니다. 처음 설치하면 의장 · 위원 운영법, 모델별 성향, CLI · git · Windows · 웹 함정을 담은 **기본 위키 91쪽**으로 시작합니다. |
-| **웹 · 모바일** | 로컬 서버 하나에 웹 UI(PWA). 작업실 화면(안건 · 의장 대화 · 위원 카드)과 **시각화 모드**(위 영상)를 오갈 수 있고, Tailscale로 휴대폰에서도 같은 화면을 홈 화면 앱처럼 씁니다([휴대폰에서 쓰기](#-휴대폰에서-쓰기)). |
-| **시각화 모드** | 의장을 가운데, 세 회사를 꼭짓점에 둔 밤하늘 그림. 지시가 선을 타고 내려가 원반이 모델을 고르고, 위원이 가지처럼 자라 일하고, 보고가 돌아옵니다. 의장 · 회사 · 위원을 누르면 같은 기능을 카드로 씁니다. |
-| **릴레이 위원** | CLI가 없는 웹 AI(웹 Gemini, AI Studio, ChatGPT 웹)는 사람이 패킷을 복사해 붙여넣는 방식으로 위원이 됩니다. |
-| **알림 · 상주** | Telegram 봇으로 의장과 대화하고 결정 요청 · 완료 알림을 받습니다. Windows 로그온 작업으로 상주시킬 수 있습니다. |
+| **🎭 Avatar** | The study above. |
+| **✦ Vision** | A night sky with the chair in the middle and the companies at the corners. An order runs down a line, a dial picks the model, and members grow like branches as they work. <br><img src="docs/media/gencouncil-mobile.gif" width="200" alt="Vision look"> |
+| **≡ Text** | The plain workshop: agenda list, chat with the chair, and member cards with logs, diffs, merge, stop and handover. |
+
+## Features
+
+| | |
+|---|---|
+| **Four companies, model ladders** | Claude (haiku · sonnet · opus · fable), GPT (luna · terra · sol · astra), Gemini (flash · hydrogen · neon · argon), Grok. You set only **how many at once, the top model and the top effort** for each company. The chair picks within that for every task. |
+| **Parallel work, safe merges** | Each member gets its own worktree and branch. Only the chair merges, and it backs out and reports on a conflict. A folder that is not a git repository gets a local git in place. |
+| **Accounts and limits** | Log in to several accounts ahead of time. A full account is skipped, and a stopped member is taken over in the same worktree by another account or model (handover). The 5-hour and weekly usage left for each company is shown. |
+| **Shared memory · Gen Wiki** | Members and the chair propose solutions, tool locations and conventions they learn to a shared memory, and what is settled becomes wiki pages. A fresh install starts with **a 91-page default wiki** on running the chair and members, each model's habits, and CLI, git, Windows and web pitfalls. |
+| **Web · mobile** | One local server with a web UI (PWA). Through Tailscale, your phone gets the same screens as a home-screen app ([On your phone](#-on-your-phone)). |
+| **Relay members** | Web AIs without a CLI (web Gemini, AI Studio, ChatGPT on the web) can be members: you copy a packet over and paste the answer back. |
+| **Notifications · always on** | Talk to the chair and get decision requests and completion notices through a Telegram bot. It can run as a Windows logon task. |
 
 <div align="center">
-<img src="docs/diagrams/model_scorecard.png" width="760" alt="AI 모델 한눈에 보기: 속도 · 신뢰도 · 지능 · 가성비 점수와 한 줄 성격">
-<br><sub>위원으로 써 본 관찰을 바탕으로 한 모델별 점수와 한 줄 성격(주관 평가). 의장은 이런 성향과 과거 기록을 보고 모델을 고릅니다.</sub>
+<img src="docs/diagrams/council-structure.gif" width="760" alt="Council structure: the chair picks a company, model and effort with council_assign, members work in their own worktrees, the chair reviews the diff and merges">
 </div>
 
-## 이렇게 동작합니다
+## How it works
 
 ```
-프로젝트(제작위원회) = 작업 폴더 1개 + 업무 분장 가이드라인 + 의장 설정
- └ 안건              = 목표 + 통합 브랜치 agenda/<안건>
-    ├ 작업 T1, T2 …  = 의장이 쪼갠 단위
-    └ 위원           = 작업 하나를 맡아 자기 worktree · 브랜치에서 실행 → 결과 보고 → 의장이 검토 · 합치기
+Project (production council) = one work folder + guidelines for dividing the work + chair settings
+ └ Agenda                    = goals + an integration branch agenda/<agenda>
+    ├ Tasks T1, T2 …         = the units the chair breaks the work into
+    └ Members                = each takes one task, runs in its own worktree and branch → reports → the chair reviews and merges
 ```
 
-1. 웹에서 프로젝트 폴더를 골라 제작위원회를 만들고, 새 안건을 엽니다.
-2. 의장에게 하고 싶은 일을 말합니다. 의장이 목표를 정리하고 작업을 쪼갭니다.
-3. 의장이 작업마다 위원을 보냅니다. 쉬운 일은 하위 모델, 일반 코딩은 주력 모델, 어려운 설계만 상위 모델에게 갑니다.
-4. 위원이 끝나면 의장이 diff를 보고 합치거나 다시 시킵니다. 결정이 필요하면 선택지와 함께 사용자에게 묻습니다.
-5. 안건을 닫으면 의장이 회고를 남기고(공유 기억 · 모델 성향), 결과를 베이스 브랜치에 합칩니다.
+1. In the web UI, pick a project folder to make a council and open a new agenda.
+2. Tell the chair what you want. It sets the goals and breaks the work down.
+3. The chair sends a member for each task: easy jobs go to small models, ordinary coding to the main ones, and only hard design to the top ones.
+4. When a member finishes, the chair reads the diff and merges it or sends it back. When it needs a decision, it asks you with options.
+5. When the agenda closes, the chair writes a retrospective (shared memory, model habits) and merges the result into the base branch.
 
-## 시작하기
+## Getting started
 
-**필요한 것**
+**You need**
 
-- Windows 10/11 (주로 Windows에서 개발하고 시험했습니다. macOS · Linux는 시험하지 않았습니다)
-- Node.js 22 이상, git
-- [Claude Code](https://docs.anthropic.com/claude-code) CLI 로그인 (의장 기본값)
-- 선택: [Codex CLI](https://github.com/openai/codex) 로그인(GPT 위원), Antigravity CLI(Gemini 위원, 아래 주의 참고), Chrome(웹 AI 릴레이)
+- Windows 10/11 (developed and tested on Windows; macOS and Linux are untested)
+- Node.js 22+, git
+- A logged-in [Claude Code](https://docs.anthropic.com/claude-code) CLI (the default chair)
+- Optional: [Codex CLI](https://github.com/openai/codex) (GPT members), Antigravity CLI (Gemini members, see the warning below), Grok CLI, Chrome (web AI relays)
 
-**설치**
+**Install**
 
 ```bash
 git clone https://github.com/GENGA9/GenCouncil.git
 cd GenCouncil
 npm install && npm run build
-npm link --workspace @gencouncil/mcp     # 전역 gencouncil 명령
-gencouncil init                          # 공유 기억 폴더 (~/.gencouncil)
-gencouncil install claude                # Claude Code에 공유 기억 MCP 등록
+npm link --workspace @gencouncil/mcp     # the global gencouncil command
+gencouncil init                          # the shared memory folder (~/.gencouncil)
+gencouncil install claude                # register the shared memory MCP with Claude Code
 ```
 
-**실행**
+**Run**
 
 ```bash
 gencouncil web          # http://localhost:7700
-gencouncil web token    # 처음 접속할 때 넣을 토큰
+gencouncil web token    # the token to enter the first time
 ```
 
-브라우저에서 열고 토큰을 넣으면 됩니다. 왼쪽 위 `✦ 시각화 | ▤ 작업실` 스위치로 화면을 바꿉니다. 서버는 기본으로 이 PC 안(127.0.0.1)에서만 열리고, 다른 기기는 아래처럼 Tailscale로 들어옵니다.
+Open it in a browser and enter the token. The server listens only on this PC (127.0.0.1) by default. Other devices come in through Tailscale, as below. For a window of its own with the floating chair, build the desktop app in [apps/desktop](apps/desktop/README.md) (needs Rust).
 
-## 📱 휴대폰에서 쓰기
+## 📱 On your phone
 
-AI들은 집 PC에서 계속 일하고, 휴대폰으로는 같은 화면을 열어 지시하고 결과를 받습니다. 출근길에 지시를 보내고, 퇴근길에 결과를 확인하는 식입니다. 길은 두 가지입니다.
+The AIs keep working on your PC at home while your phone opens the same screens to give orders and read results.
 
-### 웹 앱 (PWA)
-
-1. PC와 휴대폰에 [Tailscale](https://tailscale.com)을 설치하고 같은 계정으로 로그인합니다(나만 접속할 수 있는 사설망).
-2. PC에서 한 번만 실행합니다. Tailscale이 HTTPS 인증서까지 붙여 줍니다.
+1. Install [Tailscale](https://tailscale.com) on the PC and the phone and log in with the same account (a private network only you can reach).
+2. Run this once on the PC. Tailscale adds an HTTPS certificate.
    ```bash
    tailscale serve --bg 7700
    ```
-3. 휴대폰 브라우저에서 `https://<PC 이름>.<tailnet>.ts.net`을 열고 토큰을 넣습니다(`gencouncil web`을 띄울 때 정확한 주소가 출력됩니다).
-4. 브라우저 메뉴의 **홈 화면에 추가**로 설치하면 독립 앱처럼 열립니다.
+3. On the phone, open `https://<PC name>.<tailnet>.ts.net` and enter the token (`gencouncil web` prints the exact address).
+4. Use **Add to Home Screen** in the browser menu and it opens like an app.
 
-휴대폰 화면은 이렇게 바뀝니다.
+Every API and WebSocket call needs the token, and the server is never opened to your Wi-Fi or the internet, so only your own devices on Tailscale can reach it. A Telegram bot is the other way in: the chair's answers, members' results and decision questions with buttons arrive there, and what you write goes to the agenda's chair. See [Telegram in the guide](docs/GUIDE.md#telegram).
 
-- **작업실**: [안건] [의장] [위원] 탭으로 나뉩니다. 의장과 대화하고, 사진 · 파일을 첨부해 지시하고, 의장이 묻는 결정에 선택 버튼으로 답하고, 위원 로그 · diff를 보고 머지 · 중지 · 이어받기를 할 수 있습니다.
-- **시각화 모드**: 세로 화면에 맞춘 배치입니다. 의장의 최신 말은 입력창 바로 위 패널에 고정되고, 위원은 회사 옆으로 뻗어 나가며 과제와 진행 상황을 짧게 달고 있습니다. 위키 · 기억 · 계정 · 설정도 전체 화면 시트로 열립니다.
-- 휴대폰이 잠들었다 깨거나 연결이 끊겼다 이어지면, 그동안 놓친 대화와 상태를 다시 불러옵니다.
+## ⚠️ Gemini (Antigravity CLI) is off by default
 
-API · WebSocket은 모두 토큰이 있어야 하고, 서버를 집 Wi-Fi나 인터넷에 직접 열지 않으므로 Tailscale에 들어온 내 기기만 접속할 수 있습니다.
+Section 6 of Google's [Antigravity additional terms](https://antigravity.google/terms) treats reaching the service through third-party software as a breach (grounds for suspension or termination), and the [Antigravity FAQ](https://antigravity.google/docs/faq) says wrapping `agy` in a third-party coding agent or app is not supported on personal plans. GenCouncil runs `agy` automatically for Gemini members and chairs, so **while it is off, it never runs `agy` at all.**
 
-### Telegram
+To use it, press "Read risks, turn on" in **Accounts**, read the notice and tick the box saying you are turning it on by your own decision. The decision and its consequences are yours. To use Gemini without the risk, leave it off and use a **relay** (web Gemini, AI Studio). Check the terms and limits of Claude Code, Codex CLI and Grok yourself too.
 
-앱을 열지 않아도 Telegram 봇으로 의장과 이어집니다. 봇을 만들어 연결하면(`gencouncil web telegram --token … --chat …`):
+## Docs
 
-- 의장의 답, 위원 완료 · 실패, 시안 사진 · 파일, 안건 종료가 알림으로 옵니다. 안건마다 켜고 끌 수 있습니다.
-- 의장이 결정을 기다릴 때는 선택 버튼이 달린 질문이 오고, 버튼을 눌러 답합니다.
-- 봇에게 쓴 글과 첨부한 사진 · 영상 · 파일은 그 안건의 의장에게 지시로 전달됩니다.
-- 그룹의 토픽 기능을 쓰면 안건마다 토픽이 하나씩 생겨, 안건별로 대화가 나뉩니다.
+- [Guide](docs/GUIDE.md) (Korean): councils, member autonomy, limits, accounts and handover, relays, the web UI, the looks, Telegram, running as a service, CLI, MCP tools, logs
+- [Architecture](docs/ARCHITECTURE.md) (Korean): the structure and why it is built that way
 
-설정 방법은 [상세 안내의 Telegram](docs/GUIDE.md#telegram)과 [폰에서 쓰기](docs/GUIDE.md#폰에서-쓰기-tailscale)에 있습니다.
-
-## ⚠️ Gemini(Antigravity CLI)는 기본으로 꺼져 있습니다
-
-Google [Antigravity 추가 약관](https://antigravity.google/terms) 6조는 제3자 소프트웨어로 서비스에 접근하는 것을 위반(계정 정지 · 해지 사유)으로 보고, [Antigravity FAQ](https://antigravity.google/docs/faq)는 `agy`를 제3자 코딩 에이전트 · 앱 안에 감싸 쓰는 것을 개인 요금제에서 지원하지 않는다고 적고 있습니다. GenCouncil은 Gemini 위원 · 의장에 `agy`를 자동으로 실행하므로, **꺼져 있는 동안은 `agy`를 한 번도 실행하지 않습니다.**
-
-쓰려면 **계정** 화면에서 "위험 읽고 켜기"를 누르고, 위험 고지를 읽은 뒤 "제 판단으로 켭니다"에 체크해야 합니다. 켜는 판단과 그에 따른 책임은 사용자에게 있습니다. 위험 없이 Gemini를 쓰려면 꺼 둔 채 **릴레이**(웹 Gemini · AI Studio)를 쓰세요. Claude Code와 Codex CLI 쪽도 각 서비스의 약관과 사용 한도를 직접 확인하고 쓰세요.
-
-## 문서
-
-- [상세 안내](docs/GUIDE.md): 제작위원회 · 위원 자율성 · 한도 · 계정과 핸드오버 · 릴레이 · 웹 UI · 시각화 모드 · Telegram · 상주 · CLI · MCP 도구 · 로그
-- [설계 문서](docs/ARCHITECTURE.md): 구조와 설계 결정의 배경
-
-## 개발
+## Development
 
 ```bash
-npm test                                   # 전체 테스트 (LLM 호출 없음)
-npm run dev --workspace @gencouncil/web    # 웹 UI 개발 서버
+npm test                                   # all tests (no LLM calls)
+npm run dev --workspace @gencouncil/web    # web UI dev server
 ```
 
-서버 없이 시각화 모드를 보려면 개발 서버에서 `/vision-demo.html`을 엽니다(`?film`은 위 영상의 장면).
+Without a server, open `/vision-demo.html` on the dev server: `?avatar` for the avatar look, `?meeting` for the meeting room, `?float=1` for the floating chair, `?film` (with `?avatar`) for the scenes in the videos above, and `?lang=en` or `?lang=ja` for the language. `promo/record.mjs` records a film frame by frame, and `promo/shots.mjs` takes the screenshots in this README.
 
-| 패키지 | 역할 |
+| Package | Role |
 |---|---|
-| `packages/core` | 공유 기억 · Gen Wiki 저장소(markdown + git), 검색, 기본 위키 |
-| `packages/council` | 프로젝트 · 안건 · 계정, worktree, 위원 드라이버, 의장 세션, 한도 · 핸드오버 |
-| `packages/server` | REST + WebSocket 서버, 정적 UI, 의장용 MCP, Telegram |
-| `packages/mcp` | 공유 기억 MCP 서버(stdio)와 등록기 |
-| `packages/cli` | `gencouncil` 명령 |
-| `apps/web` | React PWA (작업실 · 시각화 모드) |
+| `packages/core` | Shared memory and Gen Wiki store (markdown + git), search, default wiki |
+| `packages/council` | Projects, agendas, accounts, worktrees, member drivers, chair sessions, limits, handover |
+| `packages/server` | REST + WebSocket server, static UI, the chair's MCP, Telegram |
+| `packages/mcp` | Shared memory MCP server (stdio) and installer |
+| `packages/cli` | The `gencouncil` command |
+| `apps/web` | React PWA (workshop, vision, avatar, meeting room; ko/en/ja) |
+| `apps/desktop` | Tauri 2 tray app with the floating chair |
 
-## 라이선스
+## License
 
 [MIT](LICENSE)

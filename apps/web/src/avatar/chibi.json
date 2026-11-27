@@ -1,0 +1,699 @@
+{
+ "size": 288,
+ "actions": {
+  "walk": {
+   "frames": 6,
+   "durations": [
+    125,
+    125,
+    125,
+    125,
+    125,
+    125
+   ],
+   "loop": true,
+   "flip": true,
+   "facing": "right",
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "run": {
+   "frames": 6,
+   "durations": [
+    83,
+    84,
+    83,
+    83,
+    84,
+    83
+   ],
+   "loop": true,
+   "flip": true,
+   "facing": "right",
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "write": {
+   "frames": 5,
+   "durations": [
+    143,
+    143,
+    143,
+    142,
+    143
+   ],
+   "loop": true,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "happy": {
+   "frames": 5,
+   "durations": [
+    143,
+    143,
+    143,
+    142,
+    143
+   ],
+   "loop": true,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "sulk": {
+   "frames": 4,
+   "durations": [
+    167,
+    166,
+    167,
+    167
+   ],
+   "loop": true,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "sleep": {
+   "frames": 4,
+   "durations": [
+    167,
+    166,
+    167,
+    167
+   ],
+   "loop": true,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "fall": {
+   "frames": 5,
+   "durations": [
+    143,
+    143,
+    143,
+    142,
+    143
+   ],
+   "loop": false,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "getup": {
+   "frames": 5,
+   "durations": [
+    143,
+    143,
+    143,
+    142,
+    143
+   ],
+   "loop": false,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0
+  },
+  "picked": {
+   "frames": 6,
+   "durations": [
+    125,
+    125,
+    125,
+    125,
+    125,
+    125
+   ],
+   "loop": true,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0,
+   "grab": [
+    144.0,
+    18.0
+   ]
+  },
+  "dropped": {
+   "frames": 9,
+   "durations": [
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125
+   ],
+   "loop": false,
+   "flip": false,
+   "facing": null,
+   "floor": 270.0,
+   "root": 144.0
+  }
+ },
+ "rigs": {
+  "claudechan": {
+   "walk": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "run": {
+    "frames": 6,
+    "durations": [
+     83,
+     84,
+     83,
+     83,
+     84,
+     83
+    ]
+   },
+   "write": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "happy": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "sulk": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "sleep": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "fall": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "getup": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "picked": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "dropped": {
+    "frames": 9,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   }
+  },
+  "gpichan": {
+   "walk": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "run": {
+    "frames": 6,
+    "durations": [
+     83,
+     84,
+     83,
+     83,
+     84,
+     83
+    ]
+   },
+   "write": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "happy": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "sulk": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "sleep": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "fall": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "getup": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "picked": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "dropped": {
+    "frames": 9,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   }
+  },
+  "gemmini": {
+   "walk": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "run": {
+    "frames": 6,
+    "durations": [
+     83,
+     84,
+     83,
+     83,
+     84,
+     83
+    ]
+   },
+   "write": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "happy": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "sulk": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "sleep": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "fall": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "getup": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "picked": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "dropped": {
+    "frames": 9,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   }
+  },
+  "grok-x": {
+   "walk": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "run": {
+    "frames": 6,
+    "durations": [
+     83,
+     84,
+     83,
+     83,
+     84,
+     83
+    ]
+   },
+   "write": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "happy": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "sulk": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "sleep": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "fall": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "getup": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "picked": {
+    "frames": 6,
+    "durations": [
+     100,
+     100,
+     100,
+     100,
+     100,
+     100
+    ]
+   },
+   "dropped": {
+    "frames": 8,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   }
+  },
+  "dotchan": {
+   "walk": {
+    "frames": 6,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   },
+   "run": {
+    "frames": 6,
+    "durations": [
+     83,
+     84,
+     83,
+     83,
+     84,
+     83
+    ]
+   },
+   "write": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "happy": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "sulk": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "sleep": {
+    "frames": 4,
+    "durations": [
+     167,
+     166,
+     167,
+     167
+    ]
+   },
+   "fall": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "getup": {
+    "frames": 5,
+    "durations": [
+     143,
+     143,
+     143,
+     142,
+     143
+    ]
+   },
+   "picked": {
+    "frames": 6,
+    "durations": [
+     100,
+     100,
+     100,
+     100,
+     100,
+     100
+    ]
+   },
+   "dropped": {
+    "frames": 8,
+    "durations": [
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125,
+     125
+    ]
+   }
+  }
+ }
+}

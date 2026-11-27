@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { WikiStore, type EntryType, type MemoryStore } from "@gencouncil/core";
 import { serverEntry } from "@gencouncil/mcp/install";
-import { AccountRegistry, type Account } from "./accounts.js";
+import { AccountRegistry, type Account, grokEnv, writeGrokMcp } from "./accounts.js";
 import { ChairApprover, chairReview, type PermissionDecision, type Reviewer } from "./approval.js";
-import { codexMcpArgs, drivers, makeAgyParser, parseClaudeLine, parseCodexLine, type RunningProc } from "./drivers.js";
+import { codexMcpArgs, drivers, makeAgyParser, makeGrokParser, parseClaudeLine, parseCodexLine, type RunningProc } from "./drivers.js";
 import {
   currentBranch,
   branchExists,
@@ -31,6 +31,7 @@ import {
   type MergeResult,
 } from "./git.js";
 import { explorerAgents } from "./explorers.js";
+import { GROK_MEMBER_TOOLS } from "./prompts.js";
 import {
   consultPrompt,
   explorePrompt,
@@ -769,6 +770,13 @@ ${rows.join("\n")}`;
       fs.writeFileSync(path.join(gdir, "settings.json"), JSON.stringify(mcpCfg, null, 2), "utf8");
     }
     const extraArgs: string[] = [];
+    // Grok: a profile of its own in .council (git-excluded) carrying the same MCP servers
+    let grokProfileEnv: Record<string, string> = {};
+    if (provider === "grok") {
+      const profile = path.join(councilDir, "grok-profile");
+      writeGrokMcp(profile, mcpCfg.mcpServers as Parameters<typeof writeGrokMcp>[1], Boolean(councilToken));
+      grokProfileEnv = grokEnv(account.configDir, profile);
+    }
     if (provider === "gpt") {
       // shared memory (memory_search / memory_propose) for Codex members, same server the others get
       extraArgs.push(...codexMcpArgs(mcpCfg as Parameters<typeof codexMcpArgs>[0]));
@@ -791,7 +799,7 @@ ${rows.join("\n")}`;
       `=== ${new Date().toISOString()} spawn ${provider} account=${account.id} model=${member.model ?? "default"} effort=${member.effort ?? "-"} advisor=${member.advisor ?? "-"} task=${task.id} branch=${member.branch}\n`,
     );
 
-    const parse = provider === "claude" ? parseClaudeLine : provider === "gpt" ? parseCodexLine : makeAgyParser();
+    const parse = provider === "claude" ? parseClaudeLine : provider === "gpt" ? parseCodexLine : provider === "grok" ? makeGrokParser() : makeAgyParser();
     let resultText = "";
     let sawError = false;
     const tail: string[] = [];
@@ -805,7 +813,7 @@ ${rows.join("\n")}`;
       proc = drivers[provider].spawn(
         {
           cwd: member.worktree,
-          prompt: MEMBER_PROMPT,
+          prompt: provider === "grok" ? `${MEMBER_PROMPT} ${GROK_MEMBER_TOOLS}` : MEMBER_PROMPT,
           stdinText: packet,
           model: member.model,
           effort: member.effort,
@@ -817,6 +825,7 @@ ${rows.join("\n")}`;
             // strict MCP config keeps the tool list small: load it up front instead of a ToolSearch round trip
             ...(provider === "claude" ? { ENABLE_TOOL_SEARCH: "false" } : {}),
             ...(councilToken ? { GENCOUNCIL_COUNCIL_TOKEN: councilToken } : {}),
+            ...grokProfileEnv,
           },
           extraArgs,
         },
@@ -1957,6 +1966,23 @@ ${rows.join("\n")}`;
     return out;
   }
 
+  /**
+   * Put the chair's integration worktree back when it went missing while the agenda stayed open
+   * (another project on the same repo once finished an agenda of the same name and deleted it).
+   * Returns true when it had to be recreated.
+   */
+  async ensureIntegration(): Promise<boolean> {
+    const dir = this.store.integrationWorktree();
+    const agenda = this.store.agenda();
+    if (agenda.status === "closed" || fs.existsSync(path.join(dir, ".git"))) return false;
+    const repo = this.project.repo;
+    await ensureBranch(repo, agenda.branch, agenda.baseBranch);
+    await ensureWorktree(repo, dir, agenda.branch, agenda.baseBranch);
+    this.linkSharedInto(dir);
+    this.log(`integration worktree was missing; recreated it on ${agenda.branch}`);
+    return true;
+  }
+
   /** Remove the agenda's worktrees (notes archived first). Returns folders that stayed locked. */
   async clean(opts: { deleteBranches?: boolean } = {}): Promise<string[]> {
     if (this.running.size) throw new Error("members still running");
@@ -2013,6 +2039,25 @@ export interface DeleteAgendaResult {
  * commits that were never merged into the base branch, unless force is set.
  * The agenda's runtime must be closed first.
  */
+/** what deleting an agenda would lose: unmerged commits on its branch or its members' branches (changes nothing) */
+export async function deleteAgendaCheck(project: ProjectConfig, store: AgendaStore): Promise<string[]> {
+  const repo = project.repo;
+  const agenda = store.agenda();
+  const lost: string[] = [];
+  if (agenda.status === "closed") return lost;
+  if (await branchExists(repo, agenda.branch)) {
+    const ahead = await logRange(repo, agenda.baseBranch, agenda.branch).catch(() => []);
+    if (ahead.length) lost.push(`안건 브랜치 ${agenda.branch}: 베이스에 없는 커밋 ${ahead.length}개`);
+  }
+  for (const m of store.members()) {
+    if (!(await branchExists(repo, m.branch))) continue;
+    const base = (await branchExists(repo, agenda.branch)) ? agenda.branch : agenda.baseBranch;
+    const ahead = await logRange(repo, base, m.branch).catch(() => []);
+    if (ahead.length && !lost.some((l) => l.includes(m.branch))) lost.push(`위원 ${m.id} (${m.branch}): 합치지 않은 커밋 ${ahead.length}개`);
+  }
+  return lost;
+}
+
 export async function deleteAgenda(project: ProjectConfig, store: AgendaStore, opts: { force?: boolean } = {}): Promise<DeleteAgendaResult> {
   const repo = project.repo;
   const agenda = store.agenda();

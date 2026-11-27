@@ -18,8 +18,21 @@
   .vz-brand .vz-mark { margin-right: 0; font-size: 14px; }
   .vz-id { gap: 10px; flex-wrap: nowrap; }
   .vz-nav { gap: 6px; min-width: 0; }
-  .vz .mode-switch button { padding: 5px 11px; }
-  .vz .vz-dock button { padding: 5px 10px; gap: 5px; }
+  /* the header across the whole width: the four faces by name (no icons), wiki and settings at the right */
+  .vz-top { width: calc(100% - 24px); }
+  .vz-id { width: 100%; }
+  .vz-nav { flex: 1; }
+  .vz .mode-switch button { padding: 5px 9px; }
+  .vz .mode-switch .ms-icon { display: none; }
+  .vz .vz-dock { margin-left: auto; }
+  .vz .vz-dock button { padding: 5px 9px; gap: 5px; }
+  /* the two switch groups (room · look) take five names: the mark goes, wiki and settings show icons */
+  .vz-id > .vz-brand { display: none; }
+  .vz-id { gap: 6px; }
+  .vz .mode-switch button { padding: 5px 5px; }
+  .vz .mode-switch .ms-sep { margin: 5px 2px; }
+  .vz .vz-dock .vz-dock-label { display: none; }
+  .vz .vz-dock button { padding: 5px 6px; }
 }
 
 /* ---- the sheet ---- */
@@ -276,3 +289,11 @@
 .vz .vz-skin .wiki-prop-body { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); color: #d9dcf5; }
 .vz .vz-skin .wiki-prop-meta a { color: #b9c6ff; }
 .vz .vz-skin .wiki-curate-row button.on, .vz .vz-skin .wiki-review-filter button.on { color: var(--gold); border-color: rgba(255, 224, 158, 0.6); }
+
+/* a phone: the top row (the room and look switches, wiki and settings) has to fit the screen's width;
+   the wiki and settings buttons keep their icons and badges, their words go (the tooltips still say them) */
+.vz.narrow .vz-dock-label { display: none; }
+.vz.narrow .vz-dock button { padding: 5px 6px; }
+.vz.narrow .mode-switch button { padding: 5px 5px; }
+.vz-set-row select.vz-lang { width: auto; cursor: pointer; }
+.vz-set-row select.vz-lang option { color: #111; }

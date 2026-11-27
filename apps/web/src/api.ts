@@ -1,4 +1,5 @@
-import type { Account, Attachment, CurateStatus, FolderReport, GeminiOptIn, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "./types";
+import type { Account, Attachment, Meeting, MeetingSettings, MeetingSummary, CurateStatus, FolderReport, GeminiOptIn, FolderListing, MemoryHit, ModelsInfo, Overview, RuntimeState, TranscriptEntry, UsageSnapshot, WikiHit, WikiPage, WikiPageMeta, WikiStatus } from "./types";
+import { t } from "./i18n";
 
 export class ApiError extends Error {
   constructor(
@@ -34,6 +35,15 @@ const a = (key: string) => {
 
 export const api = {
   me: () => call<{ ok: boolean }>("GET", "/api/me"),
+  meetingLatest: () => call<{ meeting: Meeting | null }>("GET", "/api/meetings/latest"),
+  meetingStart: (topic: string) => call<{ meeting: Meeting }>("POST", "/api/meetings", { topic }),
+  meetingSettings: () => call<{ settings: MeetingSettings }>("GET", "/api/meetings/settings"),
+  /** a null field clears that choice */
+  meetingSaveSettings: (s: Partial<Record<keyof MeetingSettings, unknown>>) => call<{ settings: MeetingSettings }>("PUT", "/api/meetings/settings", s),
+  meetingList: () => call<{ meetings: MeetingSummary[] }>("GET", "/api/meetings"),
+  meetingGet: (id: string) => call<{ meeting: Meeting }>("GET", `/api/meetings/${encodeURIComponent(id)}`),
+  meetingDelete: (id: string) => call<{ ok: boolean }>("DELETE", `/api/meetings/${encodeURIComponent(id)}`),
+  meetingStop: (id: string) => call<{ meeting: Meeting | null }>("POST", `/api/meetings/${encodeURIComponent(id)}/stop`),
   login: (token: string) => call<{ ok: boolean }>("POST", "/api/login", { token }),
   overview: () => call<Overview>("GET", "/api/overview"),
   usage: (refresh = false) => call<UsageSnapshot>("GET", `/api/usage${refresh ? "?refresh=1" : ""}`),
@@ -54,6 +64,7 @@ export const api = {
   accountLogin: (id: string) => call<{ hint: string }>("POST", `/api/accounts/${encodeURIComponent(id)}/login`),
   models: () => call<ModelsInfo>("GET", "/api/models"),
   fs: (p: string) => call<FolderListing>("GET", `/api/fs?path=${encodeURIComponent(p)}`),
+  deleteProject: (id: string, force = false) => call<{ deleted: boolean; lost: string[]; movedTo?: string }>("DELETE", `/api/projects/${encodeURIComponent(id)}${force ? "?force=1" : ""}`),
   projectSettings: (id: string, b: Record<string, unknown>) => call<{ scanSummary?: string }>("PUT", `/api/projects/${encodeURIComponent(id)}/settings`, b),
   curate: () => call<CurateStatus>("POST", "/api/memory/curate"),
   reorganize: () => call<CurateStatus>("POST", "/api/memory/reorganize"),
@@ -95,8 +106,8 @@ export const api = {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress?.(Math.min(100, Math.floor((e.loaded / e.total) * 100)));
       };
-      xhr.onerror = () => reject(new ApiError(0, "서버에 연결할 수 없거나 연결이 끊겼습니다"));
-      xhr.onabort = () => reject(new ApiError(0, "업로드가 취소되었습니다"));
+      xhr.onerror = () => reject(new ApiError(0, t("서버에 연결할 수 없거나 연결이 끊겼습니다")));
+      xhr.onabort = () => reject(new ApiError(0, t("업로드가 취소되었습니다")));
       xhr.onload = () => {
         let data: { error?: string } = {};
         try {

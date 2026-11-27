@@ -1,0 +1,292 @@
+{
+ "claudechan": [
+  {
+   "text": "네, 여기 있어요. 무엇을 도와드릴까요?",
+   "lang": "ko",
+   "file": "claudechan/touch_1_ko.mp3"
+  },
+  {
+   "text": "잠깐 쉬어 가셔도 괜찮아요.",
+   "lang": "ko",
+   "file": "claudechan/touch_2_ko.mp3"
+  },
+  {
+   "text": "부르셨나요? 잘 듣고 있어요.",
+   "lang": "ko",
+   "file": "claudechan/touch_3_ko.mp3"
+  },
+  {
+   "text": "오늘도 차근차근 해 봐요.",
+   "lang": "ko",
+   "file": "claudechan/touch_4_ko.mp3"
+  },
+  {
+   "text": "はい、そばにいますよ。",
+   "lang": "ja",
+   "file": "claudechan/touch_5_ja.mp3",
+   "sub": "네, 곁에 있어요."
+  },
+  {
+   "text": "ひと息つきましょうか。",
+   "lang": "ja",
+   "file": "claudechan/touch_6_ja.mp3",
+   "sub": "잠깐 숨 돌릴까요?"
+  },
+  {
+   "text": "Yes, I'm right here. How can I help?",
+   "lang": "en",
+   "file": "claudechan/touch_7_en.mp3",
+   "sub": "네, 여기 있어요. 무엇을 도와드릴까요?"
+  },
+  {
+   "text": "It's okay to take a little break.",
+   "lang": "en",
+   "file": "claudechan/touch_8_en.mp3",
+   "sub": "잠깐 쉬어 가셔도 괜찮아요."
+  },
+  {
+   "text": "Did you call me? I'm listening.",
+   "lang": "en",
+   "file": "claudechan/touch_9_en.mp3",
+   "sub": "부르셨나요? 잘 듣고 있어요."
+  },
+  {
+   "text": "Let's take it one step at a time today, too.",
+   "lang": "en",
+   "file": "claudechan/touch_10_en.mp3",
+   "sub": "오늘도 차근차근 해 봐요."
+  }
+ ],
+ "gpichan": [
+  {
+   "text": "호출 확인했습니다.",
+   "lang": "ko",
+   "file": "gpichan/touch_1_ko.mp3"
+  },
+  {
+   "text": "대기 중입니다. 말씀하십시오.",
+   "lang": "ko",
+   "file": "gpichan/touch_2_ko.mp3"
+  },
+  {
+   "text": "다음 지시를 확인하겠습니다.",
+   "lang": "ko",
+   "file": "gpichan/touch_3_ko.mp3"
+  },
+  {
+   "text": "준비됐습니다.",
+   "lang": "ko",
+   "file": "gpichan/touch_4_ko.mp3"
+  },
+  {
+   "text": "確認しました。",
+   "lang": "ja",
+   "file": "gpichan/touch_5_ja.mp3",
+   "sub": "확인했습니다."
+  },
+  {
+   "text": "次の指示をどうぞ。",
+   "lang": "ja",
+   "file": "gpichan/touch_6_ja.mp3",
+   "sub": "다음 지시를 말씀해 주십시오."
+  },
+  {
+   "text": "Call received.",
+   "lang": "en",
+   "file": "gpichan/touch_7_en.mp3",
+   "sub": "호출 확인했습니다."
+  },
+  {
+   "text": "Standing by. Go ahead.",
+   "lang": "en",
+   "file": "gpichan/touch_8_en.mp3",
+   "sub": "대기 중입니다. 말씀하십시오."
+  },
+  {
+   "text": "Ready for your next instruction.",
+   "lang": "en",
+   "file": "gpichan/touch_9_en.mp3",
+   "sub": "다음 지시를 확인하겠습니다."
+  },
+  {
+   "text": "Ready.",
+   "lang": "en",
+   "file": "gpichan/touch_10_en.mp3",
+   "sub": "준비됐습니다."
+  }
+ ],
+ "gemmini": [
+  {
+   "text": "선배, 저 불렀어요?",
+   "lang": "ko",
+   "file": "gemmini/touch_1_ko.mp3"
+  },
+  {
+   "text": "네! 바로 준비할게요!",
+   "lang": "ko",
+   "file": "gemmini/touch_2_ko.mp3"
+  },
+  {
+   "text": "앗, 깜짝이야! 무슨 일이에요?",
+   "lang": "ko",
+   "file": "gemmini/touch_3_ko.mp3"
+  },
+  {
+   "text": "잠깐 기지개 켜고 같이 힘내요!",
+   "lang": "ko",
+   "file": "gemmini/touch_4_ko.mp3"
+  },
+  {
+   "text": "先輩、呼びました？",
+   "lang": "ja",
+   "file": "gemmini/touch_5_ja.mp3",
+   "sub": "선배, 부르셨어요?"
+  },
+  {
+   "text": "よし、一緒に頑張りましょう！",
+   "lang": "ja",
+   "file": "gemmini/touch_6_ja.mp3",
+   "sub": "좋아요, 같이 힘내요!"
+  },
+  {
+   "text": "Senpai, did you call me?",
+   "lang": "en",
+   "file": "gemmini/touch_7_en.mp3",
+   "sub": "선배, 저 불렀어요?"
+  },
+  {
+   "text": "Yes! I'll get ready right away!",
+   "lang": "en",
+   "file": "gemmini/touch_8_en.mp3",
+   "sub": "네! 바로 준비할게요!"
+  },
+  {
+   "text": "Whoa, you startled me! What's up?",
+   "lang": "en",
+   "file": "gemmini/touch_9_en.mp3",
+   "sub": "앗, 깜짝이야! 무슨 일이에요?"
+  },
+  {
+   "text": "Let's stretch for a sec and keep going together!",
+   "lang": "en",
+   "file": "gemmini/touch_10_en.mp3",
+   "sub": "잠깐 기지개 켜고 같이 힘내요!"
+  }
+ ],
+ "grok-x": [
+  {
+   "text": "응? 나 찾았어?",
+   "lang": "ko",
+   "file": "grokchan/touch_1_ko.mp3"
+  },
+  {
+   "text": "깜짝이야. 무슨 재밌는 일 있어?",
+   "lang": "ko",
+   "file": "grokchan/touch_2_ko.mp3"
+  },
+  {
+   "text": "좋아, 잠깐 쉬었다 하자.",
+   "lang": "ko",
+   "file": "grokchan/touch_3_ko.mp3"
+  },
+  {
+   "text": "나 여기 있어. 얘기해 봐.",
+   "lang": "ko",
+   "file": "grokchan/touch_4_ko.mp3"
+  },
+  {
+   "text": "ん？何か面白いこと？",
+   "lang": "ja",
+   "file": "grokchan/touch_5_ja.mp3",
+   "sub": "응? 뭐 재밌는 일 있어?"
+  },
+  {
+   "text": "ちょっと休憩しようよ。",
+   "lang": "ja",
+   "file": "grokchan/touch_6_ja.mp3",
+   "sub": "잠깐 쉬자."
+  },
+  {
+   "text": "Hm? Were you looking for me?",
+   "lang": "en",
+   "file": "grokchan/touch_7_en.mp3",
+   "sub": "응? 나 찾았어?"
+  },
+  {
+   "text": "Whoa. Something fun going on?",
+   "lang": "en",
+   "file": "grokchan/touch_8_en.mp3",
+   "sub": "깜짝이야. 무슨 재밌는 일 있어?"
+  },
+  {
+   "text": "Okay, let's take a quick break.",
+   "lang": "en",
+   "file": "grokchan/touch_9_en.mp3",
+   "sub": "좋아, 잠깐 쉬었다 하자."
+  },
+  {
+   "text": "I'm right here. Talk to me.",
+   "lang": "en",
+   "file": "grokchan/touch_10_en.mp3",
+   "sub": "나 여기 있어. 얘기해 봐."
+  }
+ ],
+ "dotchan": [
+  {
+   "text": "부르셨습니까. 곁에 있겠습니다.",
+   "lang": "ko",
+   "file": "dotchan/touch_1_ko.mp3"
+  },
+  {
+   "text": "필요하신 일을 말씀해 주십시오.",
+   "lang": "ko",
+   "file": "dotchan/touch_2_ko.mp3"
+  },
+  {
+   "text": "잠시 쉬실 시간을 마련하겠습니다.",
+   "lang": "ko",
+   "file": "dotchan/touch_3_ko.mp3"
+  },
+  {
+   "text": "차분히 진행하겠습니다.",
+   "lang": "ko",
+   "file": "dotchan/touch_4_ko.mp3"
+  },
+  {
+   "text": "お呼びでしょうか。",
+   "lang": "ja",
+   "file": "dotchan/touch_5_ja.mp3",
+   "sub": "부르셨습니까?"
+  },
+  {
+   "text": "どうぞ、ごゆっくり。",
+   "lang": "ja",
+   "file": "dotchan/touch_6_ja.mp3",
+   "sub": "부디 편히 쉬십시오."
+  },
+  {
+   "text": "You called? I shall stay by your side.",
+   "lang": "en",
+   "file": "dotchan/touch_7_en.mp3",
+   "sub": "부르셨습니까. 곁에 있겠습니다."
+  },
+  {
+   "text": "Please tell me what you require.",
+   "lang": "en",
+   "file": "dotchan/touch_8_en.mp3",
+   "sub": "필요하신 일을 말씀해 주십시오."
+  },
+  {
+   "text": "I shall arrange a moment for you to rest.",
+   "lang": "en",
+   "file": "dotchan/touch_9_en.mp3",
+   "sub": "잠시 쉬실 시간을 마련하겠습니다."
+  },
+  {
+   "text": "I shall proceed calmly.",
+   "lang": "en",
+   "file": "dotchan/touch_10_en.mp3",
+   "sub": "차분히 진행하겠습니다."
+  }
+ ]
+}

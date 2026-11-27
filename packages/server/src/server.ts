@@ -10,6 +10,7 @@ import {
   type AccountUsage,
   AgendaRuntime,
   AgendaStore,
+  projectDir,
   CLI_PROVIDERS,
   DEFAULT_LIMITS,
   EFFORTS,
@@ -25,6 +26,7 @@ import {
   handleCouncilMcpRequest,
   handleMemberMcpRequest,
   deleteAgenda,
+  deleteAgendaCheck,
   runTidy,
   runWikiRegister,
   runWikiReview,
@@ -57,6 +59,8 @@ const MAX_UPLOAD = 2 * 1024 * 1024 * 1024;
 import { listFolder } from "./fsbrowse.js";
 import { WebSocketServer, type WebSocket } from "ws";
 import { detectTailscale, loadServerConfig, saveServerConfig, type ServerConfig, type TailscaleInfo } from "./config.js";
+import { Tts } from "./tts.js";
+import { Meetings } from "./meeting.js";
 import { TelegramBridge } from "./telegram.js";
 
 export interface ServerOptions extends Partial<ServerConfig> {
@@ -109,6 +113,10 @@ const MIME: Record<string, string> = {
   ".webmanifest": "application/manifest+json",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".wav": "audio/wav",
+  ".mp4": "video/mp4",
+  ".mp3": "audio/mpeg",
+  ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
   ".map": "application/json",
@@ -159,6 +167,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   const accounts = new AccountRegistry();
   // subscription usage (5h / weekly) per CLI account, cached; reading it spawns codex / agy
   const USAGE_TTL = 5 * 60 * 1000;
+  const tts = new Tts(config.tts, log);
   let usageCache: { at: number; items: AccountUsage[] } | undefined;
   let usageRun: Promise<void> | undefined;
   const refreshUsage = (): Promise<void> =>
@@ -187,6 +196,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     const data = JSON.stringify(msg);
     for (const c of clients) if (c.readyState === c.OPEN) c.send(data);
   };
+  const meetings = new Meetings(accounts, broadcast, log);
   let telegram: TelegramBridge | undefined;
   let curate: {
     kind?: "proposals" | "reorganize" | "tidy";
@@ -287,6 +297,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
               ...a,
               key,
               taskCounts: { total: tasks.length, done: tasks.filter((t) => t.status === "done").length },
+              // what it is on now, for the one-line reminder: a task being worked on, else in review, else the next to do
+              now: (["doing", "review", "todo"] as const).map((st) => tasks.find((t) => t.status === st)).find(Boolean)?.title,
               running: running.length,
               runningFamilies: [...new Set(running.map((m) => (m.provider === "relay" ? (m.site ? SITE_INFO[m.site].family : "relay") : m.provider)))],
               chairBusy: rt?.chair.isBusy() ?? false,
@@ -342,6 +354,51 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     }
     broadcast({ type: "overview" });
     return p;
+  });
+  // delete a whole council: its agendas go the way a deleted agenda goes (worktrees and agenda branches
+  // removed), then its record moves to <home>/deleted-projects. The work folder (the code) is left alone.
+  // Unmerged commits on open agendas are listed and nothing happens unless ?force=1.
+  on("DELETE", "/api/projects/:id", async ({ params, url }) => {
+    const p = registry.get(params.id);
+    if (!p) throw new HttpError(404, "unknown project");
+    const force = url.searchParams.get("force") === "1";
+    const stores = AgendaStore.list(p).map((a) => new AgendaStore(p, a.slug));
+    for (const store of stores) {
+      const rtp = runtimes.get(`${p.id}/${store.slug}`);
+      if (!rtp) continue;
+      const rt = await rtp;
+      if (rt.chair.isBusy() || rt.council.runningCount()) throw new HttpError(409, `안건 '${store.agenda().title}'에서 의장이나 위원이 작업 중입니다. 멈춘 뒤 삭제하세요.`);
+    }
+    if (!force) {
+      // a dry run per agenda: deleteAgenda without force changes nothing when it would lose commits
+      const lost: string[] = [];
+      for (const store of stores) {
+        if (store.agenda().status === "closed") continue;
+        const r = await deleteAgendaCheck(p, store);
+        lost.push(...r.map((l) => `${store.agenda().title}: ${l}`));
+      }
+      if (lost.length) return { deleted: false, lost };
+    }
+    for (const store of stores) {
+      const key = `${p.id}/${store.slug}`;
+      const rtp = runtimes.get(key);
+      if (rtp) {
+        (await rtp).close({ closeMemory: false });
+        runtimes.delete(key);
+      }
+      try {
+        await deleteAgenda(p, store, { force: true });
+      } catch (e) {
+        throw new HttpError(500, `안건 '${store.agenda().title}' 삭제 실패: ${(e as Error).message}`);
+      }
+    }
+    const trash = path.join(path.dirname(path.dirname(projectDir(p.id))), "deleted-projects");
+    fs.mkdirSync(trash, { recursive: true });
+    const dest = path.join(trash, `${p.id}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+    fs.renameSync(projectDir(p.id), dest);
+    broadcast({ type: "overview" });
+    log(`deleted project ${p.id} -> ${dest}`);
+    return { deleted: true, lost: [], movedTo: dest };
   });
   on("PUT", "/api/projects/:id/settings", async ({ params, body }) => {
     const p = registry.get(params.id);
@@ -440,6 +497,61 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     usageCache = undefined;
     broadcast({ type: "overview" });
     return g;
+  });
+  // the avatar mode's voices: whether there is one, and a line spoken in a character's voice (WAV)
+  on("GET", "/api/tts", () => ({ available: tts.available }));
+  on("POST", "/api/tts", async ({ body, res }) => {
+    const b = await body();
+    const text = String(b.text ?? "").trim().slice(0, 600);
+    const voice = String(b.voice ?? "").trim();
+    if (!text || !/^[A-Za-z0-9_-]{1,32}$/.test(voice)) throw new HttpError(400, "text and voice required");
+    if (!tts.available) throw new HttpError(404, "TTS가 설정되지 않았습니다");
+    let wav: Buffer;
+    try {
+      wav = await tts.speak(text, voice, typeof b.speed === "number" ? b.speed : undefined);
+    } catch (e) {
+      throw new HttpError(503, (e as Error).message);
+    }
+    res.writeHead(200, { "content-type": "audio/wav", "content-length": String(wav.length), "cache-control": "no-store" });
+    res.end(wav);
+  });
+  // the meeting room: a topic, the members' opinions and talk, the chair's summary
+  on("GET", "/api/meetings/latest", () => ({ meeting: meetings.latest() }));
+  on("GET", "/api/meetings/settings", () => ({ settings: meetings.settings() }));
+  on("PUT", "/api/meetings/settings", async ({ body }) => {
+    const b = await body();
+    return {
+      settings: meetings.saveSettings({
+        chair: b.chair as string | undefined,
+        chairModel: b.chairModel as string | null | undefined,
+        chairEffort: b.chairEffort as string | null | undefined,
+        members: Array.isArray(b.members) ? (b.members as unknown[]).map(String) : undefined,
+        seats: b.seats && typeof b.seats === "object" ? (b.seats as never) : undefined,
+      }),
+    };
+  });
+  on("GET", "/api/meetings", () => ({ meetings: meetings.list() }));
+  on("POST", "/api/meetings", async ({ body }) => {
+    const b = await body();
+    try {
+      return { meeting: meetings.start(String(b.topic ?? "")) };
+    } catch (e) {
+      throw new HttpError(409, (e as Error).message);
+    }
+  });
+  on("POST", "/api/meetings/:id/stop", ({ params }) => ({ meeting: meetings.stop(params.id) }));
+  on("GET", "/api/meetings/:id", ({ params }) => {
+    const m = meetings.get(params.id);
+    if (!m) throw new HttpError(404, "회의를 찾을 수 없습니다");
+    return { meeting: m };
+  });
+  on("DELETE", "/api/meetings/:id", ({ params }) => {
+    try {
+      meetings.remove(params.id);
+      return { ok: true };
+    } catch (e) {
+      throw new HttpError(409, (e as Error).message);
+    }
   });
   on("GET", "/api/usage", async ({ url }) => {
     const force = url.searchParams.get("refresh") === "1";
@@ -947,7 +1059,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         }
         throw new HttpError(404, `no route: ${method} ${url.pathname}`);
       }
-      serveStatic(webDir, url.pathname, res);
+      serveStatic(webDir, url.pathname, res, typeof req.headers.range === "string" ? req.headers.range : undefined);
     } catch (e) {
       const status = e instanceof HttpError ? e.status : 500;
       if (status === 500) log(`${method} ${url.pathname}: ${(e as Error).stack ?? e}`);
@@ -1055,6 +1167,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       clearInterval(ping);
       clearInterval(reaper);
       telegram?.stop();
+      tts.stop();
       for (const p of runtimes.values()) (await p).close({ closeMemory: false });
       runtimes.clear();
       memory.close();
@@ -1065,7 +1178,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   };
 }
 
-function serveStatic(webDir: string, pathname: string, res: http.ServerResponse): void {
+function serveStatic(webDir: string, pathname: string, res: http.ServerResponse, range?: string): void {
   if (!fs.existsSync(webDir)) {
     res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
     res.end("web app not built. run: npm run build:web");
@@ -1082,6 +1195,25 @@ function serveStatic(webDir: string, pathname: string, res: http.ServerResponse)
   const ext = path.extname(file).toLowerCase();
   const headers: Record<string, string> = { "content-type": MIME[ext] ?? "application/octet-stream" };
   headers["cache-control"] = ext === ".html" || file.endsWith("sw.js") ? "no-cache" : "public, max-age=31536000, immutable";
+  // byte ranges: Safari plays a video only from a server that answers them (the avatar's dances)
+  const size = fs.statSync(file).size;
+  headers["accept-ranges"] = "bytes";
+  const m = range ? /^bytes=(\d*)-(\d*)$/.exec(range) : null;
+  if (m && (m[1] || m[2])) {
+    let start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+    let end = m[1] && m[2] ? Number(m[2]) : size - 1;
+    end = Math.min(end, size - 1);
+    if (start > end || start >= size) {
+      res.writeHead(416, { "content-range": `bytes */${size}` });
+      res.end();
+      return;
+    }
+    start = Math.max(0, start);
+    res.writeHead(206, { ...headers, "content-range": `bytes ${start}-${end}/${size}`, "content-length": String(end - start + 1) });
+    fs.createReadStream(file, { start, end }).pipe(res);
+    return;
+  }
+  headers["content-length"] = String(size);
   res.writeHead(200, headers);
   fs.createReadStream(file).pipe(res);
 }

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <radialGradient id="bg" cx="50%" cy="44%" r="70%"><stop offset="0" stop-color="#161a3a"/><stop offset="1" stop-color="#05060e"/></radialGradient>
+  <radialGradient id="chair" cx="42%" cy="38%" r="65%"><stop offset="0" stop-color="#fff6dd"/><stop offset=".55" stop-color="#ffe09e"/><stop offset="1" stop-color="#f2b866"/></radialGradient>
+  <radialGradient id="halo" r="50%"><stop offset="0" stop-color="#ffe09e" stop-opacity=".45"/><stop offset="1" stop-color="#ffe09e" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+<circle cx="512" cy="370" r="222" fill="none" stroke="#ff9668" stroke-width="92"/>
+<circle cx="350.9" cy="649" r="222" fill="none" stroke="#3ee2b2" stroke-width="92"/>
+<circle cx="673.1" cy="649" r="222" fill="none" stroke="#7a98ff" stroke-width="92"/>
+<circle cx="512" cy="556" r="150" fill="#05060e"/>
+<circle cx="512" cy="556" r="118" fill="url(#chair)"/>
+</svg>

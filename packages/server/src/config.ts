@@ -4,11 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { gencouncilHome } from "@gencouncil/core";
 
+import type { TtsConfig } from "./tts.js";
+
 export interface ServerConfig {
   token: string;
   port: number;
   host: string;
   telegram?: { botToken: string; chatId: string; agenda?: string; forumChatId?: string; topics?: Record<string, number>; autoNotify?: boolean };
+  /** speech for the avatar mode's characters (a local TTS server with the OpenAI speech contract) */
+  tts?: TtsConfig;
 }
 
 export function serverConfigFile(): string {
@@ -32,6 +36,7 @@ export function loadServerConfig(overrides: ServerConfigPatch = {}): ServerConfi
     // loopback by default: phones and other PCs come in through "tailscale serve", never straight from the network
     host: overrides.host ?? cfg.host ?? "127.0.0.1",
     telegram: overrides.telegram === null ? undefined : (overrides.telegram ?? cfg.telegram),
+    tts: overrides.tts ?? cfg.tts,
   };
   if (!fs.existsSync(f) || JSON.stringify(cfg) !== JSON.stringify(merged)) {
     fs.mkdirSync(path.dirname(f), { recursive: true });

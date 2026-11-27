@@ -22,6 +22,7 @@
   --c-gemini: #4285f4;
   --c-gpt: #10a37f;
   --c-relay: #7c3aed;
+  --c-grok: #c99a06;
   --on-accent: #ffffff;
   color-scheme: light;
 }
@@ -50,6 +51,7 @@
   --c-gemini: #7aa7ff;
   --c-gpt: #34c79e;
   --c-relay: #a78bfa;
+  --c-grok: #f2c94c;
   }
 }
 :root[data-theme="dark"] {
@@ -75,6 +77,7 @@
   --c-gemini: #7aa7ff;
   --c-gpt: #34c79e;
   --c-relay: #a78bfa;
+  --c-grok: #f2c94c;
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -135,8 +138,25 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .mode-switch button { flex: 1; border: none; background: transparent; border-radius: 999px; padding: 4px 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .mode-switch button:hover { color: var(--text); }
 .mode-switch button.on { background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border); font-weight: 600; }
+/* the room and the look: in the left pane, a row each; on a phone's mode row, one line */
+.mode-switch { flex-direction: column; gap: 3px; border-radius: 14px; }
+.mode-switch .ms-group { display: flex; gap: 2px; }
+.mode-switch .ms-sep { height: 1px; margin: 0 6px; background: var(--border); }
+.mode-switch .ms-icon { font-style: normal; margin-right: 0.3em; }
+.mode-row { flex: none; padding: 6px 8px 0; }
+.mode-row .mode-switch { flex-direction: row; border-radius: 999px; }
+.mode-row .mode-switch .ms-group { flex: 2; }
+.mode-row .mode-switch .ms-group + .ms-sep + .ms-group { flex: 3; }
+.mode-row .mode-switch .ms-sep { width: 1px; height: auto; margin: 4px 2px; }
+.mode-row .mode-switch .ms-icon { display: none; }
 .tabs button.tab-vision { flex: none; width: 46px; color: var(--run); }
 .tree { flex: 1; overflow: auto; min-height: 0; }
+/* on a phone the 안건 tab scrolls as one page: the agenda tree takes the height it needs and the wiki,
+   accounts and usage follow it, instead of the tree squeezed into what the footer leaves. The mode
+   switch is already in the phone's top row. */
+.pane-mobile .left-inner { height: auto; flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.pane-mobile .left-inner > .mode-switch { display: none; }
+.pane-mobile .tree { flex: none; overflow: visible; }
 .project { margin-bottom: 10px; }
 .project-row { display: flex; align-items: center; justify-content: space-between; font-weight: 600; padding: 4px 2px; }
 .project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -283,6 +303,7 @@ button.tg-auto:disabled.on { opacity: 1; }
 .limits { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
 .limits-head, .limits-row { display: grid; grid-template-columns: 1.3fr 0.7fr 1.4fr 1fr; gap: 8px; align-items: center; }
 .limits-row input, .limits-row select { padding: 4px 6px; }
+.limits-single { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 4px; }
 .limits-floor { display: flex; align-items: center; gap: 6px; margin: -2px 0 4px 8px; }
 .limits-floor input { width: 64px; padding: 4px 6px; }
 .limits-name { font-weight: 600; }
@@ -300,9 +321,10 @@ button.tg-auto:disabled.on { opacity: 1; }
 @media (max-width: 900px) { .limits-head, .limits-row { grid-template-columns: 1fr 0.6fr 1.2fr 0.9fr; font-size: 12px; } }
 
 /* theme toggle */
-.space-tools { display: flex; align-items: center; gap: 8px; }
-.theme-btn { padding: 2px 8px; font-size: 12px; border-radius: 999px; background: var(--event); color: var(--muted); border-color: var(--border); }
+.space-tools { display: flex; align-items: center; gap: 6px; }
+.theme-btn { white-space: nowrap; padding: 2px 8px; font-size: 12px; border-radius: 999px; background: var(--event); color: var(--muted); border-color: var(--border); }
 .theme-btn:hover { color: var(--text); }
+select.lang-select { width: auto; height: auto; line-height: inherit; padding: 2px 2px 2px 6px; cursor: pointer; }
 
 .autonomy-select { width: auto; padding: 3px 6px; font-size: 12px; }
 .curate-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -512,3 +534,19 @@ button.warn-btn { color: var(--warn); border-color: var(--warn); background: var
 .wiki-prop-body { white-space: pre-wrap; word-break: break-word; font-family: inherit; margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--event); font-size: 12.5px; line-height: 1.6; max-height: 50vh; overflow: auto; }
 .wiki-prop .wiki-actions { margin: 6px 0 0; justify-content: flex-end; }
 .badge.type-wiki { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.lb-root { position: fixed; inset: 0; z-index: 3000; background: rgba(0, 0, 0, 0.88); display: flex; align-items: center; justify-content: center; overscroll-behavior: contain; touch-action: none; }
+.lb-stage { position: absolute; inset: 52px 0 0 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.lb-img { max-width: 96vw; max-height: calc(100% - 8px); object-fit: contain; user-select: none; -webkit-user-select: none; cursor: zoom-in; transition: transform 0.12s ease-out; }
+.lb-img.zoomed { cursor: grab; transition: none; }
+.lb-bar { position: absolute; top: 0; left: 0; right: 0; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 12px; padding-top: env(safe-area-inset-top); color: #e8eaf2; z-index: 2; }
+.lb-count { font-size: 13px; opacity: 0.8; min-width: 44px; }
+.lb-name { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-btn { background: rgba(255, 255, 255, 0.12); color: #fff; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 8px; padding: 6px 12px; font-size: 14px; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.lb-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: none; border-radius: 10px; background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 34px; line-height: 1; cursor: pointer; z-index: 2; }
+.lb-nav:hover { background: rgba(255, 255, 255, 0.24); }
+.lb-prev { left: 10px; }
+.lb-next { right: 10px; }
+.msg-attachments a.lb-open { cursor: zoom-in; }
+@media (max-width: 600px) { .lb-nav { width: 36px; height: 52px; font-size: 28px; opacity: 0.8; } .lb-prev { left: 4px; } .lb-next { right: 4px; } }
+.danger-zone { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--line, rgba(127,127,127,0.3)); }

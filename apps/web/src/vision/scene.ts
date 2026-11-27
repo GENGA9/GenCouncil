@@ -7,15 +7,21 @@ import type { Member, ModelsInfo, RuntimeState, TaskStatus } from "../types";
 export type HouseId = "claude" | "gpt" | "gemini";
 export const HOUSE_IDS: HouseId[] = ["claude", "gpt", "gemini"];
 export const HOUSE_NAME: Record<HouseId, string> = { claude: "CLAUDE", gpt: "GPT", gemini: "GEMINI" };
+/** the companies the usage bars list: the three houses, and Grok once it has a login */
+export type UsageId = HouseId | "grok";
+export const USAGE_NAME: Record<UsageId, string> = { ...HOUSE_NAME, grok: "GROK" };
+export const usageIds = (items: Array<{ provider: string }>): UsageId[] => [...HOUSE_IDS, ...(items.some((u) => u.provider === "grok") ? (["grok"] as const) : [])];
 
 export type Rgb = [number, number, number];
-export type TintId = HouseId | "chair" | "relay";
+export type TintId = HouseId | "chair" | "relay" | "grok";
 export const TINT: Record<TintId, Rgb> = {
   claude: [255, 150, 104],
   gpt: [62, 226, 178],
   gemini: [122, 152, 255],
   chair: [255, 224, 158],
   relay: [196, 156, 255],
+  // a fuller yellow than the chair's pale gold, so a Grok member by the chair reads as its own
+  grok: [250, 206, 58],
 };
 export const rgba = (c: Rgb, a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
@@ -70,7 +76,8 @@ export interface RungNode {
 
 export interface WorkerNode {
   id: string;
-  house: HouseId | "relay";
+  /** grok has no house of its own yet: its members stand by the chair like relays, in its own colour */
+  house: HouseId | "relay" | "grok";
   x: number;
   y: number;
   /** direction from its house (or the chair), for placing the label on the far side */
@@ -254,7 +261,7 @@ function layout(w: number, h: number, state: RuntimeState | null, ladders: Ladde
 
   const members = state?.members ?? [];
   const taskTitle = (id: string) => state?.tasks.find((t) => t.id === id)?.title ?? "";
-  const toWorker = (m: Member, house: HouseId | "relay", x: number, y: number, angle: number, fromX: number, fromY: number, labelAngle = angle): WorkerNode => ({
+  const toWorker = (m: Member, house: HouseId | "relay" | "grok", x: number, y: number, angle: number, fromX: number, fromY: number, labelAngle = angle): WorkerNode => ({
     id: m.id,
     house,
     x,
@@ -388,11 +395,11 @@ function layout(w: number, h: number, state: RuntimeState | null, ladders: Ladde
   });
 
   // a relay member whose AI cannot be told from its name stays by the chair
-  const strays = members.filter((m) => isActive(m) && familyOf(m) === "relay");
+  const strays = members.filter((m) => isActive(m) && (familyOf(m) === "relay" || familyOf(m) === "grok"));
   const relays = strays.map((m, k) => {
     const angle = Math.PI / 2 + (k - (strays.length - 1) / 2) * ((30 * Math.PI) / 180);
     const dist = chairR + 1.33 * u;
-    return toWorker(m, "relay", cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, angle, cx + Math.cos(angle) * (chairR + 0.63 * u), cy + Math.sin(angle) * (chairR + 0.63 * u));
+    return toWorker(m, familyOf(m) === "grok" ? "grok" : "relay", cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, angle, cx + Math.cos(angle) * (chairR + 0.63 * u), cy + Math.sin(angle) * (chairR + 0.63 * u));
   });
 
   const all = state?.tasks ?? [];

@@ -1,0 +1,30 @@
+{
+ "rev": "20261127150000",
+ "w": 1536,
+ "h": 1024,
+ "deskY": 756,
+ "deskTop": 522,
+ "deskFront": 825,
+ "window": [
+  1194,
+  46,
+  274,
+  621
+ ],
+ "views": [
+  "autumn-day",
+  "autumn-night",
+  "spring-day",
+  "spring-night",
+  "summer-day",
+  "summer-night",
+  "winter-day",
+  "winter-night"
+ ],
+ "wide": {
+  "x": -511.7,
+  "y": -200.0,
+  "w": 2560.0,
+  "h": 1706.7
+ }
+}

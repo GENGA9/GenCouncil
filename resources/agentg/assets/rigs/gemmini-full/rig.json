@@ -1,0 +1,107 @@
+{
+  "v": 1,
+  "name": "\uc82c\ubbf8\ub2c8",
+  "canvas": [
+    832,
+    1664
+  ],
+  "anchor": [
+    427,
+    1645
+  ],
+  "bubble_anchor": [
+    427,
+    55
+  ],
+  "regions": {
+    "skin": [
+      360,
+      216,
+      136,
+      40
+    ],
+    "eyes": [
+      340,
+      176,
+      176,
+      64
+    ],
+    "mouth": [
+      384,
+      236,
+      68,
+      48
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "gemmini full-body rig (brain gemini, body_mode full), pose A 'waving' (blonde twin tails with red wavy ends and teal tips, two teal ribbons, teal X hair clip, blue eyes with red slit pupils, a fang, white blouse with a teal bow, black suspenders, navy pleated skirt, black tights, black loafers; right hand raised and waving). The base is the source itself (2x AnimeSharp, keyed, 832x1664); its grin is eyes/smile + mouth/smile_open_l (base_states), the neutral eyes/open + mouth/closed are an edit and the other states are edited from that neutral face. anchor = the head's vertical line (x of the eye midpoint, between the loafers) on the sole line, so a bust <-> full switch keeps the head above the same screen x; bubble_anchor = top of the head. Built by tools/rig/build_rig.py; record tools/rig/gemmini_full_records.json.",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "fc3d33431bb74746bb892ec89f5d75d763ef9fa698c3492e67aeb97fe36e4401",
+      "eyes/closed.png": "7d6c71ffaf6ba8e5d04ba44151557a3b21f614b1bb4b65d68926c1b1a298e227",
+      "eyes/half.png": "fe389945fb1ea0126335768be70f0528a5a8d08269b50ba46c52b21147bbd3e9",
+      "eyes/open.png": "46f084472b8ac91ffa60329f2c1fd51ac9d49ae4ce4369b63c33d7249e0221a4",
+      "eyes/sad.png": "6aa38cc051ddb125b620777101faad4457f4d2fdeb260d3e609fe23a726a82dd",
+      "eyes/smile.png": "6e2d814ca4d2cb3a24086b32058ebd4268e2af07d3eeacbca38e2f2df3c88dc0",
+      "eyes/wide.png": "c4f763b8ab45cfa59b8bcc773c812ea8e758decde98bb7fa228d55783901c438",
+      "masks/eyes.png": "5ce8f59cd12c4eb6affb95bfe6b81e3defcdcfff51254e9ecc59081b8fdf22a7",
+      "masks/mouth.png": "b7e21f5ed035f8d18487697b220fab29bdf43457afded33e4f48548fe45fcb4e",
+      "masks/skin.png": "a698c60390e0915c827331627eacbdd8f9f4ab35d8e7e75fca6600cde0c22246",
+      "mouth/closed.png": "d480c773fcd8ae69c4ba5ea8e8f1ad1a5032e8bec526cb93d7c1bb1cc228fb77",
+      "mouth/o.png": "a5d73d4453c8fc99fe79b58c022e50568af075d03db577c28c20c9d5e8788181",
+      "mouth/open_l.png": "8ba746b6f304a3d39fa8c5da72df0c4e436dd3374464e6a1996dce6e594f2ee9",
+      "mouth/open_m.png": "db7d6dd5145257367a51ecdca8831b14a469b574b999beb106a93660ead63d40",
+      "mouth/smile_closed.png": "892d75a19114e7c6577ca46002cf749ecd3af0c9025a17f372939b9d944aa28c",
+      "mouth/smile_open_l.png": "e1510584cd5646d0ecb16e80468cf25f06135774c38dabc96f73ff19dd28025c",
+      "skin/blush.png": "167ae89f16fd554e3886b9e2b8db7ef9e0fc2b8d7ab8d9b71cf02223bd20a725",
+      "skin/normal.png": "b8aad35ef45438b4588de2edcee0ae75b44ac9e56a890338981c57af634e2d79"
+    }
+  }
+}

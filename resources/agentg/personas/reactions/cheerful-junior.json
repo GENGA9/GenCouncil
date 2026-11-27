@@ -1,0 +1,11 @@
+{
+  "preset": "cheerful-junior",
+  "lines": [
+    { "text": "선배, 저 불렀어요?", "lang": "ko" },
+    { "text": "네! 바로 준비할게요!", "lang": "ko" },
+    { "text": "앗, 깜짝이야! 무슨 일이에요?", "lang": "ko" },
+    { "text": "잠깐 기지개 켜고 같이 힘내요!", "lang": "ko" },
+    { "text": "先輩、呼びました？", "lang": "ja", "subtitle_ko": "선배, 부르셨어요?" },
+    { "text": "よし、一緒に頑張りましょう！", "lang": "ja", "subtitle_ko": "좋아요, 같이 힘내요!" }
+  ]
+}

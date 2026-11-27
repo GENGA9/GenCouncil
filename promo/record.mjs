@@ -5,6 +5,9 @@
 // filmSeconds / outSeconds is the speed the film plays at (10 and 10: as it is). `slow` plays stretches
 // of the film slower still: "from:to:speed" in film seconds, comma-separated, e.g. "2.6:3.8:0.6".
 // The video is always outSeconds long, so a slowed stretch takes its time from the film's end.
+// REC_PATH picks the page (default /vision-demo.html?film; the avatar film is
+// /vision-demo.html?avatar&film), REC_READY the element to wait for before the clock starts.
+// Videos on the page (the avatar's dances) follow the same clock: each frame seeks them to its time.
 import { spawn, execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -39,7 +42,7 @@ const chrome = spawn("C:/Program Files/Google/Chrome/Application/chrome.exe", [
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let target;
-for (let i = 0; i < 50 && !target; i++) {
+for (let i = 0; i < 200 && !target; i++) {
   await sleep(200);
   try {
     const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
@@ -99,7 +102,29 @@ const CLOCK = `(() => {
     }
   };
   window.__pin = pin;
-  window.__step = (dt) => {
+  // videos keep to the clock too: play() only notes when they started; every frame seeks them there
+  const vids = new Set();
+  const realPause = HTMLMediaElement.prototype.pause;
+  HTMLMediaElement.prototype.play = function () { this.__t0 = now - (this.currentTime || 0) * 1000; this.__on = true; vids.add(this); realPause.call(this); return Promise.resolve(); };
+  HTMLMediaElement.prototype.pause = function () { this.__on = false; realPause.call(this); };
+  window.__videos = async () => {
+    const seeks = [];
+    for (const v of vids) {
+      if (!v.__on) continue;
+      const t = (now - v.__t0) / 1000;
+      if (v.duration && t >= v.duration) { v.__on = false; v.dispatchEvent(new Event("ended")); continue; }
+      if (Math.abs(v.currentTime - t) < 0.001 && v.readyState >= 2) continue;
+      seeks.push(new Promise((r) => { const done = () => r(); v.addEventListener("seeked", done, { once: true }); realTimeout(done, 4000); v.currentTime = t; }));
+    }
+    await Promise.all(seeks);
+  };
+  window.__frame = () => {
+    const cbs = [...rafs.values()];
+    rafs.clear();
+    for (const fn of cbs) { try { fn(now); } catch (e) { console.error(e); } }
+    pin();
+  };
+  window.__step = (dt, timersOnly) => {
     now += dt;
     for (let guard = 0; guard < 10000; guard++) {
       let pick = null;
@@ -109,6 +134,7 @@ const CLOCK = `(() => {
       if (t.every) t.at += t.every; else timers.delete(i);
       try { typeof t.fn === "function" && t.fn(...t.args); } catch (e) { console.error(e); }
     }
+    if (timersOnly) return;
     const cbs = [...rafs.values()];
     rafs.clear();
     for (const fn of cbs) { try { fn(now); } catch (e) { console.error(e); } }
@@ -123,11 +149,15 @@ await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: scale, mobile: false });
 await send("Emulation.setFocusEmulationEnabled", { enabled: true });
 await send("Page.addScriptToEvaluateOnNewDocument", { source: CLOCK });
-await send("Page.navigate", { url: "http://localhost:5173/vision-demo.html?film" });
+const PAGE = process.env.REC_PATH ?? "/vision-demo.html?film";
+const READY = process.env.REC_READY ?? ".vz-chair";
+await send("Page.navigate", { url: `${process.env.REC_ORIGIN ?? "http://localhost:5173"}${PAGE}` });
 for (let i = 0; i < 100; i++) {
   await sleep(150);
-  if (await evaluate("!!document.querySelector('.vz-chair') && !!window.__step").catch(() => false)) break;
+  if (await evaluate(`!!document.querySelector(${JSON.stringify(READY)}) && !!window.__step`).catch(() => false)) break;
 }
+// let the pictures load (in real time: the page's clock is still at 0)
+await evaluate("Promise.all([...document.images].filter((i) => !i.complete).map((i) => new Promise((r) => { i.onload = i.onerror = r; })))").catch(() => undefined);
 await sleep(400);
 
 const t0 = Date.now();
@@ -135,7 +165,10 @@ let filmNow = 0;
 for (let f = 0; f < frames; f++) {
   const dt = step * speedAt(filmNow);
   filmNow += dt;
-  await evaluate(`__step(${dt})`);
+  await evaluate(`__step(${dt}, true)`);
+  await evaluate("__settle()");
+  await evaluate("__videos()");
+  await evaluate("__frame()");
   await evaluate("__settle()");
   await evaluate("__pin()");
   const shot = await send("Page.captureScreenshot", { format: "png" });

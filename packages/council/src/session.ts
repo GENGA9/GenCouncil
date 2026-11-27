@@ -68,7 +68,7 @@ export interface ResumeInfo {
 export interface RuntimeState extends CouncilState {
   key: string;
   resume?: ResumeInfo;
-  chair: { provider: "claude" | "gpt" | "gemini"; model?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean; queued: string[] };
+  chair: { provider: "claude" | "gpt" | "gemini" | "grok"; model?: string; modelId?: string; effort?: string; advisor?: string; account?: string; sessionId?: string; busy: boolean; queued: string[] };
   /** tool/text events per minute for the last ACTIVITY_MINUTES minutes, per member */
   activity: Record<string, number[]>;
 }
@@ -299,6 +299,8 @@ export class AgendaRuntime extends EventEmitter {
       chair: {
         provider: this.chair.provider(),
         model: this.chair.model(),
+        // the version it ran as (only while the setting is the one it ran with)
+        modelId: session.modelId && session.model === this.chair.model() ? session.modelId : undefined,
         effort: this.chair.effort(),
         advisor: this.council.chairCfg().advisor,
         account: this.chair.account(),

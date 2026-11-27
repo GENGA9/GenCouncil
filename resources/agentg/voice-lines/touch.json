@@ -1,0 +1,486 @@
+{
+ "version": 1,
+ "note": "터치(클릭) 반응 대사의 녹음용 목록. ko/ja는 personas/reactions/<preset>.json 그대로, en은 ko 4줄의 번역(subtitle_ko에 원문). 앱의 personas/reactions는 ko/ja 5~8줄만 받으므로 en은 여기에만 둔다. 생성: tools/voice-lines/generate_el.py run --ids <id...>",
+ "lines": [
+  {
+   "id": "claudechan.touch.1",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "ko",
+   "text": "네, 여기 있어요. 무엇을 도와드릴까요?",
+   "file": "claudechan/touch_1_ko.mp3"
+  },
+  {
+   "id": "claudechan.touch.2",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "ko",
+   "text": "잠깐 쉬어 가셔도 괜찮아요.",
+   "file": "claudechan/touch_2_ko.mp3"
+  },
+  {
+   "id": "claudechan.touch.3",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "ko",
+   "text": "부르셨나요? 잘 듣고 있어요.",
+   "file": "claudechan/touch_3_ko.mp3"
+  },
+  {
+   "id": "claudechan.touch.4",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "ko",
+   "text": "오늘도 차근차근 해 봐요.",
+   "file": "claudechan/touch_4_ko.mp3"
+  },
+  {
+   "id": "claudechan.touch.5",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "ja",
+   "text": "はい、そばにいますよ。",
+   "subtitle_ko": "네, 곁에 있어요.",
+   "file": "claudechan/touch_5_ja.mp3"
+  },
+  {
+   "id": "claudechan.touch.6",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "ja",
+   "text": "ひと息つきましょうか。",
+   "subtitle_ko": "잠깐 숨 돌릴까요?",
+   "file": "claudechan/touch_6_ja.mp3"
+  },
+  {
+   "id": "claudechan.touch.7",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "en",
+   "text": "Yes, I'm right here. How can I help?",
+   "subtitle_ko": "네, 여기 있어요. 무엇을 도와드릴까요?",
+   "file": "claudechan/touch_7_en.mp3"
+  },
+  {
+   "id": "claudechan.touch.8",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "en",
+   "text": "It's okay to take a little break.",
+   "subtitle_ko": "잠깐 쉬어 가셔도 괜찮아요.",
+   "file": "claudechan/touch_8_en.mp3"
+  },
+  {
+   "id": "claudechan.touch.9",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "en",
+   "text": "Did you call me? I'm listening.",
+   "subtitle_ko": "부르셨나요? 잘 듣고 있어요.",
+   "file": "claudechan/touch_9_en.mp3"
+  },
+  {
+   "id": "claudechan.touch.10",
+   "char": "claudechan",
+   "event": "touch",
+   "preset": "kind-secretary",
+   "lang": "en",
+   "text": "Let's take it one step at a time today, too.",
+   "subtitle_ko": "오늘도 차근차근 해 봐요.",
+   "file": "claudechan/touch_10_en.mp3"
+  },
+  {
+   "id": "gpichan.touch.1",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "ko",
+   "text": "호출 확인했습니다.",
+   "file": "gpichan/touch_1_ko.mp3"
+  },
+  {
+   "id": "gpichan.touch.2",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "ko",
+   "text": "대기 중입니다. 말씀하십시오.",
+   "file": "gpichan/touch_2_ko.mp3"
+  },
+  {
+   "id": "gpichan.touch.3",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "ko",
+   "text": "다음 지시를 확인하겠습니다.",
+   "file": "gpichan/touch_3_ko.mp3"
+  },
+  {
+   "id": "gpichan.touch.4",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "ko",
+   "text": "준비됐습니다.",
+   "file": "gpichan/touch_4_ko.mp3"
+  },
+  {
+   "id": "gpichan.touch.5",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "ja",
+   "text": "確認しました。",
+   "subtitle_ko": "확인했습니다.",
+   "file": "gpichan/touch_5_ja.mp3"
+  },
+  {
+   "id": "gpichan.touch.6",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "ja",
+   "text": "次の指示をどうぞ。",
+   "subtitle_ko": "다음 지시를 말씀해 주십시오.",
+   "file": "gpichan/touch_6_ja.mp3"
+  },
+  {
+   "id": "gpichan.touch.7",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "en",
+   "text": "Call received.",
+   "subtitle_ko": "호출 확인했습니다.",
+   "file": "gpichan/touch_7_en.mp3"
+  },
+  {
+   "id": "gpichan.touch.8",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "en",
+   "text": "Standing by. Go ahead.",
+   "subtitle_ko": "대기 중입니다. 말씀하십시오.",
+   "file": "gpichan/touch_8_en.mp3"
+  },
+  {
+   "id": "gpichan.touch.9",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "en",
+   "text": "Ready for your next instruction.",
+   "subtitle_ko": "다음 지시를 확인하겠습니다.",
+   "file": "gpichan/touch_9_en.mp3"
+  },
+  {
+   "id": "gpichan.touch.10",
+   "char": "gpichan",
+   "event": "touch",
+   "preset": "brief-reporter",
+   "lang": "en",
+   "text": "Ready.",
+   "subtitle_ko": "준비됐습니다.",
+   "file": "gpichan/touch_10_en.mp3"
+  },
+  {
+   "id": "gemmini.touch.1",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "ko",
+   "text": "선배, 저 불렀어요?",
+   "file": "gemmini/touch_1_ko.mp3"
+  },
+  {
+   "id": "gemmini.touch.2",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "ko",
+   "text": "네! 바로 준비할게요!",
+   "file": "gemmini/touch_2_ko.mp3"
+  },
+  {
+   "id": "gemmini.touch.3",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "ko",
+   "text": "앗, 깜짝이야! 무슨 일이에요?",
+   "file": "gemmini/touch_3_ko.mp3"
+  },
+  {
+   "id": "gemmini.touch.4",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "ko",
+   "text": "잠깐 기지개 켜고 같이 힘내요!",
+   "file": "gemmini/touch_4_ko.mp3"
+  },
+  {
+   "id": "gemmini.touch.5",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "ja",
+   "text": "先輩、呼びました？",
+   "subtitle_ko": "선배, 부르셨어요?",
+   "file": "gemmini/touch_5_ja.mp3"
+  },
+  {
+   "id": "gemmini.touch.6",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "ja",
+   "text": "よし、一緒に頑張りましょう！",
+   "subtitle_ko": "좋아요, 같이 힘내요!",
+   "file": "gemmini/touch_6_ja.mp3"
+  },
+  {
+   "id": "gemmini.touch.7",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "en",
+   "text": "Senpai, did you call me?",
+   "subtitle_ko": "선배, 저 불렀어요?",
+   "file": "gemmini/touch_7_en.mp3"
+  },
+  {
+   "id": "gemmini.touch.8",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "en",
+   "text": "Yes! I'll get ready right away!",
+   "subtitle_ko": "네! 바로 준비할게요!",
+   "file": "gemmini/touch_8_en.mp3"
+  },
+  {
+   "id": "gemmini.touch.9",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "en",
+   "text": "Whoa, you startled me! What's up?",
+   "subtitle_ko": "앗, 깜짝이야! 무슨 일이에요?",
+   "file": "gemmini/touch_9_en.mp3"
+  },
+  {
+   "id": "gemmini.touch.10",
+   "char": "gemmini",
+   "event": "touch",
+   "preset": "cheerful-junior",
+   "lang": "en",
+   "text": "Let's stretch for a sec and keep going together!",
+   "subtitle_ko": "잠깐 기지개 켜고 같이 힘내요!",
+   "file": "gemmini/touch_10_en.mp3"
+  },
+  {
+   "id": "grokchan.touch.1",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "ko",
+   "text": "응? 나 찾았어?",
+   "file": "grokchan/touch_1_ko.mp3"
+  },
+  {
+   "id": "grokchan.touch.2",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "ko",
+   "text": "깜짝이야. 무슨 재밌는 일 있어?",
+   "file": "grokchan/touch_2_ko.mp3"
+  },
+  {
+   "id": "grokchan.touch.3",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "ko",
+   "text": "좋아, 잠깐 쉬었다 하자.",
+   "file": "grokchan/touch_3_ko.mp3"
+  },
+  {
+   "id": "grokchan.touch.4",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "ko",
+   "text": "나 여기 있어. 얘기해 봐.",
+   "file": "grokchan/touch_4_ko.mp3"
+  },
+  {
+   "id": "grokchan.touch.5",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "ja",
+   "text": "ん？何か面白いこと？",
+   "subtitle_ko": "응? 뭐 재밌는 일 있어?",
+   "file": "grokchan/touch_5_ja.mp3"
+  },
+  {
+   "id": "grokchan.touch.6",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "ja",
+   "text": "ちょっと休憩しようよ。",
+   "subtitle_ko": "잠깐 쉬자.",
+   "file": "grokchan/touch_6_ja.mp3"
+  },
+  {
+   "id": "grokchan.touch.7",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "en",
+   "text": "Hm? Were you looking for me?",
+   "subtitle_ko": "응? 나 찾았어?",
+   "file": "grokchan/touch_7_en.mp3"
+  },
+  {
+   "id": "grokchan.touch.8",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "en",
+   "text": "Whoa. Something fun going on?",
+   "subtitle_ko": "깜짝이야. 무슨 재밌는 일 있어?",
+   "file": "grokchan/touch_8_en.mp3"
+  },
+  {
+   "id": "grokchan.touch.9",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "en",
+   "text": "Okay, let's take a quick break.",
+   "subtitle_ko": "좋아, 잠깐 쉬었다 하자.",
+   "file": "grokchan/touch_9_en.mp3"
+  },
+  {
+   "id": "grokchan.touch.10",
+   "char": "grokchan",
+   "event": "touch",
+   "preset": "playful-friend",
+   "lang": "en",
+   "text": "I'm right here. Talk to me.",
+   "subtitle_ko": "나 여기 있어. 얘기해 봐.",
+   "file": "grokchan/touch_10_en.mp3"
+  },
+  {
+   "id": "dotchan.touch.1",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "ko",
+   "text": "부르셨습니까. 곁에 있겠습니다.",
+   "file": "dotchan/touch_1_ko.mp3"
+  },
+  {
+   "id": "dotchan.touch.2",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "ko",
+   "text": "필요하신 일을 말씀해 주십시오.",
+   "file": "dotchan/touch_2_ko.mp3"
+  },
+  {
+   "id": "dotchan.touch.3",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "ko",
+   "text": "잠시 쉬실 시간을 마련하겠습니다.",
+   "file": "dotchan/touch_3_ko.mp3"
+  },
+  {
+   "id": "dotchan.touch.4",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "ko",
+   "text": "차분히 진행하겠습니다.",
+   "file": "dotchan/touch_4_ko.mp3"
+  },
+  {
+   "id": "dotchan.touch.5",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "ja",
+   "text": "お呼びでしょうか。",
+   "subtitle_ko": "부르셨습니까?",
+   "file": "dotchan/touch_5_ja.mp3"
+  },
+  {
+   "id": "dotchan.touch.6",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "ja",
+   "text": "どうぞ、ごゆっくり。",
+   "subtitle_ko": "부디 편히 쉬십시오.",
+   "file": "dotchan/touch_6_ja.mp3"
+  },
+  {
+   "id": "dotchan.touch.7",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "en",
+   "text": "You called? I shall stay by your side.",
+   "subtitle_ko": "부르셨습니까. 곁에 있겠습니다.",
+   "file": "dotchan/touch_7_en.mp3"
+  },
+  {
+   "id": "dotchan.touch.8",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "en",
+   "text": "Please tell me what you require.",
+   "subtitle_ko": "필요하신 일을 말씀해 주십시오.",
+   "file": "dotchan/touch_8_en.mp3"
+  },
+  {
+   "id": "dotchan.touch.9",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "en",
+   "text": "I shall arrange a moment for you to rest.",
+   "subtitle_ko": "잠시 쉬실 시간을 마련하겠습니다.",
+   "file": "dotchan/touch_9_en.mp3"
+  },
+  {
+   "id": "dotchan.touch.10",
+   "char": "dotchan",
+   "event": "touch",
+   "preset": "calm-butler",
+   "lang": "en",
+   "text": "I shall proceed calmly.",
+   "subtitle_ko": "차분히 진행하겠습니다.",
+   "file": "dotchan/touch_10_en.mp3"
+  }
+ ]
+}

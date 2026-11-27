@@ -1,0 +1,111 @@
+{
+  "v": 1,
+  "name": "그록쨩",
+  "canvas": [
+    832,
+    1664
+  ],
+  "anchor": [
+    428,
+    1655
+  ],
+  "bubble_anchor": [
+    425,
+    39
+  ],
+  "regions": {
+    "skin": [
+      372,
+      208,
+      120,
+      32
+    ],
+    "eyes": [
+      364,
+      172,
+      144,
+      52
+    ],
+    "mouth": [
+      404,
+      228,
+      68,
+      36
+    ]
+  },
+  "masks": {
+    "skin": "masks/skin.png",
+    "eyes": "masks/eyes.png",
+    "mouth": "masks/mouth.png"
+  },
+  "layers": [
+    "base",
+    "skin",
+    "eyes",
+    "mouth",
+    "overlay"
+  ],
+  "states": {
+    "skin": [
+      "normal",
+      "blush"
+    ],
+    "eyes": [
+      "open",
+      "half",
+      "closed",
+      "smile",
+      "sad",
+      "wide",
+      "angry",
+      "sleepy"
+    ],
+    "mouth": [
+      "closed",
+      "open_m",
+      "open_l",
+      "smile_closed",
+      "smile_open_l",
+      "o"
+    ]
+  },
+  "mouth_sets": {
+    "normal": [
+      "closed",
+      "open_m",
+      "open_l"
+    ],
+    "smile": [
+      "smile_closed",
+      "smile_open_l"
+    ]
+  },
+  "hit_alpha_min": 1,
+  "x_note": "grok-x full-body rig (brain grok, body_mode full), natural pose B: hand on hip, weight on one leg (pose sheet B_hand_on_hip.png; jacket shorter than the approved front view). Long wavy pale blonde hair, two black X clips, grey eyes, choker, dog tag, black jacket over the shirt with the white X, belt, black mini skirt with chain, knee socks with a white X, platform boots. Face: the D impression of the bust (sleepy drooping lids, faint dark circles, lazy closed mouth), redrawn in the face masks only; the base is the neutral face (eyes/open, mouth/closed). Eyes add angry and sleepy to the usual six. anchor = sole line (y 1655) at the body centre x 428, bubble_anchor = top of the head. Built by tools/rig/build_rig.py; record tools/rig/grok_x_full_d_records.json (pose-B smug face: grok_x_full_records.json).",
+  "approved": {
+    "by": "",
+    "at": "",
+    "sha256": {
+      "base.png": "70e78ebba5e937c6df26b1f6ab6a54cd4794dad7efc652188793bba0c1f8bd88",
+      "eyes/angry.png": "d3a3a21b30fe170ed3119307141140612073d2dcee969bef9b658055813c5188",
+      "eyes/closed.png": "f0b6a683b95ee7a2a48ed60e127910d0e537778acd24fdc76b0bc9445094b2b7",
+      "eyes/half.png": "0ec792d4943d82fd9bbcbc3597d4b90e831d638c7ad665fd1a89c9630fd7e46f",
+      "eyes/open.png": "5912d25ee6ea89957981da447db6e929539ca6b2953293cb46ea4b9e567f5b0a",
+      "eyes/sad.png": "4f4f33a2313947c355f3c30106fc4e48476fa0222e7b284d2d679a3a964f42ad",
+      "eyes/sleepy.png": "1d37186a5ff2b222db8b8e5dcfb3b7a2d88e2f9c66e175df1cf3a232b566176a",
+      "eyes/smile.png": "fc0f43243d1bf8489e86be31e606c48f3e950bebe10fd543fcc1d1e2c49f9b8f",
+      "eyes/wide.png": "e3f623a51beb0dd37c2f2dc4a3313a5609c2c8961424b03cd4d35c564d3ed1b0",
+      "masks/eyes.png": "f6e962377255c467202895023bf95ea6cee705c4ee3f4c5454a58cd287ec5db7",
+      "masks/mouth.png": "7830eb6d9e9c70f20b9dfa135d54f4a93a7463e7502be78c2335b0ce20796983",
+      "masks/skin.png": "1f2d3ee84ef5f1ffab3677ea729c70213751dd12c36de751a3375c210c945124",
+      "mouth/closed.png": "5bb61bebd8eeba8c639036d79c3c476f0b9ed2eab5ebd08e6f4de467d568a6fc",
+      "mouth/o.png": "33dbb258c4f09e814a4c2f0eda969e97356f468f743f15ec40fcb3e3aa5b6f7a",
+      "mouth/open_l.png": "cc6f7ec946018971b1625c7753d7ad50aaac64ce05341fe17e4fdaf53a1d63b0",
+      "mouth/open_m.png": "125e76ede4fecdf128a40e792da549e916a7560e779af1e09ed345d26a914220",
+      "mouth/smile_closed.png": "66e74f3c0b9b8d6c6e6a73c13bacc300bc0a786c8ce4a219cd2e9b87a541f6d7",
+      "mouth/smile_open_l.png": "0c8cbcbc311bf5f4e4fb01e067ccc56a7b9e51ec463f47c945ae10e5f888a39e",
+      "skin/blush.png": "ae0af981837376923d92c878f5adeb457d608d2bacba50753883f59c6dd930e5",
+      "skin/normal.png": "f21d24f31bcb5c3c61319a83aba3e86abc6fbe44d2534abd3053da797e037af5"
+    }
+  }
+}
