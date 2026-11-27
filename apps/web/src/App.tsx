@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, connectWs } from "./api";
 import { familyOf, memberName } from "./model";
 import { AccountsView } from "./components/AccountsView";
@@ -8,10 +8,6 @@ import { MemoryView } from "./components/MemoryView";
 import { WikiView } from "./components/WikiView";
 import { RightPane } from "./components/RightPane";
 import { ModeSwitch, readMode, saveMode, type Mode } from "./components/ModeSwitch";
-import { AvatarView } from "./components/AvatarView";
-import { MeetingView } from "./components/MeetingView";
-import { VisionView } from "./components/VisionView";
-import { FloatingChair } from "./components/FloatingChair";
 import { IS_FLOAT, reportMode } from "./desktop";
 import { useT } from "./i18n";
 import { reloadGemini } from "./components/GeminiOptIn";
@@ -19,6 +15,14 @@ import type { ChairActions, MemberActions, ProjectActions } from "./vision/actio
 import type { VisionEvent } from "./vision/renderer";
 import { FolderTidyModal, GuidelinesModal, HandoverModal, MemberModal, NewProjectModal, ProjectSettingsModal, RelayModal } from "./components/Modals";
 import type { Attachment, ChatItem, Meeting, MeetingSettings, Member, Overview, RuntimeState, TranscriptEntry, UploadHooks, UsageSnapshot } from "./types";
+
+// The looks other than the text one are loaded when they are first shown: the text look, which every
+// visit starts from unless another was saved, does not wait for the avatar's lines and rigs or the
+// vision's renderer. (Their stylesheets stay in the first load: see main.tsx.)
+const AvatarView = lazy(() => import("./components/AvatarView").then((m) => ({ default: m.AvatarView })));
+const MeetingView = lazy(() => import("./components/MeetingView").then((m) => ({ default: m.MeetingView })));
+const VisionView = lazy(() => import("./components/VisionView").then((m) => ({ default: m.VisionView })));
+const FloatingChair = lazy(() => import("./components/FloatingChair").then((m) => ({ default: m.FloatingChair })));
 
 const MEMORY_KEY = "__memory__";
 const ACCOUNTS_KEY = "__accounts__";
@@ -107,12 +111,27 @@ export function App() {
     window.setTimeout(() => setToast(""), 4000);
   }, []);
 
-  const refreshOverview = useCallback(async () => {
-    try {
-      setOverview(await api.overview());
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) setAuthed(false);
+  // several events in a row (a member starts, the chair answers, …) ask for the overview once:
+  // a call that arrives while one is on its way is answered by one more fetch after it
+  const overviewLoad = useRef<{ running: Promise<void> | null; again: boolean }>({ running: null, again: false });
+  const refreshOverview = useCallback((): Promise<void> => {
+    const o = overviewLoad.current;
+    if (o.running) {
+      o.again = true;
+      return o.running;
     }
+    o.running = (async () => {
+      do {
+        o.again = false;
+        try {
+          setOverview(await api.overview());
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 401) setAuthed(false);
+        }
+      } while (o.again);
+      o.running = null;
+    })();
+    return o.running;
   }, []);
 
   const loadAgenda = useCallback(
@@ -149,7 +168,7 @@ export function App() {
 
   const refreshState = useCallback(async (key: string) => {
     try {
-      const r = await api.agenda(key);
+      const r = await api.agendaState(key);
       // a late answer for an agenda that is no longer open must not overwrite the current one
       if (key !== selectedRef.current) return;
       setState(r.state);
@@ -533,10 +552,9 @@ export function App() {
     onFinish: async () => {
       if (!selected || !confirm(t("안건 브랜치를 베이스 브랜치에 머지하고 worktree를 정리합니다. 계속할까요?"))) return;
       if (!confirm(t("안건을 종료할까요? 의장이 회고(교훈·모델 성향을 공유 기억에 제안)를 먼저 하고, 안건 브랜치를 베이스 브랜치에 합친 뒤 닫습니다."))) return;
-      const retro = true;
       try {
-        if (retro) notify(t("회고 중… 끝나면 종료합니다."));
-        await api.finish(selected, retro);
+        notify(t("회고 중… 끝나면 종료합니다."));
+        await api.finish(selected, true);
         notify(t("안건을 종료했습니다."));
         void refreshOverview();
         void loadAgenda(selected);
@@ -590,10 +608,16 @@ export function App() {
     />
   );
 
-  if (IS_FLOAT) return <FloatingChair overview={overview} onPick={setSelected} state={shownState} chat={chat} subscribe={subscribeVision} onSend={send} chair={chairActions} toast={toast} />;
+  if (IS_FLOAT)
+    return (
+      <Suspense fallback={null}>
+        <FloatingChair overview={overview} onPick={setSelected} state={shownState} chat={chat} subscribe={subscribeVision} onSend={send} chair={chairActions} toast={toast} />
+      </Suspense>
+    );
 
   return (
     <div className={`app ${mobile ? "mobile" : ""} ${mode.room !== "work" || mode.look !== "text" ? "is-vision" : ""}`}>
+      <Suspense fallback={null}>
       {mode.room === "meeting" ? (
         <MeetingView
           look={mode.look}
@@ -708,6 +732,7 @@ export function App() {
           <aside className="pane right">{right}</aside>
         </>
       )}
+      </Suspense>
       {toast && <div className="toast">{toast}</div>}
       {modal?.kind === "project" && (
         <NewProjectModal

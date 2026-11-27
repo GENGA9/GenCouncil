@@ -29,7 +29,6 @@ export type DayTime = "day" | "dusk" | "night";
 
 export const seasonOf = (month: number): Season => (month >= 2 && month <= 4 ? "spring" : month >= 5 && month <= 7 ? "summer" : month >= 8 && month <= 10 ? "autumn" : "winter");
 export const timeOf = (hour: number): DayTime => (hour >= 7 && hour < 17 ? "day" : (hour >= 17 && hour < 19) || (hour >= 5 && hour < 7) ? "dusk" : "night");
-export const SEASON_KO: Record<Season, string> = { spring: "봄", summer: "여름", autumn: "가을", winter: "겨울" };
 
 const art = (file: string) => `/avatar/study/${file}.webp?v=${STUDY.rev}`;
 const [WX, WY, WW, WH] = STUDY.window;

@@ -457,9 +457,10 @@ export class TelegramBridge {
 
   /** push a runtime event: a question waiting for the user's decision always goes out; everything else only when automatic sending is on for the agenda */
   notify(key: string, e: RuntimeEvent): void {
-    if (!this.isAuto(key) && e.type !== "chair:ask") return;
+    // most events are noise here: tell that first, before isAuto reads the agenda from disk
     const text = TelegramBridge.format(key, e);
     if (!text) return;
+    if (e.type !== "chair:ask" && !this.isAuto(key)) return;
     if (e.type === "chair:ask" && e.options?.length) {
       void this.sendFor(key, text, { reply_markup: { inline_keyboard: this.registerAsk(key, e.question, e.options) } });
       return;

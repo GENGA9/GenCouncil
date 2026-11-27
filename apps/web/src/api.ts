@@ -94,6 +94,8 @@ export const api = {
   createAgenda: (id: string, title?: string, goals?: string[]) =>
     call<{ key: string }>("POST", `/api/projects/${encodeURIComponent(id)}/agendas`, { title, goals }),
   agenda: (key: string) => call<{ state: RuntimeState; transcript: TranscriptEntry[]; firstTurn: boolean }>("GET", a(key)),
+  /** the state alone, for refreshing while members work (the server skips reading the transcript) */
+  agendaState: (key: string) => call<{ state: RuntimeState; firstTurn: boolean }>("GET", `${a(key)}?transcript=0`),
   chat: (key: string, message: string, attachments: Attachment[] = []) => call<{ started: boolean; queued?: boolean }>("POST", `${a(key)}/chat`, { message, attachments }),
   stopChair: (key: string) => call<{ stopped: boolean }>("POST", `${a(key)}/chair/stop`),
   clearQueue: (key: string) => call<{ cleared: number }>("POST", `${a(key)}/chat/queue/clear`),

@@ -15,8 +15,8 @@ Language is not part of the request (OpenAI contract). It comes from the voice n
 Listens on 127.0.0.1 only (other hosts are refused).
 
 Run (example):
-  <venv>/Scripts/python.exe -I -X utf8 tools/tts-adapters/supertonic/server.py --port 18880 \
-      --model-dir %LOCALAPPDATA%/Agentg/experiments/tts/supertonic/model
+  <venv>/Scripts/python.exe -I -X utf8 tools/tts/supertonic/server.py --port 18880 \
+      --model-dir %USERPROFILE%/.gencouncil/tts/supertonic/model
 """
 import argparse
 import io

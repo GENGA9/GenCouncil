@@ -63,6 +63,7 @@ const fableLim = normalizeLimits({ claude: { maxMembers: 1, maxModel: "fable" } 
 check("fable main takes no advisor", throws(() => resolveAdvisor("fable", "fable", fableLim), /without an advisor/) && resolveAdvisor("fable", "none", fableLim) === undefined);
 check("opus main may take fable advisor", resolveAdvisor("opus", "fable", fableLim) === "fable");
 check("gpt display name", memberDisplayName({ id: "gpt-1", provider: "gpt", model: "gpt-6.1-sol" }) === "GPT-6.1 Sol");
+check("a grok member without a model is shown as Grok", memberDisplayName({ id: "grok-1", provider: "grok" }) === "Grok");
 check("terra display name", memberDisplayName({ id: "gpt-2", provider: "gpt", model: "gpt-6.1-terra" }) === "GPT-6.1 Terra");
 
 // Hydrogen is the middle workhorse; old Flash/Pro limits keep their meaning.

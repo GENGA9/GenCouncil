@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { GeminiOptIn as Setting } from "../types";
-import { locale, t as tr, useT } from "../i18n";
+import { locale, useT } from "../i18n";
 import { rich as richText } from "../i18n/rich";
 
 const TERMS = "https://antigravity.google/terms";

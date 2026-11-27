@@ -2,8 +2,10 @@
  * CLI drivers. Every member and the chair is a headless CLI process:
  *   claude -p ... --output-format stream-json     (uses the user's Claude Code login)
  *   agy -p ... --output-format stream-json        (Antigravity CLI, the user's Google login)
+ *   codex exec --json ...                         (the user's ChatGPT login)
+ *   grok ...                                      (xAI Grok Build, the user's SuperGrok login)
  * Multi-account works by pointing the process at another config dir
- * (CLAUDE_CONFIG_DIR / HOME+USERPROFILE for gemini).
+ * (CLAUDE_CONFIG_DIR / HOME+USERPROFILE for gemini / CODEX_HOME / GROK_HOME).
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { assertGeminiEnabled } from "./optin.js";
@@ -55,12 +57,21 @@ const INSTALL_DIRS: Record<string, string[]> = {
   grok: [path.join(process.env.USERPROFILE ?? process.env.HOME ?? "", ".grok", "bin")],
 };
 
+/** where each CLI was found last, for the PATH it was found under: every spawn asks, and the walk over PATH is long */
+const found = new Map<string, { PATH: string; full: string }>();
+
 export function findExecutable(name: string): string | null {
-  const dirs = [...(process.env.PATH ?? "").split(path.delimiter).filter(Boolean), ...(INSTALL_DIRS[name] ?? [])];
+  const PATH = process.env.PATH ?? "";
+  const hit = found.get(name);
+  if (hit && hit.PATH === PATH && fs.existsSync(hit.full)) return hit.full;
+  const dirs = [...PATH.split(path.delimiter).filter(Boolean), ...(INSTALL_DIRS[name] ?? [])];
   for (const d of dirs) {
     for (const ext of exts) {
       const full = path.join(d, name + ext);
-      if (fs.existsSync(full)) return full;
+      if (fs.existsSync(full)) {
+        found.set(name, { PATH, full });
+        return full;
+      }
     }
   }
   return null;

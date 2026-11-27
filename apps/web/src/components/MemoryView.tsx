@@ -19,9 +19,11 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
   const [curate, setCurate] = useState<CurateStatus | null>(null);
   useEffect(() => {
     let timer: number | undefined;
+    let alive = true;
     const poll = async () => {
       try {
         const s = await api.curateStatus();
+        if (!alive) return;
         setCurate((prev) => {
           if (prev?.running && !s.running) {
             notify(
@@ -41,11 +43,14 @@ export function MemoryView({ notify }: { notify: (m: string) => void }) {
         });
         timer = window.setTimeout(poll, s.running ? 3000 : 15000);
       } catch {
-        timer = window.setTimeout(poll, 15000);
+        if (alive) timer = window.setTimeout(poll, 15000);
       }
     };
     void poll();
-    return () => window.clearTimeout(timer);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
   }, []);
   const startCurate = async () => {
     try {

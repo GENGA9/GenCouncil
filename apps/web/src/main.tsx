@@ -1,6 +1,13 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+// the looks' stylesheets, ahead of styles.css as they were when the looks were part of the first
+// load: the looks themselves are loaded later (App.tsx), and rules of the same weight must keep their order
+import "./vision/vision.css";
+import "./vision/sheet.css";
+import "./avatar/avatar.css";
+import "./avatar/meeting.css";
+import "./components/float.css";
 import "./styles.css";
 import { applyTheme } from "./theme";
 

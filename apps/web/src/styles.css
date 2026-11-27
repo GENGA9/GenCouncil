@@ -149,7 +149,6 @@ h4 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .mode-row .mode-switch .ms-group + .ms-sep + .ms-group { flex: 3; }
 .mode-row .mode-switch .ms-sep { width: 1px; height: auto; margin: 4px 2px; }
 .mode-row .mode-switch .ms-icon { display: none; }
-.tabs button.tab-vision { flex: none; width: 46px; color: var(--run); }
 .tree { flex: 1; overflow: auto; min-height: 0; }
 /* on a phone the 안건 tab scrolls as one page: the agenda tree takes the height it needs and the wiki,
    accounts and usage follow it, instead of the tree squeezed into what the footer leaves. The mode
@@ -204,7 +203,6 @@ button.tg-auto:disabled.on { opacity: 1; }
 .grid-spinner i:nth-child(4) { animation-delay: 0.4s; }
 .grid-spinner i:nth-child(3) { animation-delay: 0.6s; }
 @keyframes gc-fill { 0%, 49.9% { background: currentColor; } 50%, 100% { background: transparent; } }
-.pinned-idle { color: var(--muted); margin-right: 6px; }
 .agenda-title { display: inline-flex; align-items: center; }
 .pinned-title { display: flex; align-items: center; }
 .goals { margin: 12px 14px 0; border: 2px solid var(--border-strong); border-radius: var(--radius); padding: 10px 12px; max-height: 32vh; overflow: auto; }

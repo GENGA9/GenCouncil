@@ -67,6 +67,8 @@ check("guidelines persisted", (await api("GET", `/api/projects/${encodeURICompon
 
 const a = await api("GET", `/api/a/${encodeURIComponent(proj.json.id)}/${encodeURIComponent("첫-안건")}`);
 check("agenda opens runtime", a.status === 200 && a.json.firstTurn === true && a.json.state.agenda.branch === "agenda/첫-안건", JSON.stringify(a.json).slice(0, 200));
+const aState = await api("GET", `/api/a/${encodeURIComponent(proj.json.id)}/${encodeURIComponent("첫-안건")}?transcript=0`);
+check("state alone, without the transcript", aState.status === 200 && aState.json.state.agenda.branch === "agenda/첫-안건" && !("transcript" in aState.json) && Array.isArray(a.json.transcript));
 check("integration worktree created", fs.existsSync(path.join(repo, ".worktrees", "첫-안건", "_integration", "a.txt")));
 check("chair model from project", a.json.state.chair.model === "claude-sonnet-5-5");
 

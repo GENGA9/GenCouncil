@@ -50,10 +50,6 @@ export interface ProjectConfig {
     defaultProvider: CliProvider;
     /** per-provider member caps; the chair picks models/efforts within these */
     limits?: Partial<Limits>;
-    claudeModel?: string;
-    geminiModel?: string;
-    /** advisor for claude members (default opus); "" = off */
-    claudeAdvisor?: string;
     /** give claude members read-only Haiku explorer subagents (search / grep / docs); default true */
     explorers?: boolean;
     /** extra Claude Code flags for members, e.g. ["--max-turns","60"] */
@@ -259,7 +255,7 @@ function cap(s: string): string {
 /** What the UI shows for a member: the model it actually runs, not "claude-1". */
 export function memberDisplayName(m: Pick<MemberRecord, "id" | "provider" | "model" | "label">): string {
   if (m.provider === "relay") return m.label || "relay";
-  return prettyModel(m.model) ?? (m.provider === "claude" ? "Claude" : m.provider === "gpt" ? "GPT" : "Gemini");
+  return prettyModel(m.model) ?? (m.provider === "claude" ? "Claude" : m.provider === "gpt" ? "GPT" : m.provider === "grok" ? "Grok" : "Gemini");
 }
 
 /**
@@ -508,9 +504,6 @@ export class AgendaStore {
     return store;
   }
 
-  exists(): boolean {
-    return fs.existsSync(path.join(this.dir, "agenda.json"));
-  }
 
   agenda(): AgendaConfig {
     return readJson<AgendaConfig>(path.join(this.dir, "agenda.json"), null as unknown as AgendaConfig);

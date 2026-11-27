@@ -2,7 +2,7 @@
 .vz {
   position: fixed; inset: 0; overflow: hidden; background: #05060e; color: #e8eaff; color-scheme: dark;
   --gold: #ffe09e; --ink: rgba(10, 12, 28, 0.58); --line: rgba(255, 255, 255, 0.1); --dim: rgba(214, 220, 255, 0.62);
-  --console-w: clamp(330px, 30vw, 430px); --sheet-h: 150px;
+  --console-w: clamp(330px, 30vw, 430px);
   font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
 }
 .vz button { background: none; border: none; border-radius: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
@@ -132,11 +132,6 @@
 
 /* bottom of the picture: the chair's voice (console away), and the four steps of the loop */
 .vz-bottom { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(760px, calc(100% - 28px)); display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 2; pointer-events: none; }
-.vz .vz-voice { max-width: 620px; display: flex; align-items: baseline; gap: 10px; text-align: left; font-size: 13px; line-height: 1.5; color: #eef0ff; text-shadow: 0 1px 5px #000, 0 0 14px #000; pointer-events: auto; }
-.vz-voice-tag { flex: none; font-size: 10px; letter-spacing: 0.3em; color: var(--gold); }
-.vz-voice-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.vz .vz-voice.ask { padding: 9px 14px; border-radius: 12px; background: rgba(46, 29, 6, 0.88); border: 1px solid rgba(255, 190, 96, 0.45); }
-.vz-voice.ask .vz-voice-tag { color: #ffc266; }
 .vz-stages { list-style: none; margin: 0; padding: 4px; display: flex; gap: 4px; border-radius: 999px; background: var(--ink); border: 1px solid var(--line); backdrop-filter: blur(10px); pointer-events: auto; max-width: 100%; }
 .vz-stages li { display: flex; align-items: center; gap: 7px; padding: 6px 13px 6px 7px; border-radius: 999px; font-size: 12px; color: rgba(214, 220, 255, 0.42); white-space: nowrap; transition: color 0.4s, background 0.4s, box-shadow 0.4s; }
 .vz-stages b { font-weight: 600; letter-spacing: 0.12em; }
@@ -145,8 +140,6 @@
 .vz-stages li.on { color: #fff6dd; background: linear-gradient(135deg, rgba(255, 224, 158, 0.22), rgba(150, 130, 255, 0.2)); box-shadow: inset 0 0 0 1px rgba(255, 224, 158, 0.4), 0 0 18px rgba(255, 224, 158, 0.16); }
 .vz-stages li.on .vz-stage-n { background: var(--gold); border-color: var(--gold); color: #1a1406; }
 .vz-stages li.on .vz-stage-text { display: inline; color: rgba(255, 246, 221, 0.8); }
-.vz .vz-console-tab { position: absolute; right: 0; top: 34%; transform: translateY(-50%); padding: 12px 10px 12px 12px; border-radius: 14px 0 0 14px; background: var(--ink); border: 1px solid var(--line); border-right: none; backdrop-filter: blur(10px); font-size: 12px; letter-spacing: 0.1em; color: #dcd6ff; z-index: 3; }
-.vz .vz-console-tab:hover { color: #fff; background: rgba(150, 130, 255, 0.22); }
 
 /* ---- the conversation ---- */
 .vz-console { position: absolute; top: 0; right: 0; bottom: 0; width: var(--console-w); display: flex; flex-direction: column; min-height: 0; background: linear-gradient(180deg, rgba(16, 18, 40, 0.96), rgba(7, 8, 20, 0.98)); border-left: 1px solid var(--line); box-shadow: -24px 0 70px rgba(0, 0, 0, 0.45); z-index: 5; }
@@ -160,7 +153,6 @@
 @keyframes vz-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
 .vz-msg-who { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); display: flex; align-items: center; gap: 6px; }
 .vz-msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.vz-msg-att { color: var(--dim); font-size: 11px; }
 .vz-msg.assistant { padding: 10px 12px; border-radius: 4px 14px 14px 14px; background: linear-gradient(135deg, rgba(255, 224, 158, 0.11), rgba(255, 224, 158, 0.04)); border: 1px solid rgba(255, 224, 158, 0.2); }
 .vz-msg.assistant .vz-msg-who { color: var(--gold); }
 .vz-msg.user { align-self: flex-end; max-width: 88%; padding: 9px 12px; border-radius: 14px 14px 4px 14px; background: linear-gradient(135deg, rgba(150, 130, 255, 0.34), rgba(110, 140, 255, 0.24)); border: 1px solid rgba(180, 170, 255, 0.3); }
@@ -217,10 +209,6 @@
 .vz .vz-send { flex: none; width: 36px; height: 36px; border-radius: 50%; font-size: 14px; color: #14102e; background: linear-gradient(135deg, #cfc6ff, #8fa4ff); box-shadow: 0 0 18px rgba(150, 130, 255, 0.5); transition: transform 0.15s, box-shadow 0.2s; }
 .vz .vz-send:hover:not(:disabled) { transform: scale(1.08); box-shadow: 0 0 26px rgba(170, 150, 255, 0.8); }
 .vz .vz-send:disabled { box-shadow: none; }
-.vz .vz-last { display: block; width: 100%; padding: 0 14px 8px; text-align: left; max-height: 44px; overflow: hidden; }
-.vz .vz-last .vz-msg { animation: none; padding: 0; border: none; background: none; }
-.vz .vz-last .vz-msg-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vz .vz-workshop-link { display: none; }
 
 /* on a phone the conversation is a sheet over the bottom of the picture */
 .vz.narrow .vz-console { left: 0; top: auto; width: auto; height: min(74vh, calc(100% - 70px)); animation: vz-sheet-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1) both; border-left: none; border-top: 1px solid var(--line); border-radius: 20px 20px 0 0; box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.55); padding-bottom: env(safe-area-inset-bottom); transition: height 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }

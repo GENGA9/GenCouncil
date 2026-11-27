@@ -2,7 +2,7 @@
  * Memory curator: a one-shot session with owner rights on the shared memory. It reviews
  * pending proposals — improves, merges, approves or rejects them — and tidies verified
  * entries. Members and the chair only propose; this is the single place that approves.
- * Routine runs use Opus and only see entries picked by code; Fable runs the full check.
+ * Routine runs use Opus and only see entries picked by code.
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -57,19 +57,7 @@ export interface MemoryProjectInfo {
   name: string;
 }
 
-/** size of the verified memory, shown to the reorganize run so it knows how hard to compress */
-export interface MemoryStats {
-  entries: number;
-  common: number;
-  project: number;
-  avgTitle: number;
-  longTitles: number;
-  avgBody: number;
-  longBodies: number;
-  totalChars: number;
-}
-
-/** compression targets for the reorganize run */
+/** length targets the tidy holds entries to */
 export const COMPRESS_TARGETS = { title: 45, commonBody: 600, projectBody: 350, personaBody: 500 };
 
 /** an old solution and the newer one that replaced it: keep one entry, the old way as a single line */
@@ -78,47 +66,6 @@ const SUPERSEDE_STEP = `2-1. 같은 주제의 낡은 해결법: 같은 문제·�
    - 그다음 옛 항목을 memory_retire(id, reason: "대체됨: <무엇이 바뀌었나 한 줄>", merged_into: 새 id)로 정리한다.
    - 둘이 환경(OS·계정·프로젝트·모델)에 따라 각각 맞는 것이면 대체가 아니다: 한 항목에 "A일 때 / B일 때"로 정리하거나 그대로 둔다.
    - 어느 쪽이 맞는지 본문과 날짜로 판단이 안 서면 지우지 않고 보고서에 "확인 필요: <id들>"로 남긴다.`;
-
-export function reorganizePrompt(projects: MemoryProjectInfo[], stats?: MemoryStats, retireBudget?: number, pruneBudget?: number): string {
-  const list = projects.length ? projects.map((p) => `- ${p.key} (${p.name})`).join("\n") : "- (등록된 프로젝트 없음)";
-  const t = COMPRESS_TARGETS;
-  const now = stats
-    ? `지금 상태: 승인된 기억 ${stats.entries}개(공용 ${stats.common}, 프로젝트 ${stats.project}), 전체 ${stats.totalChars.toLocaleString()}자. 제목 평균 ${stats.avgTitle}자(60자 넘는 것 ${stats.longTitles}개), 본문 평균 ${stats.avgBody}자(1500자 넘는 것 ${stats.longBodies}개).`
-    : "";
-  return `너는 공유 기억(Space Memory)의 관리자다. 이번 일은 승인된(verified) 기억에서 일회성 항목을 쳐내고, 남은 것을 "찾기 쉽고 짧게" 정리하는 것이다. 목표는 다시 쓸 지식만 잘 찾히게 남기는 것이다. 이 정리를 여러 번 반복해 돌려도 다시 쓸 지식은 줄면 안 된다.
-${now}
-
-${KEEP_TEST}
-
-원칙
-- 항목 수 목표는 없다. 위 기준으로 쳐낼 것만 쳐내고, 다시 쓸 지식(서로 다른 사실·절차)은 그대로 지킨다. 그 밖에 줄이는 것은 새 해결법에 밀린 옛 해결법, 반복된 말과 경위뿐이다.
-- 한 항목 = 한 주제(한 도구, 한 절차, 한 시스템·루틴, 한 모델). 제목에 서로 다른 주제가 "·"로 3개 넘게 나열되어 있거나, 본문이 여러 주제를 다루면 그 항목은 주제별로 **나눈다**.
-- 합치는 것은 **같은 절차·같은 사실이 실제로 겹칠 때만**이다. 비슷한 분야라는 이유로 다른 주제를 한 항목에 묶지 않는다.
-- 제목: ${t.title}자 이내, 나중에 검색할 핵심어 문장.
-- 본문: 공용 ${t.commonBody}자, 프로젝트 ${t.projectBody}자, 모델 성향 ${t.personaBody}자 안팎. "## 문제 / ## 해결 / ## 적용" 각 1~3줄 글머리표. 정확한 명령·경로·옵션·주소·값·오류 문구·하지 말 것은 반드시 남긴다. 경위·날짜별 기록·반복은 지운다. 한 주제인데 사실이 많아 길어지면 줄이려고 사실을 빼지 말고, 하위 주제로 나눈다.
-- 이미 위 기준을 만족하는 항목은 건드리지 않는다. 고칠 것이 없으면 "변경 없음"이라고 보고하고 끝낸다.
-
-프로젝트 키(project 필드에 쓰는 값):
-${list}
-
-순서
-1. 한 번에 200개까지만 나오므로 나눠서 전부 본다: memory_list(status: verified, scope: common, limit: 200), 그리고 위 프로젝트 키마다 memory_list(status: verified, project: <키>, limit: 200). 일회성으로 보이는 항목, 기준을 넘는 항목(여러 주제를 묶은 것, 너무 긴 것, 제목이 긴 것), 진짜 중복을 고른다. 일회성은 제목만으로 정하지 말고 memory_read로 본문을 읽고 정한다.
-2. 일회성 항목: 일반 교훈이 있으면 memory_update로 교훈만 남기고, 없으면 memory_retire(id, reason: "일회성: <한 줄 이유>")로 쳐낸다.
-${SUPERSEDE_STEP}
-3. 여러 주제를 묶은 항목을 나눌 때:
-   - memory_read로 본문을 읽는다. 예전에 이 항목으로 합쳐진 원본들도 찾아 읽는다: memory_list(status: rejected, limit: 200)에서 mergedInto가 이 항목 id인 것. 합치면서 빠졌던 세부 사실(명령·주소·값)을 거기서 되살린다.
-   - 주제마다 memory_write로 새 항목을 만든다(type, scope, project, tags를 원래대로 맞추고, 제목·본문은 위 기준).
-   - 새 항목을 모두 만든 뒤에 원래 항목을 memory_retire(id, reason: "분할: <새 id들>")로 정리한다. 나눈 항목의 사실이 새 항목들에 빠짐없이 들어갔는지 먼저 확인한다.
-4. 진짜 중복을 합칠 때: 남길 항목에 memory_update(body)로 두 쪽의 고유한 사실을 모두 담고, 나머지는 memory_retire(id, reason: "중복: <남긴 id>", merged_into: 남긴 id).
-5. 혼자 너무 긴 항목은 memory_update로 경위·반복만 지워 줄인다. 사실은 지우지 않는다.
-6. scope: common(다른 프로젝트에서도 그대로 쓰는 것: 공통 도구 사용법, 외부 서비스 절차, OS·셸·git·Node·테스트 도구 문제, NAS·계정·GenCouncil 사용법, 모델 성향) / project(한 프로젝트의 코드·데이터·도메인 사실). project 값은 위 키 중 하나로.
-7. 일회성·대체된 항목이 아니면 틀린 것이 확실할 때만 이유를 적어 memory_retire 한다. "오래돼 보인다"는 이유만으로는 지우지 않는다(같은 주제의 더 새 항목이 있을 때만 2-1로 대체한다).${retireBudget ? `
-8. 이번 정리에서 분할·일회성 외의 정리(합치기·삭제)는 최대 ${retireBudget}개까지만 된다. 그 이상은 도구가 거절한다. 거절되면 더 합치지 말고 나누기·줄이기만 한다.` : ""}${pruneBudget ? `
-9. 일회성 쳐내기와 대체된 항목 정리는 합쳐서 이번에 최대 ${pruneBudget}개까지만 된다. 나머지는 다음 정리에 맡긴다.` : ""}
-10. 새 사실을 지어내지 않는다. 뜻을 바꾸지 않는다.
-11. 매번 분량을 줄인다: 대체된 옛 해결법, 일회성 기록, 경위·날짜별 기록·반복 문장을 걷어내 정리 뒤 전체 글자 수가 정리 전보다 줄어야 한다. 단, 다시 쓸 사실(명령·경로·값·하지 말 것)은 글자 수를 위해 빼지 않는다.
-12. 끝나면 한국어로 보고한다: 전과 후의 항목 수와 전체 글자 수(memory_list 결과로 어림), 쳐낸 항목(id와 제목 전부), 대체한 항목(옛 id → 남긴 id, 무엇이 바뀌었나 한 줄), 확인 필요로 남긴 충돌, 교훈만 남긴 항목, 나눈 항목(원래 → 새 항목들), 합친 항목, 줄이기만 한 항목, 되살린 세부 사실이 있으면 그 내용.`;
-}
 
 // ---------- incremental tidy: code picks the entries, the model only sees those ----------
 
@@ -222,15 +169,14 @@ export function selectTidyCandidates(store: MemoryStore, limit = TIDY_BATCH): { 
 }
 
 /**
- * After a successful run: the candidates, every entry the run wrote or edited, and (for the
- * full check) everything else count as seen.
+ * After a successful run: the candidates and every entry the run wrote or edited count as seen.
  */
-export function markReviewed(store: MemoryStore, opts: { before: Record<string, string>; candidates?: string[]; all?: boolean }): void {
+export function markReviewed(store: MemoryStore, opts: { before: Record<string, string>; candidates?: string[] }): void {
   const reviewed = loadReviewed() ?? {};
   const now = verifiedHashes(store);
   for (const id of Object.keys(reviewed)) if (!now[id]) delete reviewed[id];
   for (const [id, hash] of Object.entries(now)) {
-    if (opts.all || opts.candidates?.includes(id) || opts.before[id] !== hash) reviewed[id] = hash;
+    if (opts.candidates?.includes(id) || opts.before[id] !== hash) reviewed[id] = hash;
   }
   saveReviewed(reviewed);
 }
@@ -281,26 +227,6 @@ export interface CuratorResult {
 
 export function curatorLogFile(): string {
   return path.join(spaceDir(), "curator", "curator.log");
-}
-
-/** Full check: Fable reads every verified entry, relabels scopes, splits bundles and merges duplicates. */
-export function runReorganize(
-  projects: MemoryProjectInfo[],
-  opts: { account?: string; model?: string; effort?: string; stats?: MemoryStats; onEvent?: (e: ClaudeEvent) => void } = {},
-): Promise<CuratorResult> {
-  // merges and deletions per run are capped so repeated runs cannot shrink the memory; splits do not count
-  const retireBudget = Math.max(5, Math.ceil((opts.stats?.entries ?? 25) * 0.2));
-  // one-off entries have their own larger cap: a backlog goes in a few runs, and retired entries can be restored
-  const pruneBudget = Math.max(5, Math.ceil((opts.stats?.entries ?? 25) * 0.4));
-  return runCurator({
-    model: FULL_CHECK_MODEL,
-    effort: FULL_CHECK_EFFORT,
-    ...opts,
-    prompt: reorganizePrompt(projects, opts.stats, retireBudget, pruneBudget),
-    label: "reorganize",
-    retireBudget,
-    pruneBudget,
-  });
 }
 
 /** Incremental tidy: the routine model looks only at the candidates code picked. */

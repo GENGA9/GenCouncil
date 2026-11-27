@@ -11,7 +11,7 @@ import type { VisionEvent } from "../vision/renderer";
 import { VisionSheet, type SheetAt, type SheetTab } from "../vision/Sheet";
 import { UsageMini } from "../vision/UsageMini";
 import { isActive, type TintId, type Rgb } from "../vision/scene";
-import { artUrl, CAST, castOf, chairCast, feetOf, pick, STANDING, topOf, type Character } from "../avatar/cast";
+import { artUrl, castOf, chairCast, feetOf, pick, STANDING, topOf, type Character } from "../avatar/cast";
 import { AvatarMenu, chairFigure, useAvatarPrefs, useVoice, type Seat } from "../avatar/settings";
 import { ChestArt, type GazeBus } from "../avatar/chest";
 import { DanceArt, danceVideo, type Dance } from "../avatar/dance";
@@ -1623,7 +1623,6 @@ export function AvatarView({ state, overview, selected, chat, wsUp, loading, fir
               </div>
               {shown.map((s) => {
                 const b = bubbles.get(s.member.id);
-                const face = s.leaving === "done" || s.leaving === "fail" || b?.kind === "done" ? "emote" : "smile";
                 return (
                   <div
                     key={s.member.id}

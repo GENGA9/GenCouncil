@@ -6,7 +6,7 @@ import path from "node:path";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "gencouncil-tidy-"));
 process.env.GENCOUNCIL_HOME = home;
 const { MemoryStore } = await import("@gencouncil/core");
-const { selectTidyCandidates, markReviewed, verifiedHashes, tidyPrompt, reorganizePrompt, curatorPrompt, loadReviewed } = await import("@gencouncil/council");
+const { selectTidyCandidates, markReviewed, verifiedHashes, tidyPrompt, curatorPrompt, loadReviewed } = await import("@gencouncil/council");
 
 let failed = 0;
 const check = (name, cond, extra = "") => {
@@ -57,15 +57,8 @@ check("batch limit keeps the rest for later", sel.candidates.length === 3 && sel
 const prompt = tidyPrompt([{ key: "demo", name: "Demo" }], sel.candidates, 3);
 check("prompt lists only the candidates", sel.candidates.every((c) => prompt.includes(c.id)) && !prompt.includes(long.meta.id));
 
-check("every memory pass applies the one-off test", [prompt, reorganizePrompt([], undefined, 5, 8), curatorPrompt()].every((p) => p.includes("남길 가치 기준") && p.includes("일회성")));
-check("full check and tidy fold old solutions into the newer entry", [reorganizePrompt([], undefined, 5, 8), prompt].every((p) => p.includes('"대체됨: <무엇이 바뀌었나 한 줄>"') && p.includes("updated 날짜") && p.includes("확인 필요")));
-check("full check shrinks the total every run", reorganizePrompt([], undefined, 5, 8).includes("전체 글자 수가 정리 전보다 줄어야"));
-check("full check says how to cut and its cap", reorganizePrompt([], undefined, 5, 8).includes('"일회성: <한 줄 이유>"') && reorganizePrompt([], undefined, 5, 8).includes("최대 8개"));
-
-// full check marks everything
-markReviewed(store, { before: verifiedHashes(store), all: true });
-check("full check marks all", selectTidyCandidates(store).candidates.length === 0);
-
+check("every memory pass applies the one-off test", [prompt, curatorPrompt()].every((p) => p.includes("남길 가치 기준") && p.includes("일회성")));
+check("tidy folds old solutions into the newer entry", [prompt].every((p) => p.includes('"대체됨: <무엇이 바뀌었나 한 줄>"') && p.includes("updated 날짜") && p.includes("확인 필요")));
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall tidy checks passed");
 process.exitCode = failed ? 1 : 0;

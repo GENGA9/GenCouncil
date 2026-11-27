@@ -4,7 +4,6 @@
  * the rest by a one-shot call to the chair's model (same account), so the user doesn't
  * have to sit at the PC.
  */
-import type { Account } from "./accounts.js";
 import { claudeModelId, spawnCli, wireProcess } from "./drivers.js";
 
 export interface PermissionRequest {
@@ -161,6 +160,3 @@ export function permissionToolResult(d: PermissionDecision, input: Record<string
   return JSON.stringify(d.behavior === "allow" ? { behavior: "allow", updatedInput: input } : { behavior: "deny", message: `의장 거절: ${d.reason}` });
 }
 
-export function chairEnvFor(account: Account | undefined, env: (a: Account | undefined) => Record<string, string>): Record<string, string> {
-  return env(account);
-}

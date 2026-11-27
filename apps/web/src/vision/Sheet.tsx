@@ -15,7 +15,7 @@ import { THEME_LABEL, useTheme } from "../theme";
 import type { AccountUsage, AgendaOv, Overview, ProjectOv, UsageSnapshot } from "../types";
 import type { ProjectActions } from "./actions";
 import { Bar } from "./Menus";
-import { HOUSE_IDS, HOUSE_NAME, TINT, USAGE_NAME, usageIds, type Rgb } from "./scene";
+import { TINT, USAGE_NAME, usageIds, type Rgb } from "./scene";
 import { LangSelect } from "../components/LangSelect";
 
 const css = (c: Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;

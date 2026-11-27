@@ -1,5 +1,4 @@
 // Dev-only stand-in: a message with six pictures through the real <Attachments>, for looking at the lightbox.
-import React from "react";
 import { createRoot } from "react-dom/client";
 import { api } from "./api";
 import { Attachments } from "./components/Attachments";

@@ -3,6 +3,7 @@
  *   claude: the usage endpoint Claude Code's /usage uses, with the account's own login
  *   gpt:    `codex app-server` -> account/rateLimits/read
  *   gemini: `agy -p /usage` (Antigravity CLI prints tab-separated remaining quota)
+ *   grok:   the billing endpoint Grok Build's /usage window reads, with the account's own login
  * Every reader is best effort; a failure becomes an `error` string for the UI.
  */
 import { spawn } from "node:child_process";

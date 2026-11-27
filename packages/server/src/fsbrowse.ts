@@ -36,7 +36,7 @@ function roots(): FolderEntry[] {
   return out;
 }
 
-export async function listFolder(p: string, isRepo: (dir: string) => Promise<boolean>): Promise<FolderListing> {
+export async function listFolder(p: string): Promise<FolderListing> {
   const dir = p ? path.resolve(p) : os.homedir();
   let entries: FolderEntry[] = [];
   try {
@@ -52,5 +52,4 @@ export async function listFolder(p: string, isRepo: (dir: string) => Promise<boo
   for (const e of entries.slice(0, 300)) e.git = fs.existsSync(path.join(e.path, ".git"));
   const parent = path.dirname(dir);
   return { path: dir, parent: parent !== dir ? parent : undefined, entries, roots: roots() };
-  void isRepo;
 }

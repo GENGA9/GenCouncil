@@ -7,7 +7,7 @@ import { Bust } from "./AvatarView";
 import { Composer } from "../vision/Console";
 import type { ChairActions, SendFn } from "../vision/actions";
 import type { VisionEvent } from "../vision/renderer";
-import { CAST, chairCast } from "../avatar/cast";
+import { chairCast } from "../avatar/cast";
 import { chairFigure, useAvatarPrefs } from "../avatar/settings";
 import { memberName, prettyModel } from "../model";
 import { desktop, inDesktop } from "../desktop";

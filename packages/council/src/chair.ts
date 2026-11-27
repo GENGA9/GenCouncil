@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { WikiStore } from "@gencouncil/core";
 import { ensureAgyCouncil, serverEntry } from "@gencouncil/mcp/install";
-import { grokEnv, writeGrokMcp, type Account } from "./accounts.js";
+import { grokEnv, isCliProvider, writeGrokMcp, type Account } from "./accounts.js";
 import type { Council } from "./council.js";
 import { agyModelId, claudeModelId, codexMcpArgs, makeAgyParser, makeGrokParser, parseClaudeLine, parseCodexLine, spawnCli, wireProcess, type ClaudeEvent, type RunningProc } from "./drivers.js";
 import { tierOf, type CliProvider } from "./models.js";
@@ -193,7 +193,7 @@ export class Chair {
   /** the chair runs on whatever CLI its account belongs to */
   provider(): CliProvider {
     const p = this.council.accounts.get(this.account())?.provider;
-    return p === "gpt" || p === "gemini" ? p : "claude";
+    return p && isCliProvider(p) ? p : "claude";
   }
 
   model(): string | undefined {
@@ -358,7 +358,7 @@ export class Chair {
     onEvent: (e: ClaudeEvent) => void,
   ): Promise<ChairTurnResult & { resumeFailed?: boolean; stderr: string; exitCode: number | null }> {
     const store = this.council.store;
-    const provider = (account.provider === "gpt" || account.provider === "gemini" || account.provider === "grok" ? account.provider : "claude") as CliProvider;
+    const provider: CliProvider = isCliProvider(account.provider) ? account.provider : "claude";
     const launch =
       provider === "gpt"
         ? this.codexLaunch(message, resume, account)

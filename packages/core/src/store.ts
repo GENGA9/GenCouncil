@@ -140,7 +140,9 @@ export class MemoryStore {
   private startWatch(): void {
     if (this.watcher || !fs.existsSync(this.dir)) return;
     try {
-      this.watcher = fs.watch(this.dir, { recursive: true }, () => {
+      this.watcher = fs.watch(this.dir, { recursive: true }, (_event, filename) => {
+        // INDEX.md is written from the entries (after every write of ours): nothing to load from it
+        if (filename && path.basename(String(filename)) === "INDEX.md") return;
         if (this.reloadTimer) clearTimeout(this.reloadTimer);
         this.reloadTimer = setTimeout(() => {
           // a failed background reload must never take the host process down; the next change reloads again

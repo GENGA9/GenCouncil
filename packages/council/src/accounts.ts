@@ -1,9 +1,9 @@
 /**
  * Account registry: which logins exist per provider and whether they are usable right now.
- * ~/.gencouncil/accounts.json. The implicit accounts "claude", "gemini" and "gpt" are the normal
+ * ~/.gencouncil/accounts.json. The implicit accounts "claude", "gemini", "gpt" and "grok" are the normal
  * logins (no config dir override) and always exist.
  *
- * CLI accounts keep their login in their own folder (CLAUDE_CONFIG_DIR / HOME for gemini = Antigravity CLI / CODEX_HOME).
+ * CLI accounts keep their login in their own folder (CLAUDE_CONFIG_DIR / HOME for gemini = Antigravity CLI / CODEX_HOME / GROK_HOME).
  * Web accounts (web Gemini, AI Studio, ChatGPT) are dedicated Chrome profiles the user logs into once;
  * relay members then open the site in that profile.
  */
@@ -442,7 +442,3 @@ export function findChrome(): string | undefined {
   return CHROME_PATHS.find((p) => fs.existsSync(p));
 }
 
-// backwards-compatible helper used by the CLI
-export function loadAccounts(): Account[] {
-  return new AccountRegistry().list();
-}

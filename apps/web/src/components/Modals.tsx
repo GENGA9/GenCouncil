@@ -235,31 +235,6 @@ export function ProjectSettingsForm({ project, onClose, onSaved }: { project: Pr
   );
 }
 
-export function NewAgendaModal({ projectId, onClose, onCreate }: { projectId: string; onClose: () => void; onCreate: (title: string, goals: string[]) => Promise<void> }) {
-  const t = useT();
-  const [title, setTitle] = useState("");
-  const [goals, setGoals] = useState("");
-  const [err, setErr] = useState("");
-  const submit = async () => {
-    try {
-      await onCreate(title, goals.split("\n").map((g) => g.trim()).filter(Boolean));
-    } catch (e) {
-      setErr((e as Error).message);
-    }
-  };
-  return (
-    <Modal title={t("안건 추가 · {id}", { id: projectId })} onClose={onClose}>
-      <label>{t("제목")}<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("밸런스 안건")} autoFocus /></label>
-      <label>{t("목표 (한 줄에 하나)")}<textarea rows={5} value={goals} onChange={(e) => setGoals(e.target.value)} placeholder={t("목표1\n목표2\n목표3")} /></label>
-      {err && <div className="err">{err}</div>}
-      <div className="modal-actions">
-        <button className="ghost" onClick={onClose}>{t("취소")}</button>
-        <button className="primary" onClick={submit} disabled={!title.trim()}>{t("만들기")}</button>
-      </div>
-    </Modal>
-  );
-}
-
 export function GuidelinesModal({ projectId, onClose, notify }: { projectId: string; onClose: () => void; notify: (m: string) => void }) {
   const t = useT();
   return (

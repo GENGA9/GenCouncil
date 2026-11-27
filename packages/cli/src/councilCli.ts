@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { MemoryStore } from "@gencouncil/core";
-import { spawnSync } from "node:child_process";
 import {
   AccountRegistry,
   AgendaRuntime,
@@ -10,10 +9,6 @@ import {
   Chair,
   Council,
   ProjectRegistry,
-  currentBranch,
-  findExecutable,
-  hasCommits,
-  isRepo,
   memberDisplayName,
   projectDir,
   runChat,

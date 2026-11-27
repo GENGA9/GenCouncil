@@ -55,7 +55,7 @@ export async function stopLeftover(pid: number | undefined, startedAt: string | 
 }
 
 /** programs a member can leave behind; anything else (an editor open on the folder) is never stopped */
-const AGENT_PROGRAMS = ["claude.exe", "codex.exe", "agy.exe", "node.exe", "bash.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "python.exe", "py.exe"];
+const AGENT_PROGRAMS = ["claude.exe", "codex.exe", "agy.exe", "grok.exe", "node.exe", "bash.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "python.exe", "py.exe"];
 
 /**
  * Stop agent/shell processes whose command line mentions dir (a member worktree). Catches trees whose

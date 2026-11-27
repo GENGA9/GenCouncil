@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { MemoryStore, WikiStore, entryScope, type EntryType } from "@gencouncil/core";
 import {
@@ -39,7 +40,6 @@ import {
   verifiedHashes,
   projectMemoryKey,
   isCliProvider,
-  isRepo,
   isWebSite,
   normalizeLimits,
   openLoginWindow,
@@ -222,6 +222,9 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   };
 
   const getRuntime = (id: string, slug: string): Promise<AgendaRuntime> => {
+    // an open agenda asked for by its own id and slug (every web request): no walk over the folders
+    const open = runtimes.get(`${id}/${slug}`);
+    if (open) return open;
     const { project, store } = findAgenda(id, slug);
     const key = `${project.id}/${store.slug}`;
     let p = runtimes.get(key);
@@ -457,7 +460,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     efforts: EFFORTS,
     defaults: DEFAULT_LIMITS,
   }));
-  on("GET", "/api/fs", async ({ url }) => listFolder(url.searchParams.get("path") ?? "", isRepo));
+  on("GET", "/api/fs", async ({ url }) => listFolder(url.searchParams.get("path") ?? ""));
   on("GET", "/api/projects/:id/guidelines", ({ params }) => {
     const p = registry.get(params.id);
     if (!p) throw new HttpError(404, "unknown project");
@@ -605,8 +608,10 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     return { ...store.agenda(), key: `${p.id}/${store.slug}` };
   });
 
-  on("GET", "/api/a/:id/:slug", async ({ params }) => {
+  on("GET", "/api/a/:id/:slug", async ({ params, url }) => {
     const rt = await getRuntime(params.id, params.slug);
+    // ?transcript=0: the state alone (the web's refresh while members work), without reading the transcript file
+    if (url.searchParams.get("transcript") === "0") return { state: rt.state(), firstTurn: rt.isFirstTurn() };
     return { state: rt.state(), transcript: rt.transcript(), firstTurn: rt.isFirstTurn() };
   });
   on("POST", "/api/a/:id/:slug/chat", async ({ params, body }) => {
@@ -1059,7 +1064,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
         }
         throw new HttpError(404, `no route: ${method} ${url.pathname}`);
       }
-      serveStatic(webDir, url.pathname, res, typeof req.headers.range === "string" ? req.headers.range : undefined);
+      serveStatic(webDir, url.pathname, res, typeof req.headers.range === "string" ? req.headers.range : undefined, /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? "")));
     } catch (e) {
       const status = e instanceof HttpError ? e.status : 500;
       if (status === 500) log(`${method} ${url.pathname}: ${(e as Error).stack ?? e}`);
@@ -1178,7 +1183,11 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   };
 }
 
-function serveStatic(webDir: string, pathname: string, res: http.ServerResponse, range?: string): void {
+/** text files of the built web app, gzipped once per version of the file */
+const GZIP_EXT = new Set([".html", ".js", ".css", ".json", ".svg", ".webmanifest", ".map"]);
+const gzipped = new Map<string, { mtimeMs: number; body: Buffer }>();
+
+function serveStatic(webDir: string, pathname: string, res: http.ServerResponse, range?: string, gzip = false): void {
   if (!fs.existsSync(webDir)) {
     res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
     res.end("web app not built. run: npm run build:web");
@@ -1187,16 +1196,29 @@ function serveStatic(webDir: string, pathname: string, res: http.ServerResponse,
   let rel = decodeURIComponent(pathname);
   if (rel === "/" || rel === "") rel = "/index.html";
   let file = path.join(webDir, rel);
-  if (!file.startsWith(webDir)) {
+  if (file !== webDir && !file.startsWith(webDir + path.sep)) {
     res.writeHead(403).end();
     return;
   }
-  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(webDir, "index.html"); // SPA fallback
+  let stat = fs.statSync(file, { throwIfNoEntry: false });
+  if (!stat || stat.isDirectory()) {
+    file = path.join(webDir, "index.html"); // SPA fallback
+    stat = fs.statSync(file);
+  }
   const ext = path.extname(file).toLowerCase();
   const headers: Record<string, string> = { "content-type": MIME[ext] ?? "application/octet-stream" };
-  headers["cache-control"] = ext === ".html" || file.endsWith("sw.js") ? "no-cache" : "public, max-age=31536000, immutable";
+  // names that stay the same across builds (the page, the worker, the manifest and its icons) are asked for again
+  const fixedName = ext === ".html" || file.endsWith("sw.js");
+  headers["cache-control"] = fixedName ? "no-cache" : ext === ".webmanifest" || rel.startsWith("/icons/") ? "public, max-age=3600" : "public, max-age=31536000, immutable";
+  if (gzip && !range && GZIP_EXT.has(ext) && stat.size > 1024) {
+    let z = gzipped.get(file);
+    if (!z || z.mtimeMs !== stat.mtimeMs) gzipped.set(file, (z = { mtimeMs: stat.mtimeMs, body: zlib.gzipSync(fs.readFileSync(file)) }));
+    res.writeHead(200, { ...headers, "content-encoding": "gzip", vary: "accept-encoding", "content-length": String(z.body.length) });
+    res.end(z.body);
+    return;
+  }
   // byte ranges: Safari plays a video only from a server that answers them (the avatar's dances)
-  const size = fs.statSync(file).size;
+  const size = stat.size;
   headers["accept-ranges"] = "bytes";
   const m = range ? /^bytes=(\d*)-(\d*)$/.exec(range) : null;
   if (m && (m[1] || m[2])) {

@@ -134,6 +134,9 @@ const rt = await import("@gencouncil/council");
 council.project.chair.account = "gpt";
 check("chair provider follows the account", chairTok.provider() === "gpt");
 check("claude model swapped for the provider default", chairTok.model() === "gpt-6.2-sol" && rt.chairModelFor("gpt", "gpt-6-astra") === "gpt-6-astra");
+council.project.chair.account = "grok";
+check("a grok account makes a grok chair, on its own default model and without an advisor", chairTok.provider() === "grok" && chairTok.model() === "grok-4.7" && chairTok.advisor() === undefined, `${chairTok.provider()} ${chairTok.model()}`);
+council.project.chair.account = "gpt";
 const g1 = await chairTok.turn("GPT 의장 첫 턴", () => {});
 const cArgs = fs.readFileSync(path.join(rec, "codex-args.txt"), "utf8").replace(/"/g, ""); // arguments reach a batch file quoted
 const cIn = fs.readFileSync(path.join(rec, "codex-stdin.txt"), "utf8");

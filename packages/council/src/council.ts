@@ -84,7 +84,7 @@ import { classifyFailure } from "./quota.js";
 import { reapStrays, snapshotDescendants, stopLeftover, stopProcessesUnder, stopTracked } from "./interrupt.js";
 import { applyRelayFiles, bundleFiles, parseRelayResponse, RELAY_FORMAT } from "./relay.js";
 
-export { accountsFile, loadAccounts, type Account } from "./accounts.js";
+export { accountsFile, type Account } from "./accounts.js";
 
 export interface AssignInput {
   taskId: string;
@@ -1019,7 +1019,7 @@ ${rows.join("\n")}`;
   async handover(memberId: string, opts: HandoverOptions = {}): Promise<MemberRecord> {
     const prev = this.member(memberId);
     if (this.running.has(memberId)) throw new Error(`member ${memberId} is still running; stop it first`);
-    if (prev.provider === "relay" && !opts.provider) throw new Error("relay member: specify provider claude|gemini|gpt to hand over to a CLI member");
+    if (prev.provider === "relay" && !opts.provider) throw new Error("relay member: specify provider claude|gemini|gpt|grok to hand over to a CLI member");
     if (prev.handoverTo) throw new Error(`member ${memberId} was already handed over to ${prev.handoverTo}`);
     // check before changing any record, so a failed handover leaves nothing half-done
     if (prev.worktreeReleased) throw new Error(`member ${memberId}: 결과가 이미 안건 브랜치에 합쳐져 작업 폴더를 정리했거나 다른 위원에게 넘겼습니다. 이어서 할 일은 새로 배정하세요.`);

@@ -1,6 +1,6 @@
 // Speech for the avatar mode: the chair speaks with its character's voice. The voices come from a local
-// TTS server with the OpenAI speech contract (POST /v1/audio/speech -> WAV), e.g. Agentg's Supertonic
-// adapter. It is configured in server.json ("tts"); when it has a "launch" command the server is started
+// TTS server with the OpenAI speech contract (POST /v1/audio/speech -> WAV), e.g. the Supertonic adapter
+// in tools/tts/supertonic. It is configured in server.json ("tts"); when it has a "launch" command the server is started
 // on the first request and stopped again after it has been idle a while.
 import { spawn, type ChildProcess } from "node:child_process";
 

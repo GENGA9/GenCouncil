@@ -116,9 +116,11 @@ function CurateBar({ notify, onDone, onReview, reviewing, version }: { notify: (
 
   useEffect(() => {
     let timer: number | undefined;
+    let alive = true;
     const poll = async () => {
       try {
         const s = await api.curateStatus();
+        if (!alive) return;
         setCurate((prev) => {
           if (prev?.running && !s.running) {
             notify(s.isError ? t("실패: {text}", { text: (s.text ?? "").slice(0, 100) }) : s.kind === "reorganize" ? t("Fable이 위키 점검을 마쳤습니다.") : s.remaining ? t("위키 등록을 마쳤습니다 (남은 항목 {n}개).", { n: s.remaining }) : t("위키 등록을 마쳤습니다."));
@@ -130,12 +132,15 @@ function CurateBar({ notify, onDone, onReview, reviewing, version }: { notify: (
         });
         timer = window.setTimeout(poll, s.running ? 3000 : 15000);
       } catch {
-        timer = window.setTimeout(poll, 15000);
+        if (alive) timer = window.setTimeout(poll, 15000);
       }
     };
     void poll();
     void loadStatus();
-    return () => window.clearTimeout(timer);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
   }, []);
   // a proposal was rejected in the review: the counts change
   useEffect(() => {

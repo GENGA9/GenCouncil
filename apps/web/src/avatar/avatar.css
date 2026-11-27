@@ -167,7 +167,6 @@
 .av-world.av-top > * { pointer-events: auto; }
 /* on a phone the menu is a sheet: it comes up over her (she is still over its dimmed backdrop) */
 .vz.av.portrait .av-world.av-top.under-sheet { z-index: 7; }
-.vz .av-away { position: absolute; inset: 0; z-index: 8; background: transparent; cursor: default; }
 .av-name.hidden { display: none; }
 .vz .av-say.react { pointer-events: none; animation: av-say-in 0.32s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
 
